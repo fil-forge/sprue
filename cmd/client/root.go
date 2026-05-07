@@ -1,8 +1,8 @@
 package client
 
 import (
+	"github.com/fil-forge/sprue/cmd/client/admin"
 	"github.com/spf13/cobra"
-	"github.com/storacha/sprue/cmd/client/admin"
 )
 
 var Cmd = &cobra.Command{

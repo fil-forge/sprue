@@ -4,8 +4,8 @@ import (
 	"context"
 	"sync"
 
-	"github.com/storacha/go-ucanto/did"
-	"github.com/storacha/sprue/pkg/store/metrics"
+	"github.com/fil-forge/go-ucanto/did"
+	"github.com/fil-forge/sprue/pkg/store/metrics"
 )
 
 type Store struct {

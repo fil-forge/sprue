@@ -9,10 +9,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/fil-forge/go-ucanto/did"
+	"github.com/fil-forge/sprue/pkg/store"
+	"github.com/fil-forge/sprue/pkg/store/subscription"
 	"github.com/ipfs/go-cid"
-	"github.com/storacha/go-ucanto/did"
-	"github.com/storacha/sprue/pkg/store"
-	"github.com/storacha/sprue/pkg/store/subscription"
 )
 
 const customerV2IndexName = "customerV2"

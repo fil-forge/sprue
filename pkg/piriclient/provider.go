@@ -3,7 +3,7 @@ package piriclient
 import (
 	"net/url"
 
-	"github.com/storacha/go-ucanto/ucan"
+	"github.com/fil-forge/go-ucanto/ucan"
 	"go.uber.org/zap"
 )
 

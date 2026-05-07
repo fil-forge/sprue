@@ -1,7 +1,7 @@
 VERSION=$(shell awk -F'"' '/"version":/ {print $$4}' version.json)
 COMMIT=$(shell git rev-parse --short HEAD)
 DATE=$(shell date -u -Iseconds)
-GOFLAGS=-ldflags="-X github.com/storacha/sprue/pkg/build.version=$(VERSION) -X github.com/storacha/sprue/pkg/build.Commit=$(COMMIT) -X github.com/storacha/sprue/pkg/build.Date=$(DATE) -X github.com/storacha/sprue/pkg/build.BuiltBy=make"
+GOFLAGS=-ldflags="-X github.com/fil-forge/sprue/pkg/build.version=$(VERSION) -X github.com/fil-forge/sprue/pkg/build.Commit=$(COMMIT) -X github.com/fil-forge/sprue/pkg/build.Date=$(DATE) -X github.com/fil-forge/sprue/pkg/build.BuiltBy=make"
 DOCKER := $(shell which docker)
 
 .PHONY: all build test lint clean docker-build

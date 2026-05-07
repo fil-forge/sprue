@@ -11,9 +11,9 @@ import (
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 
-	"github.com/storacha/sprue/internal/config"
-	"github.com/storacha/sprue/pkg/identity"
-	"github.com/storacha/sprue/pkg/service"
+	"github.com/fil-forge/sprue/internal/config"
+	"github.com/fil-forge/sprue/pkg/identity"
+	"github.com/fil-forge/sprue/pkg/service"
 )
 
 // ServerModule provides the HTTP server with lifecycle management.

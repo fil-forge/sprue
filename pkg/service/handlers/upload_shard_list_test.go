@@ -3,14 +3,14 @@ package handlers_test
 import (
 	"testing"
 
+	"github.com/fil-forge/go-libstoracha/capabilities/upload/shard"
+	"github.com/fil-forge/go-ucanto/core/result"
+	"github.com/fil-forge/go-ucanto/core/result/failure/datamodel"
+	"github.com/fil-forge/sprue/internal/testutil"
+	"github.com/fil-forge/sprue/pkg/service/handlers"
+	uploadmemory "github.com/fil-forge/sprue/pkg/store/upload/memory"
 	"github.com/ipfs/go-cid"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
-	"github.com/storacha/go-libstoracha/capabilities/upload/shard"
-	"github.com/storacha/go-ucanto/core/result"
-	"github.com/storacha/go-ucanto/core/result/failure/datamodel"
-	"github.com/storacha/sprue/internal/testutil"
-	"github.com/storacha/sprue/pkg/service/handlers"
-	uploadmemory "github.com/storacha/sprue/pkg/store/upload/memory"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 )

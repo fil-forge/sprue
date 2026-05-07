@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/fil-forge/go-ucanto/did"
+	"github.com/fil-forge/sprue/pkg/store/revocation"
 	"github.com/ipfs/go-cid"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/storacha/go-ucanto/did"
-	"github.com/storacha/sprue/pkg/store/revocation"
 )
 
 type Store struct {

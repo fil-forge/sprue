@@ -11,11 +11,11 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"github.com/storacha/go-ucanto/core/delegation"
-	"github.com/storacha/go-ucanto/did"
-	"github.com/storacha/sprue/pkg/internal/timeutil"
-	"github.com/storacha/sprue/pkg/store"
-	storageprovider "github.com/storacha/sprue/pkg/store/storage_provider"
+	"github.com/fil-forge/go-ucanto/core/delegation"
+	"github.com/fil-forge/go-ucanto/did"
+	"github.com/fil-forge/sprue/pkg/internal/timeutil"
+	"github.com/fil-forge/sprue/pkg/store"
+	storageprovider "github.com/fil-forge/sprue/pkg/store/storage_provider"
 )
 
 var DynamoStorageProviderTableProps = struct {

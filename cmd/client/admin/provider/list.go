@@ -3,8 +3,8 @@ package provider
 import (
 	"fmt"
 
+	"github.com/fil-forge/sprue/cmd/client/lib"
 	"github.com/spf13/cobra"
-	"github.com/storacha/sprue/cmd/client/lib"
 )
 
 var listCmd = &cobra.Command{

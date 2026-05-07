@@ -3,9 +3,9 @@ package weight
 import (
 	"strconv"
 
+	"github.com/fil-forge/go-ucanto/did"
+	"github.com/fil-forge/sprue/cmd/client/lib"
 	"github.com/spf13/cobra"
-	"github.com/storacha/go-ucanto/did"
-	"github.com/storacha/sprue/cmd/client/lib"
 )
 
 var setCmd = &cobra.Command{

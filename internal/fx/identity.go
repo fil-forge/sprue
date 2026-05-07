@@ -6,8 +6,8 @@ import (
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 
-	"github.com/storacha/sprue/internal/config"
-	"github.com/storacha/sprue/pkg/identity"
+	"github.com/fil-forge/sprue/internal/config"
+	"github.com/fil-forge/sprue/pkg/identity"
 )
 
 // IdentityModule provides the service identity.

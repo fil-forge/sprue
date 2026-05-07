@@ -7,13 +7,13 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/fil-forge/go-ucanto/did"
+	"github.com/fil-forge/sprue/pkg/store"
+	"github.com/fil-forge/sprue/pkg/store/subscription"
 	"github.com/ipfs/go-cid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/storacha/go-ucanto/did"
-	"github.com/storacha/sprue/pkg/store"
-	"github.com/storacha/sprue/pkg/store/subscription"
 )
 
 const (

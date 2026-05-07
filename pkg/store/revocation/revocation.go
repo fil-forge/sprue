@@ -3,8 +3,8 @@ package revocation
 import (
 	"context"
 
+	"github.com/fil-forge/go-ucanto/did"
 	"github.com/ipfs/go-cid"
-	"github.com/storacha/go-ucanto/did"
 )
 
 type Store interface {

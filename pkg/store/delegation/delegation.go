@@ -3,10 +3,10 @@ package delegation
 import (
 	"context"
 
+	"github.com/fil-forge/go-ucanto/core/delegation"
+	"github.com/fil-forge/go-ucanto/did"
+	"github.com/fil-forge/sprue/pkg/store"
 	"github.com/ipfs/go-cid"
-	"github.com/storacha/go-ucanto/core/delegation"
-	"github.com/storacha/go-ucanto/did"
-	"github.com/storacha/sprue/pkg/store"
 )
 
 type (

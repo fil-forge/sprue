@@ -8,11 +8,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/fil-forge/go-libstoracha/bytemap"
+	"github.com/fil-forge/go-ucanto/did"
+	"github.com/fil-forge/sprue/pkg/store/replica"
 	cid "github.com/ipfs/go-cid"
 	"github.com/multiformats/go-multihash"
-	"github.com/storacha/go-libstoracha/bytemap"
-	"github.com/storacha/go-ucanto/did"
-	"github.com/storacha/sprue/pkg/store/replica"
 )
 
 type Store struct {

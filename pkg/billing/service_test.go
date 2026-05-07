@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/storacha/go-ucanto/did"
-	"github.com/storacha/sprue/pkg/lib/didmailto"
-	customermemory "github.com/storacha/sprue/pkg/store/customer/memory"
+	"github.com/fil-forge/go-ucanto/did"
+	"github.com/fil-forge/sprue/pkg/lib/didmailto"
+	customermemory "github.com/fil-forge/sprue/pkg/store/customer/memory"
 	"github.com/stretchr/testify/require"
 )
 

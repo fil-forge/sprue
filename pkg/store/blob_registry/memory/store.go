@@ -7,15 +7,15 @@ import (
 	"sync"
 	"time"
 
+	"github.com/fil-forge/go-libstoracha/capabilities/types"
+	"github.com/fil-forge/go-ucanto/did"
+	"github.com/fil-forge/sprue/pkg/store"
+	blobregistry "github.com/fil-forge/sprue/pkg/store/blob_registry"
+	"github.com/fil-forge/sprue/pkg/store/consumer"
+	"github.com/fil-forge/sprue/pkg/store/metrics"
+	spacediff "github.com/fil-forge/sprue/pkg/store/space_diff"
 	cid "github.com/ipfs/go-cid"
 	multihash "github.com/multiformats/go-multihash"
-	"github.com/storacha/go-libstoracha/capabilities/types"
-	"github.com/storacha/go-ucanto/did"
-	"github.com/storacha/sprue/pkg/store"
-	blobregistry "github.com/storacha/sprue/pkg/store/blob_registry"
-	"github.com/storacha/sprue/pkg/store/consumer"
-	"github.com/storacha/sprue/pkg/store/metrics"
-	spacediff "github.com/storacha/sprue/pkg/store/space_diff"
 )
 
 type Store struct {

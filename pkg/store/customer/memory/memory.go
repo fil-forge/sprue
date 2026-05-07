@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/storacha/go-ucanto/did"
-	"github.com/storacha/sprue/pkg/store"
-	"github.com/storacha/sprue/pkg/store/customer"
+	"github.com/fil-forge/go-ucanto/did"
+	"github.com/fil-forge/sprue/pkg/store"
+	"github.com/fil-forge/sprue/pkg/store/customer"
 )
 
 type Store struct {

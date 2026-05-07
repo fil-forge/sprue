@@ -3,8 +3,8 @@ package handlers
 import (
 	"go.uber.org/fx"
 
-	"github.com/storacha/go-ucanto/ucan"
-	"github.com/storacha/sprue/pkg/service/handlers"
+	"github.com/fil-forge/go-ucanto/ucan"
+	"github.com/fil-forge/sprue/pkg/service/handlers"
 )
 
 var Module = fx.Module("service-handlers",

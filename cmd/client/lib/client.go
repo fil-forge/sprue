@@ -3,11 +3,11 @@ package lib
 import (
 	"fmt"
 
+	"github.com/fil-forge/sprue/internal/config"
+	"github.com/fil-forge/sprue/internal/fx"
+	"github.com/fil-forge/sprue/pkg/client"
+	"github.com/fil-forge/sprue/pkg/identity"
 	"github.com/spf13/cobra"
-	"github.com/storacha/sprue/internal/config"
-	"github.com/storacha/sprue/internal/fx"
-	"github.com/storacha/sprue/pkg/client"
-	"github.com/storacha/sprue/pkg/identity"
 	"go.uber.org/zap"
 )
 

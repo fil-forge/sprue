@@ -6,15 +6,15 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/fil-forge/go-ucanto/core/ipld/codec/cbor"
+	"github.com/fil-forge/go-ucanto/did"
+	"github.com/fil-forge/sprue/pkg/lib/errors"
+	"github.com/fil-forge/sprue/pkg/store/consumer"
+	"github.com/fil-forge/sprue/pkg/store/subscription"
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime/codec/dagcbor"
 	basicnode "github.com/ipld/go-ipld-prime/node/basic"
 	"github.com/multiformats/go-multihash"
-	"github.com/storacha/go-ucanto/core/ipld/codec/cbor"
-	"github.com/storacha/go-ucanto/did"
-	"github.com/storacha/sprue/pkg/lib/errors"
-	"github.com/storacha/sprue/pkg/store/consumer"
-	"github.com/storacha/sprue/pkg/store/subscription"
 )
 
 type (

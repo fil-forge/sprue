@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"iter"
 
+	"github.com/fil-forge/go-ucanto/core/car"
+	"github.com/fil-forge/go-ucanto/core/ipld"
+	"github.com/fil-forge/sprue/pkg/internal/ipldutil"
 	"github.com/ipfs/go-cid"
-	"github.com/storacha/go-ucanto/core/car"
-	"github.com/storacha/go-ucanto/core/ipld"
-	"github.com/storacha/sprue/pkg/internal/ipldutil"
 )
 
 func collect[T any](seq iter.Seq2[T, error]) ([]T, error) {

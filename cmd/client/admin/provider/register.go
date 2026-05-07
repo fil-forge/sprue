@@ -3,9 +3,9 @@ package provider
 import (
 	"net/url"
 
+	"github.com/fil-forge/go-ucanto/core/delegation"
+	"github.com/fil-forge/sprue/cmd/client/lib"
 	"github.com/spf13/cobra"
-	"github.com/storacha/go-ucanto/core/delegation"
-	"github.com/storacha/sprue/cmd/client/lib"
 )
 
 var registerCmd = &cobra.Command{

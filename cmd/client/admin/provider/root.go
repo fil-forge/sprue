@@ -1,8 +1,8 @@
 package provider
 
 import (
+	"github.com/fil-forge/sprue/cmd/client/admin/provider/weight"
 	"github.com/spf13/cobra"
-	"github.com/storacha/sprue/cmd/client/admin/provider/weight"
 )
 
 var Cmd = &cobra.Command{

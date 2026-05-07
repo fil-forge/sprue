@@ -7,13 +7,13 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/fil-forge/go-libstoracha/digestutil"
+	"github.com/fil-forge/go-ucanto/did"
+	"github.com/fil-forge/sprue/pkg/store/replica"
 	"github.com/ipfs/go-cid"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/multiformats/go-multihash"
-	"github.com/storacha/go-libstoracha/digestutil"
-	"github.com/storacha/go-ucanto/did"
-	"github.com/storacha/sprue/pkg/store/replica"
 )
 
 const uniqueViolation = "23505"

@@ -5,15 +5,15 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/fil-forge/go-ucanto/did"
+	"github.com/fil-forge/sprue/internal/testutil"
+	"github.com/fil-forge/sprue/pkg/store"
+	"github.com/fil-forge/sprue/pkg/store/upload"
+	"github.com/fil-forge/sprue/pkg/store/upload/aws"
+	"github.com/fil-forge/sprue/pkg/store/upload/memory"
+	uploadpostgres "github.com/fil-forge/sprue/pkg/store/upload/postgres"
 	"github.com/google/uuid"
 	"github.com/ipfs/go-cid"
-	"github.com/storacha/go-ucanto/did"
-	"github.com/storacha/sprue/internal/testutil"
-	"github.com/storacha/sprue/pkg/store"
-	"github.com/storacha/sprue/pkg/store/upload"
-	"github.com/storacha/sprue/pkg/store/upload/aws"
-	"github.com/storacha/sprue/pkg/store/upload/memory"
-	uploadpostgres "github.com/storacha/sprue/pkg/store/upload/postgres"
 	"github.com/stretchr/testify/require"
 )
 
