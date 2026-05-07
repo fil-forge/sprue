@@ -6,11 +6,11 @@ import (
 	"slices"
 	"sync"
 
+	"github.com/fil-forge/go-ucanto/core/delegation"
+	"github.com/fil-forge/go-ucanto/did"
+	"github.com/fil-forge/sprue/pkg/store"
+	dlgstore "github.com/fil-forge/sprue/pkg/store/delegation"
 	cid "github.com/ipfs/go-cid"
-	"github.com/storacha/go-ucanto/core/delegation"
-	"github.com/storacha/go-ucanto/did"
-	"github.com/storacha/sprue/pkg/store"
-	dlgstore "github.com/storacha/sprue/pkg/store/delegation"
 )
 
 type Store struct {

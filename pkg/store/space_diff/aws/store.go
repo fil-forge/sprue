@@ -9,11 +9,11 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/fil-forge/go-ucanto/did"
+	"github.com/fil-forge/sprue/pkg/internal/timeutil"
+	"github.com/fil-forge/sprue/pkg/store"
+	spacediff "github.com/fil-forge/sprue/pkg/store/space_diff"
 	"github.com/ipfs/go-cid"
-	"github.com/storacha/go-ucanto/did"
-	"github.com/storacha/sprue/pkg/internal/timeutil"
-	"github.com/storacha/sprue/pkg/store"
-	spacediff "github.com/storacha/sprue/pkg/store/space_diff"
 )
 
 var DynamoSpaceDiffTableProps = struct {

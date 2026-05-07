@@ -3,14 +3,14 @@ package fx
 import (
 	"net/url"
 
-	"github.com/storacha/go-ucanto/did"
+	"github.com/fil-forge/go-ucanto/did"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 
-	"github.com/storacha/sprue/internal/config"
-	"github.com/storacha/sprue/pkg/identity"
-	"github.com/storacha/sprue/pkg/indexerclient"
-	"github.com/storacha/sprue/pkg/piriclient"
+	"github.com/fil-forge/sprue/internal/config"
+	"github.com/fil-forge/sprue/pkg/identity"
+	"github.com/fil-forge/sprue/pkg/indexerclient"
+	"github.com/fil-forge/sprue/pkg/piriclient"
 )
 
 // ClientsModule provides external service clients.

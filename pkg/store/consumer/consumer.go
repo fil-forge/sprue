@@ -3,10 +3,10 @@ package consumer
 import (
 	"context"
 
+	"github.com/fil-forge/go-ucanto/did"
+	"github.com/fil-forge/sprue/pkg/lib/errors"
+	"github.com/fil-forge/sprue/pkg/store"
 	"github.com/ipfs/go-cid"
-	"github.com/storacha/go-ucanto/did"
-	"github.com/storacha/sprue/pkg/lib/errors"
-	"github.com/storacha/sprue/pkg/store"
 )
 
 const (

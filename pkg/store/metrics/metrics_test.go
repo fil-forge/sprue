@@ -4,12 +4,12 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/fil-forge/sprue/internal/testutil"
+	"github.com/fil-forge/sprue/pkg/store/metrics"
+	metricsaws "github.com/fil-forge/sprue/pkg/store/metrics/aws"
+	"github.com/fil-forge/sprue/pkg/store/metrics/memory"
+	metricspostgres "github.com/fil-forge/sprue/pkg/store/metrics/postgres"
 	"github.com/google/uuid"
-	"github.com/storacha/sprue/internal/testutil"
-	"github.com/storacha/sprue/pkg/store/metrics"
-	metricsaws "github.com/storacha/sprue/pkg/store/metrics/aws"
-	"github.com/storacha/sprue/pkg/store/metrics/memory"
-	metricspostgres "github.com/storacha/sprue/pkg/store/metrics/postgres"
 	"github.com/stretchr/testify/require"
 )
 

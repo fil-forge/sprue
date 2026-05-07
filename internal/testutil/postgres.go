@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fil-forge/sprue/internal/migrations"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/storacha/sprue/internal/migrations"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"

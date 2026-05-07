@@ -8,9 +8,9 @@ import (
 	"io"
 	"os"
 
+	signer "github.com/fil-forge/go-ucanto/principal/ed25519/signer"
+	verifier "github.com/fil-forge/go-ucanto/principal/ed25519/verifier"
 	"github.com/spf13/cobra"
-	signer "github.com/storacha/go-ucanto/principal/ed25519/signer"
-	verifier "github.com/storacha/go-ucanto/principal/ed25519/verifier"
 )
 
 var parseCmd = &cobra.Command{

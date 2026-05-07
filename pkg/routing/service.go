@@ -6,13 +6,13 @@ import (
 	"net/url"
 	"slices"
 
-	"github.com/storacha/go-libstoracha/capabilities/types"
-	"github.com/storacha/go-libstoracha/digestutil"
-	"github.com/storacha/go-ucanto/core/delegation"
-	"github.com/storacha/go-ucanto/ucan"
-	"github.com/storacha/sprue/pkg/lib/errors"
-	"github.com/storacha/sprue/pkg/store"
-	storageprovider "github.com/storacha/sprue/pkg/store/storage_provider"
+	"github.com/fil-forge/go-libstoracha/capabilities/types"
+	"github.com/fil-forge/go-libstoracha/digestutil"
+	"github.com/fil-forge/go-ucanto/core/delegation"
+	"github.com/fil-forge/go-ucanto/ucan"
+	"github.com/fil-forge/sprue/pkg/lib/errors"
+	"github.com/fil-forge/sprue/pkg/store"
+	storageprovider "github.com/fil-forge/sprue/pkg/store/storage_provider"
 	"go.uber.org/zap"
 )
 

@@ -9,7 +9,7 @@ builds:
     ldflags:
       # Sets the version variable in the build package to the build version prefixed with a 'v'
       # Sets the main.date to a static date for checksum verification. See https://goreleaser.com/customization/builds/#reproducible-builds.
-      - -s -w -X github.com/storacha/sprue/pkg/build.version=v{{.Version}} -X github.com/storacha/sprue/pkg/build.Commit={{.Commit}} -X github.com/storacha/sprue/pkg/build.Date={{.CommitDate}} -X github.com/storacha/sprue/pkg/build.BuiltBy=goreleaser
+      - -s -w -X github.com/fil-forge/sprue/pkg/build.version=v{{.Version}} -X github.com/fil-forge/sprue/pkg/build.Commit={{.Commit}} -X github.com/fil-forge/sprue/pkg/build.Date={{.CommitDate}} -X github.com/fil-forge/sprue/pkg/build.BuiltBy=goreleaser
     goos:
       - linux
       - darwin
@@ -42,7 +42,7 @@ changelog:
 dockers:
   # AMD64 image
   - image_templates:
-      - "ghcr.io/storacha/sprue:{{ .Version }}-amd64"
+      - "ghcr.io/fil-forge/sprue:{{ .Version }}-amd64"
     dockerfile: Dockerfile.release
     use: buildx
     build_flag_templates:
@@ -56,7 +56,7 @@ dockers:
 
   # ARM64 image
   - image_templates:
-      - "ghcr.io/storacha/sprue:{{ .Version }}-arm64"
+      - "ghcr.io/fil-forge/sprue:{{ .Version }}-arm64"
     dockerfile: Dockerfile.release
     use: buildx
     build_flag_templates:
@@ -69,7 +69,7 @@ dockers:
     goarch: arm64
 
 docker_manifests:
-  - name_template: "ghcr.io/storacha/sprue:{{ .Version }}"
+  - name_template: "ghcr.io/fil-forge/sprue:{{ .Version }}"
     image_templates:
-      - "ghcr.io/storacha/sprue:{{ .Version }}-amd64"
-      - "ghcr.io/storacha/sprue:{{ .Version }}-arm64"
+      - "ghcr.io/fil-forge/sprue:{{ .Version }}-amd64"
+      - "ghcr.io/fil-forge/sprue:{{ .Version }}-arm64"

@@ -6,10 +6,10 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/fil-forge/go-ucanto/did"
+	"github.com/fil-forge/sprue/pkg/store/metrics"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/storacha/go-ucanto/did"
-	"github.com/storacha/sprue/pkg/store/metrics"
 )
 
 // pgxExec is the common Exec surface shared by *pgxpool.Pool and pgx.Tx.

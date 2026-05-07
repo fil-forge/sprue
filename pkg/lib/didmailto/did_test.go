@@ -3,7 +3,7 @@ package didmailto
 import (
 	"testing"
 
-	"github.com/storacha/go-ucanto/did"
+	"github.com/fil-forge/go-ucanto/did"
 	"github.com/stretchr/testify/require"
 )
 

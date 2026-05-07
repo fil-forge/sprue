@@ -9,10 +9,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/storacha/go-ucanto/did"
-	"github.com/storacha/go-ucanto/principal"
-	ed25519 "github.com/storacha/go-ucanto/principal/ed25519/signer"
-	"github.com/storacha/go-ucanto/principal/signer"
+	"github.com/fil-forge/go-ucanto/did"
+	"github.com/fil-forge/go-ucanto/principal"
+	ed25519 "github.com/fil-forge/go-ucanto/principal/ed25519/signer"
+	"github.com/fil-forge/go-ucanto/principal/signer"
 )
 
 // Identity holds the service's cryptographic identity.

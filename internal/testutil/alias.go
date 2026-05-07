@@ -3,8 +3,8 @@ package testutil
 import (
 	"testing"
 
+	"github.com/fil-forge/go-libstoracha/testutil"
 	"github.com/ipfs/go-cid"
-	"github.com/storacha/go-libstoracha/testutil"
 )
 
 var (

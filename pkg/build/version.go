@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/storacha/sprue/pkg/internal/revision"
+	"github.com/fil-forge/sprue/pkg/internal/revision"
 )
 
 var (
 	// version is the built version.
-	// Set with ldflags in .goreleaser.yaml via -ldflags="-X github.com/storacha/sprue/pkg/build.version=v{{.Version}}".
+	// Set with ldflags in .goreleaser.yaml via -ldflags="-X github.com/fil-forge/sprue/pkg/build.version=v{{.Version}}".
 	version string
 	// Version returns the current version of the application
 	Version string

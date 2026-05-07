@@ -3,9 +3,9 @@ package metrics
 import (
 	"context"
 
-	"github.com/storacha/go-libstoracha/capabilities/space/blob"
-	"github.com/storacha/go-libstoracha/capabilities/upload"
-	"github.com/storacha/go-ucanto/did"
+	"github.com/fil-forge/go-libstoracha/capabilities/space/blob"
+	"github.com/fil-forge/go-libstoracha/capabilities/upload"
+	"github.com/fil-forge/go-ucanto/did"
 )
 
 const BlobAddTotalMetric = blob.AddAbility + "-total"

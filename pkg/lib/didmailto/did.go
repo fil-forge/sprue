@@ -6,8 +6,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/storacha/go-ucanto/did"
-	"github.com/storacha/sprue/pkg/lib/errors"
+	"github.com/fil-forge/go-ucanto/did"
+	"github.com/fil-forge/sprue/pkg/lib/errors"
 )
 
 const InvalidMailtoDIDErrorName = "InvalidMailtoDID"

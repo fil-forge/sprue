@@ -1,8 +1,8 @@
 package admin
 
 import (
+	"github.com/fil-forge/sprue/cmd/client/admin/provider"
 	"github.com/spf13/cobra"
-	"github.com/storacha/sprue/cmd/client/admin/provider"
 )
 
 var Cmd = &cobra.Command{

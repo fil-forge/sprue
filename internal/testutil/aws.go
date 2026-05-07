@@ -10,7 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/storacha/go-libstoracha/testutil"
+	"github.com/fil-forge/go-libstoracha/testutil"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	tcdynamodb "github.com/testcontainers/testcontainers-go/modules/dynamodb"

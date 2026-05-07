@@ -9,10 +9,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/storacha/go-ucanto/core/delegation"
-	"github.com/storacha/go-ucanto/did"
-	"github.com/storacha/sprue/pkg/store"
-	storageprovider "github.com/storacha/sprue/pkg/store/storage_provider"
+	"github.com/fil-forge/go-ucanto/core/delegation"
+	"github.com/fil-forge/go-ucanto/did"
+	"github.com/fil-forge/sprue/pkg/store"
+	storageprovider "github.com/fil-forge/sprue/pkg/store/storage_provider"
 )
 
 type Store struct {

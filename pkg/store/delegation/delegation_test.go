@@ -5,15 +5,15 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/fil-forge/go-ucanto/core/delegation"
+	"github.com/fil-forge/go-ucanto/ucan"
+	"github.com/fil-forge/sprue/internal/testutil"
+	"github.com/fil-forge/sprue/pkg/store"
+	dlgstore "github.com/fil-forge/sprue/pkg/store/delegation"
+	delegationaws "github.com/fil-forge/sprue/pkg/store/delegation/aws"
+	"github.com/fil-forge/sprue/pkg/store/delegation/memory"
+	delegationpostgres "github.com/fil-forge/sprue/pkg/store/delegation/postgres"
 	"github.com/google/uuid"
-	"github.com/storacha/go-ucanto/core/delegation"
-	"github.com/storacha/go-ucanto/ucan"
-	"github.com/storacha/sprue/internal/testutil"
-	"github.com/storacha/sprue/pkg/store"
-	dlgstore "github.com/storacha/sprue/pkg/store/delegation"
-	delegationaws "github.com/storacha/sprue/pkg/store/delegation/aws"
-	"github.com/storacha/sprue/pkg/store/delegation/memory"
-	delegationpostgres "github.com/storacha/sprue/pkg/store/delegation/postgres"
 	"github.com/stretchr/testify/require"
 )
 

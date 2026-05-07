@@ -4,12 +4,12 @@ import (
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 
-	"github.com/storacha/go-ucanto/server"
-	"github.com/storacha/sprue/pkg/identity"
-	"github.com/storacha/sprue/pkg/indexerclient"
-	"github.com/storacha/sprue/pkg/service"
-	"github.com/storacha/sprue/pkg/store/agent"
-	"github.com/storacha/sprue/pkg/store/delegation"
+	"github.com/fil-forge/go-ucanto/server"
+	"github.com/fil-forge/sprue/pkg/identity"
+	"github.com/fil-forge/sprue/pkg/indexerclient"
+	"github.com/fil-forge/sprue/pkg/service"
+	"github.com/fil-forge/sprue/pkg/store/agent"
+	"github.com/fil-forge/sprue/pkg/store/delegation"
 )
 
 // Module provides the UCAN service.

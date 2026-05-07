@@ -3,12 +3,12 @@ package fx
 import (
 	"fmt"
 
-	"github.com/storacha/sprue/internal/config"
-	"github.com/storacha/sprue/internal/fx/service"
-	"github.com/storacha/sprue/internal/fx/service/handlers"
-	"github.com/storacha/sprue/internal/fx/store/aws"
-	"github.com/storacha/sprue/internal/fx/store/memory"
-	"github.com/storacha/sprue/internal/fx/store/postgres"
+	"github.com/fil-forge/sprue/internal/config"
+	"github.com/fil-forge/sprue/internal/fx/service"
+	"github.com/fil-forge/sprue/internal/fx/service/handlers"
+	"github.com/fil-forge/sprue/internal/fx/store/aws"
+	"github.com/fil-forge/sprue/internal/fx/store/memory"
+	"github.com/fil-forge/sprue/internal/fx/store/postgres"
 	"go.uber.org/fx"
 )
 

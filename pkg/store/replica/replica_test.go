@@ -4,12 +4,12 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/fil-forge/sprue/internal/testutil"
+	"github.com/fil-forge/sprue/pkg/store/replica"
+	replicaaws "github.com/fil-forge/sprue/pkg/store/replica/aws"
+	"github.com/fil-forge/sprue/pkg/store/replica/memory"
+	replicapostgres "github.com/fil-forge/sprue/pkg/store/replica/postgres"
 	"github.com/google/uuid"
-	"github.com/storacha/sprue/internal/testutil"
-	"github.com/storacha/sprue/pkg/store/replica"
-	replicaaws "github.com/storacha/sprue/pkg/store/replica/aws"
-	"github.com/storacha/sprue/pkg/store/replica/memory"
-	replicapostgres "github.com/storacha/sprue/pkg/store/replica/postgres"
 	"github.com/stretchr/testify/require"
 )
 
