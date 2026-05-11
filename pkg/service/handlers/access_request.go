@@ -21,19 +21,14 @@ import (
 	"github.com/fil-forge/ucantone/ucan/promise"
 )
 
-const (
-	InvalidAuthorizationAccountErrorName  = "InvalidAuthorizationAccount"
-	InvalidAuthorizationAudienceErrorName = "InvalidAuthorizationAudience"
-)
-
 // Standard email flow - create confirmation delegation and send email
 // We allow granting access within the next 15 minutes
 const confirmationTTL = time.Minute * 15
 
 var (
-	ErrMissingAuthorizationAccount  = errors.New(InvalidAuthorizationAccountErrorName, "missing authorization account DID")
-	ErrInvalidAuthorizationAccount  = errors.New(InvalidAuthorizationAccountErrorName, "invalid authorization account DID")
-	ErrInvalidAuthorizationAudience = errors.New(InvalidAuthorizationAudienceErrorName, "invalid authorization audience DID")
+	ErrMissingAuthorizationAccount  = errors.New(access.InvalidAuthorizationAccountErrorName, "missing authorization account DID")
+	ErrInvalidAuthorizationAccount  = errors.New(access.InvalidAuthorizationAccountErrorName, "invalid authorization account DID")
+	ErrInvalidAuthorizationAudience = errors.New(access.InvalidAuthorizationAudienceErrorName, "invalid authorization audience DID")
 )
 
 func NewAccessRequestHandler(serverCfg config.ServerConfig, id *identity.Identity, mailer mailer.Mailer, logger *zap.Logger) Handler {

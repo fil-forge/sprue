@@ -76,7 +76,7 @@ func TestUCANConcludeHandler(t *testing.T) {
 		model := edm.ErrorModel{}
 		err = datamodel.Rebind(datamodel.NewAny(fail), &model)
 		require.NoError(t, err)
-		require.Equal(t, handlers.ConclusionReceiptNotFoundErrorName, model.Name())
+		require.Equal(t, ucancaps.ConclusionReceiptNotFoundErrorName, model.Name())
 	})
 
 	t.Run("unknown invocation returns success", func(t *testing.T) {

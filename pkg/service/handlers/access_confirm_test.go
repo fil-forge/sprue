@@ -60,7 +60,7 @@ func TestAccessConfirmHandler(t *testing.T) {
 		model := edm.ErrorModel{}
 		err = datamodel.Rebind(datamodel.NewAny(fail), &model)
 		require.NoError(t, err)
-		require.Equal(t, InvalidAccessConfirmInvocationErrorName, model.Name())
+		require.Equal(t, access.InvalidAccessConfirmSubjectErrorName, model.Name())
 	})
 
 	t.Run("invalid issuer DID", func(t *testing.T) {
@@ -102,7 +102,7 @@ func TestAccessConfirmHandler(t *testing.T) {
 		model := edm.ErrorModel{}
 		err = datamodel.Rebind(datamodel.NewAny(fail), &model)
 		require.NoError(t, err)
-		require.Equal(t, InvalidAccessConfirmInvocationErrorName, model.Name())
+		require.Equal(t, access.InvalidAccessConfirmIssuerErrorName, model.Name())
 	})
 
 	t.Run("success", func(t *testing.T) {

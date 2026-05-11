@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	accesscaps "github.com/fil-forge/libforge/capabilities/access"
 	uploadcaps "github.com/fil-forge/libforge/capabilities/upload"
 	"github.com/fil-forge/libforge/didmailto"
 	"github.com/fil-forge/sprue/internal/testutil"
@@ -105,7 +106,7 @@ func TestUploadAddHandler(t *testing.T) {
 
 		model := edm.ErrorModel{}
 		require.NoError(t, datamodel.Rebind(datamodel.NewAny(fail), &model))
-		require.Equal(t, handlers.InsufficientStorageErrorName, model.Name())
+		require.Equal(t, accesscaps.InsufficientStorageErrorName, model.Name())
 
 		// Nothing should have been persisted.
 		exists, err := deps.store.Exists(ctx, space.DID(), root)

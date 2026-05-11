@@ -170,7 +170,7 @@ func TestProviderAddHandler(t *testing.T) {
 
 		model := edm.ErrorModel{}
 		require.NoError(t, datamodel.Rebind(datamodel.NewAny(fail), &model))
-		require.Equal(t, handlers.InvalidAccountErrorName, model.Name())
+		require.Equal(t, providercaps.InvalidAccountErrorName, model.Name())
 	})
 
 	t.Run("missing payment plan", func(t *testing.T) {
@@ -201,7 +201,7 @@ func TestProviderAddHandler(t *testing.T) {
 
 		model := edm.ErrorModel{}
 		require.NoError(t, datamodel.Rebind(datamodel.NewAny(fail), &model))
-		require.Equal(t, handlers.AccountPlanMissingErrorName, model.Name())
+		require.Equal(t, providercaps.AccountPlanMissingErrorName, model.Name())
 	})
 
 	t.Run("provider not allowed", func(t *testing.T) {

@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"fmt"
 
+	accesscaps "github.com/fil-forge/libforge/capabilities/access"
 	blobcaps "github.com/fil-forge/libforge/capabilities/blob"
 	httpcaps "github.com/fil-forge/libforge/capabilities/http"
 	"github.com/fil-forge/libforge/digestutil"
@@ -61,7 +62,7 @@ func NewBlobAddHandler(id *identity.Identity, provisioningSvc *provisioning.Serv
 				return fmt.Errorf("listing service providers: %w", err)
 			}
 			if len(providers) == 0 {
-				return res.SetFailure(errors.New(InsufficientStorageErrorName, "space has no storage provider"))
+				return res.SetFailure(errors.New(accesscaps.InsufficientStorageErrorName, "space has no storage provider"))
 			}
 
 			reg, err := blobRegistry.Get(req.Context(), space, blob.Digest)

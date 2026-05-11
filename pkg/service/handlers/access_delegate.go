@@ -13,11 +13,6 @@ import (
 	"go.uber.org/zap"
 )
 
-const (
-	DelegationNotFoundErrorName  = "DelegationNotFound"
-	InsufficientStorageErrorName = "InsufficientStorage"
-)
-
 func NewAccessDelegateHandler(delegationStore delegation_store.Store, provisioningSvc *provisioning.Service, logger *zap.Logger) Handler {
 	log := logger.With(zap.String("handler", access.DelegateCommand))
 	return Handler{
@@ -42,7 +37,7 @@ func NewAccessDelegateHandler(delegationStore delegation_store.Store, provisioni
 				return fmt.Errorf("listing service providers: %w", err)
 			}
 			if len(providers) == 0 {
-				return res.SetFailure(errors.New(InsufficientStorageErrorName, "space has no storage provider"))
+				return res.SetFailure(errors.New(access.InsufficientStorageErrorName, "space has no storage provider"))
 			}
 
 			dlgs, err := extractDelegations(args, req.Metadata())
@@ -73,7 +68,7 @@ func extractDelegations(args *access.DelegateArguments, meta ucan.Container) ([]
 	for _, link := range args.Delegations {
 		d, ok := all[link]
 		if !ok {
-			return nil, errors.New(DelegationNotFoundErrorName, "delegation not found: %s", link.String())
+			return nil, errors.New(access.DelegationNotFoundErrorName, "delegation not found: %s", link.String())
 		}
 		dlgs = append(dlgs, d)
 	}

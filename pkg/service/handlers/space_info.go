@@ -11,8 +11,6 @@ import (
 	"go.uber.org/zap"
 )
 
-const UnknownSpaceErrorName = "UnknownSpace"
-
 // This handler returns info about a space, including its providers.
 func NewSpaceInfoHandler(provisioningSvc *provisioning.Service, logger *zap.Logger) Handler {
 	log := logger.With(zap.String("handler", spacecaps.InfoCommand))
@@ -28,7 +26,7 @@ func NewSpaceInfoHandler(provisioningSvc *provisioning.Service, logger *zap.Logg
 
 			if !strings.HasPrefix(space.DID().String(), "did:key:") {
 				log.Warn("non-did:key space info requested")
-				return res.SetFailure(errors.New(UnknownSpaceErrorName, "can only get info for did:key spaces"))
+				return res.SetFailure(errors.New(spacecaps.UnknownSpaceErrorName, "can only get info for did:key spaces"))
 			}
 
 			providers, err := provisioningSvc.ListServiceProviders(req.Context(), space.DID())

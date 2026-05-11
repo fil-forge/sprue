@@ -8,7 +8,6 @@ import (
 	"github.com/fil-forge/libforge/didmailto"
 	"github.com/fil-forge/sprue/pkg/identity"
 	delegation_store "github.com/fil-forge/sprue/pkg/store/delegation"
-	"github.com/fil-forge/ucantone/errors"
 	"github.com/fil-forge/ucantone/execution/bindexec"
 	"github.com/fil-forge/ucantone/ipld"
 	"github.com/fil-forge/ucantone/ipld/datamodel"
@@ -21,8 +20,6 @@ import (
 	"go.uber.org/zap"
 )
 
-const InvalidAccessConfirmInvocationErrorName = "InvalidAccessConfirmInvocation"
-
 func NewAccessConfirmHandler(id *identity.Identity, delegationStore delegation_store.Store, logger *zap.Logger) Handler {
 	log := logger.With(zap.String("handler", access.ConfirmCommand))
 	return Handler{
@@ -34,13 +31,13 @@ func NewAccessConfirmHandler(id *identity.Identity, delegationStore delegation_s
 			args := req.Task().BindArguments()
 			if req.Invocation().Subject().DID() != id.Signer.DID() {
 				log.Warn("not a valid invocation", zap.Stringer("subject", req.Invocation().Subject().DID()))
-				return res.SetFailure(errors.New(InvalidAccessConfirmInvocationErrorName, "not a valid access/confirm delegation"))
+				return res.SetFailure(access.ErrInvalidAccessConfirmSubject)
 			}
 
 			accountDID, err := didmailto.Parse(args.Issuer.DID().String())
 			if err != nil {
 				log.Warn("invalid issuer DID", zap.Stringer("issuer", args.Issuer.DID()), zap.Error(err))
-				return res.SetFailure(errors.New(InvalidAccessConfirmInvocationErrorName, "invalid issuer DID in delegation"))
+				return res.SetFailure(access.ErrInvalidAccessConfirmIssuer)
 			}
 
 			// Create a absentee signer for the account that authorized the delegation

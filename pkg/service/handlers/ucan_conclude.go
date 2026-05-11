@@ -15,13 +15,6 @@ import (
 	"go.uber.org/zap"
 )
 
-const (
-	InvalidInvocationErrorName         = "InvalidInvocation"
-	ConclusionReceiptNotFoundErrorName = "ConclusionReceiptNotFound"
-)
-
-var ErrConclusionReceiptNotFound = errors.New(ConclusionReceiptNotFoundErrorName, "conclusion receipt not found")
-
 type ConclusionHandlerFunc func(context.Context, ucan.Invocation, ucan.Receipt, ucan.Container) error
 
 // ConclusionHandler is the definition of a handler for an invocation conclusion
@@ -64,7 +57,7 @@ func NewUCANConcludeHandler(id *identity.Identity, agentStore agent.Store, handl
 			}
 			if rcpt == nil {
 				log.Warn("receipt not found in invocation metadata")
-				return res.SetFailure(ErrConclusionReceiptNotFound)
+				return res.SetFailure(ucancaps.ErrConclusionReceiptNotFound)
 			}
 			log = log.With(zap.Stringer("task", rcpt.Ran()))
 

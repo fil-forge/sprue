@@ -132,7 +132,7 @@ func TestAccessRequestHandler(t *testing.T) {
 		model := edm.ErrorModel{}
 		err = datamodel.Rebind(datamodel.NewAny(x), &model)
 		require.NoError(t, err)
-		require.Equal(t, InvalidAuthorizationAccountErrorName, model.Name())
+		require.Equal(t, access.InvalidAuthorizationAccountErrorName, model.Name())
 	})
 
 	t.Run("mailer error", func(t *testing.T) {

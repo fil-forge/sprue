@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"testing"
 
+	accesscaps "github.com/fil-forge/libforge/capabilities/access"
 	assertcaps "github.com/fil-forge/libforge/capabilities/assert"
 	blobcaps "github.com/fil-forge/libforge/capabilities/blob"
 	contentcaps "github.com/fil-forge/libforge/capabilities/content"
@@ -126,7 +127,7 @@ func TestIndexAddHandler(t *testing.T) {
 
 		model := edm.ErrorModel{}
 		require.NoError(t, datamodel.Rebind(datamodel.NewAny(fail), &model))
-		require.Equal(t, handlers.InsufficientStorageErrorName, model.Name())
+		require.Equal(t, accesscaps.InsufficientStorageErrorName, model.Name())
 	})
 
 	t.Run("index not found in space", func(t *testing.T) {
@@ -154,7 +155,7 @@ func TestIndexAddHandler(t *testing.T) {
 
 		model := edm.ErrorModel{}
 		require.NoError(t, datamodel.Rebind(datamodel.NewAny(fail), &model))
-		require.Equal(t, handlers.IndexNotFoundErrorName, model.Name())
+		require.Equal(t, indexcaps.IndexNotFoundErrorName, model.Name())
 	})
 
 	t.Run("retrieval auth supplied publishes index claim", func(t *testing.T) {

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/fil-forge/libforge/capabilities"
+	accesscaps "github.com/fil-forge/libforge/capabilities/access"
 	blobcaps "github.com/fil-forge/libforge/capabilities/blob"
 	httpcaps "github.com/fil-forge/libforge/capabilities/http"
 	"github.com/fil-forge/libforge/didmailto"
@@ -189,7 +190,7 @@ func TestBlobAddHandler(t *testing.T) {
 		model := edm.ErrorModel{}
 		err = datamodel.Rebind(datamodel.NewAny(fail), &model)
 		require.NoError(t, err)
-		require.Equal(t, handlers.InsufficientStorageErrorName, model.Name())
+		require.Equal(t, accesscaps.InsufficientStorageErrorName, model.Name())
 	})
 
 	t.Run("no candidates available", func(t *testing.T) {

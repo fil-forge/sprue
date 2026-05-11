@@ -130,6 +130,6 @@ func TestSpaceInfoHandler(t *testing.T) {
 
 		model := edm.ErrorModel{}
 		require.NoError(t, datamodel.Rebind(datamodel.NewAny(fail), &model))
-		require.Equal(t, handlers.UnknownSpaceErrorName, model.Name())
+		require.Equal(t, spacecaps.UnknownSpaceErrorName, model.Name())
 	})
 }

@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 
+	accesscaps "github.com/fil-forge/libforge/capabilities/access"
 	uploadcaps "github.com/fil-forge/libforge/capabilities/upload"
 	"github.com/fil-forge/sprue/pkg/provisioning"
 	upload_store "github.com/fil-forge/sprue/pkg/store/upload"
@@ -39,7 +40,7 @@ func NewUploadAddHandler(provisioningSvc *provisioning.Service, uploadStore uplo
 			}
 			if len(provs) == 0 {
 				log.Warn("space has no service provider")
-				return res.SetFailure(errors.New(InsufficientStorageErrorName, "space has no service provider"))
+				return res.SetFailure(errors.New(accesscaps.InsufficientStorageErrorName, "space has no service provider"))
 			}
 
 			err = uploadStore.Upsert(req.Context(), space.DID(), args.Root, args.Index, args.Shards, cause)

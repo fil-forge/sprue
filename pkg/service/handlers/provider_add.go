@@ -14,13 +14,6 @@ import (
 	"go.uber.org/zap"
 )
 
-const (
-	InvalidAccountErrorName     = "InvalidAccount"
-	AccountPlanMissingErrorName = "AccountPlanMissing"
-)
-
-var ErrAccountPlanMissing = errors.New(AccountPlanMissingErrorName, "account does not have an active payment plan")
-
 func NewProviderAddHandler(deploymentCfg config.DeploymentConfig, provisioningSvc *provisioning.Service, billingSvc *billing.Service, logger *zap.Logger) Handler {
 	log := logger.With(zap.String("handler", providercaps.AddCommand))
 	return Handler{
@@ -33,7 +26,7 @@ func NewProviderAddHandler(deploymentCfg config.DeploymentConfig, provisioningSv
 			account, err := didmailto.Parse(req.Invocation().Subject().DID().String())
 			if err != nil {
 				log.Warn("invalid account", zap.Stringer("account", req.Invocation().Subject().DID()))
-				return res.SetFailure(errors.New(InvalidAccountErrorName, "invalid account DID: %v", err))
+				return res.SetFailure(errors.New(providercaps.InvalidAccountErrorName, "invalid account DID: %v", err))
 			}
 			serviceProvider := args.Provider
 			space := args.Consumer
@@ -53,7 +46,7 @@ func NewProviderAddHandler(deploymentCfg config.DeploymentConfig, provisioningSv
 				if err != nil {
 					if errors.Is(err, billing.ErrMissingPaymentPlan) {
 						log.Warn("account does not have an active payment plan")
-						return res.SetFailure(ErrAccountPlanMissing)
+						return res.SetFailure(providercaps.ErrAccountPlanMissing)
 					}
 					log.Error("failed to check payment plan", zap.Error(err))
 					return fmt.Errorf("checking payment plan: %w", err)

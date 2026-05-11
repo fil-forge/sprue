@@ -5,6 +5,7 @@ import (
 
 	"go.uber.org/zap"
 
+	accesscaps "github.com/fil-forge/libforge/capabilities/access"
 	indexcaps "github.com/fil-forge/libforge/capabilities/index"
 	"github.com/fil-forge/sprue/pkg/identity"
 	"github.com/fil-forge/sprue/pkg/indexerclient"
@@ -14,10 +15,6 @@ import (
 	"github.com/fil-forge/ucantone/errors"
 	"github.com/fil-forge/ucantone/execution/bindexec"
 )
-
-const IndexNotFoundErrorName = "IndexNotFound"
-
-var ErrIndexNotFound = errors.New(IndexNotFoundErrorName, "index not found in space")
 
 func NewIndexAddHandler(id *identity.Identity, provisioningSvc *provisioning.Service, blobRegistry blobregistry.Store, indexerClient *indexerclient.Client, logger *zap.Logger) Handler {
 	log := logger.With(zap.String("handler", indexcaps.AddCommand))
@@ -44,7 +41,7 @@ func NewIndexAddHandler(id *identity.Identity, provisioningSvc *provisioning.Ser
 			}
 			if len(provs) == 0 {
 				log.Warn("space has no service provider")
-				return res.SetFailure(errors.New(InsufficientStorageErrorName, "space has no service provider"))
+				return res.SetFailure(errors.New(accesscaps.InsufficientStorageErrorName, "space has no service provider"))
 			}
 
 			// Ensure the index is stored in the agent's space
@@ -52,7 +49,7 @@ func NewIndexAddHandler(id *identity.Identity, provisioningSvc *provisioning.Ser
 			if err != nil {
 				if errors.Is(err, blobregistry.ErrEntryNotFound) {
 					log.Warn("index not found in space")
-					return res.SetFailure(ErrIndexNotFound)
+					return res.SetFailure(indexcaps.ErrIndexNotFound)
 				}
 				log.Error("failed to get index from blob registry", zap.Error(err))
 				return err

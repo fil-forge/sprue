@@ -163,6 +163,8 @@ github.com/felixge/httpsnoop v1.0.4 h1:NFTV2Zj1bL4mc9sqWACXbQFVBBg2W3GPvqp8/ESS2
 github.com/felixge/httpsnoop v1.0.4/go.mod h1:m8KPJKqk1gH5J9DgRY2ASl2lWCfGKXixSwevea8zH2U=
 github.com/fil-forge/libforge v0.0.0-20260511104837-383044b9b01f h1:bxGaLAF+kD5ADpX5N68hwBn2Wc+qW4cC9ptCzymQ7xs=
 github.com/fil-forge/libforge v0.0.0-20260511104837-383044b9b01f/go.mod h1:IdNOBIQeH59dG99FnLmqrwrvaJ4Akm4IPUng8DeqFig=
+github.com/fil-forge/libforge v0.0.0-20260511140612-bf046e51661e h1:t+/Q3U7qeUkkaOoUx0XOY3AjFHx+2k9HZ7MVWpVW/1I=
+github.com/fil-forge/libforge v0.0.0-20260511140612-bf046e51661e/go.mod h1:IdNOBIQeH59dG99FnLmqrwrvaJ4Akm4IPUng8DeqFig=
 github.com/fil-forge/ucantone v0.0.0-20260507115308-bdd3b86f5b1b h1:8tvw5e7S1ntUnm0v/OTWLZelbJWQcho/WZI+ttCPv+A=
 github.com/fil-forge/ucantone v0.0.0-20260507115308-bdd3b86f5b1b/go.mod h1:vqgVEsy6LEEsY24Zyjxem0vSofj1XTIx29GbV635f+I=
 github.com/frankban/quicktest v1.14.6 h1:7Xjx+VpznH+oBnejlPUj8oUpdxnVs4f8XU8WnHkI4W8=
