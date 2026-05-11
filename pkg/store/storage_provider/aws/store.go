@@ -70,11 +70,10 @@ func (s *Store) Put(ctx context.Context, id did.DID, endpoint url.URL, weight in
 		TableName: aws.String(s.tableName),
 		Key:       map[string]types.AttributeValue{"provider": &types.AttributeValueMemberS{Value: id.String()}},
 		UpdateExpression: aws.String(
-			"SET #endpoint = :endpoint, #proof = :proof, #weight = :weight, #replicationWeight = :replicationWeight, #insertedAt = if_not_exists(#insertedAt, :now), #updatedAt = :now",
+			"SET #endpoint = :endpoint, #weight = :weight, #replicationWeight = :replicationWeight, #insertedAt = if_not_exists(#insertedAt, :now), #updatedAt = :now",
 		),
 		ExpressionAttributeNames: map[string]string{
 			"#endpoint":   "endpoint",
-			"#proof":      "proof",
 			"#weight":     "weight",
 			"#insertedAt": "insertedAt",
 			"#updatedAt":  "updatedAt",

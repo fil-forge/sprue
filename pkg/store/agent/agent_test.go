@@ -8,8 +8,9 @@ import (
 	ucancap "github.com/fil-forge/libforge/capabilities/ucan"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/store/agent"
-	"github.com/fil-forge/sprue/pkg/store/agent/aws"
-	"github.com/fil-forge/sprue/pkg/store/agent/memory"
+	agentaws "github.com/fil-forge/sprue/pkg/store/agent/aws"
+	agentmemory "github.com/fil-forge/sprue/pkg/store/agent/memory"
+	agentpostgres "github.com/fil-forge/sprue/pkg/store/agent/postgres"
 	"github.com/fil-forge/ucantone/ipld"
 	"github.com/fil-forge/ucantone/ipld/datamodel"
 	"github.com/fil-forge/ucantone/result"
@@ -34,7 +35,7 @@ var storeKinds = []StoreKind{Memory, AWS, Postgres}
 func makeStore(t *testing.T, k StoreKind) agent.Store {
 	switch k {
 	case Memory:
-		return memory.New()
+		return agentmemory.New()
 	case AWS:
 		return createAWSStore(t)
 	case Postgres:
@@ -83,7 +84,7 @@ func createAWSStore(t *testing.T) agent.Store {
 	dynamo := testutil.NewDynamoClient(t, dynamoEndpoint)
 
 	id := uuid.NewString()
-	store := aws.New(dynamo, "agent-index-"+id, s3, "agent-message-"+id)
+	store := agentaws.New(dynamo, "agent-index-"+id, s3, "agent-message-"+id)
 
 	err := store.Initialize(t.Context())
 	require.NoError(t, err)

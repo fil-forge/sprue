@@ -8,10 +8,9 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/fil-forge/go-ucanto/core/delegation"
-	"github.com/fil-forge/go-ucanto/did"
 	"github.com/fil-forge/sprue/pkg/store"
 	storageprovider "github.com/fil-forge/sprue/pkg/store/storage_provider"
+	"github.com/fil-forge/ucantone/did"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -30,23 +29,17 @@ func New(pool *pgxpool.Pool) *Store {
 
 func (s *Store) Initialize(ctx context.Context) error { return nil }
 
-func (s *Store) Put(ctx context.Context, endpoint url.URL, proof delegation.Delegation, weight int, replicationWeight *int) error {
-	proofStr, err := delegation.Format(proof)
-	if err != nil {
-		return fmt.Errorf("formatting proof: %w", err)
-	}
-
+func (s *Store) Put(ctx context.Context, id did.DID, endpoint url.URL, weight int, replicationWeight *int) error {
 	now := time.Now().UTC()
-	_, err = s.pool.Exec(ctx, `
-		INSERT INTO storage_provider (provider, endpoint, proof, weight, replication_weight, inserted_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $6)
+	_, err := s.pool.Exec(ctx, `
+		INSERT INTO storage_provider (provider, endpoint, weight, replication_weight, inserted_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $5)
 		ON CONFLICT (provider) DO UPDATE
 		SET endpoint = EXCLUDED.endpoint,
-		    proof = EXCLUDED.proof,
 		    weight = EXCLUDED.weight,
 		    replication_weight = EXCLUDED.replication_weight,
 		    updated_at = EXCLUDED.updated_at
-	`, proof.Issuer().DID().String(), endpoint.String(), proofStr, weight, replicationWeight, now)
+	`, id.String(), endpoint.String(), weight, replicationWeight, now)
 	if err != nil {
 		return fmt.Errorf("storing storage provider: %w", err)
 	}
@@ -55,7 +48,7 @@ func (s *Store) Put(ctx context.Context, endpoint url.URL, proof delegation.Dele
 
 func (s *Store) Get(ctx context.Context, providerID did.DID) (storageprovider.Record, error) {
 	row := s.pool.QueryRow(ctx, `
-		SELECT provider, endpoint, proof, weight, replication_weight, inserted_at, updated_at
+		SELECT provider, endpoint, weight, replication_weight, inserted_at, updated_at
 		FROM storage_provider
 		WHERE provider = $1
 	`, providerID.String())
@@ -92,7 +85,7 @@ func (s *Store) List(ctx context.Context, options ...storageprovider.ListOption)
 
 	args := []any{limit + 1}
 	query := `
-		SELECT provider, endpoint, proof, weight, replication_weight, inserted_at, updated_at
+		SELECT provider, endpoint, weight, replication_weight, inserted_at, updated_at
 		FROM storage_provider
 	`
 	if cfg.Cursor != nil {
@@ -136,13 +129,12 @@ func scanRecord(row rowScanner) (storageprovider.Record, error) {
 	var (
 		providerStr       string
 		endpointStr       string
-		proofStr          string
 		weight            int
 		replicationWeight *int
 		insertedAt        time.Time
 		updatedAt         time.Time
 	)
-	if err := row.Scan(&providerStr, &endpointStr, &proofStr, &weight, &replicationWeight, &insertedAt, &updatedAt); err != nil {
+	if err := row.Scan(&providerStr, &endpointStr, &weight, &replicationWeight, &insertedAt, &updatedAt); err != nil {
 		return storageprovider.Record{}, err
 	}
 	providerDID, err := did.Parse(providerStr)
@@ -153,14 +145,9 @@ func scanRecord(row rowScanner) (storageprovider.Record, error) {
 	if err != nil {
 		return storageprovider.Record{}, fmt.Errorf("parsing endpoint URL: %w", err)
 	}
-	proof, err := delegation.Parse(proofStr)
-	if err != nil {
-		return storageprovider.Record{}, fmt.Errorf("parsing proof: %w", err)
-	}
 	return storageprovider.Record{
 		Provider:          providerDID,
 		Endpoint:          *endpoint,
-		Proof:             proof,
 		Weight:            weight,
 		ReplicationWeight: replicationWeight,
 		InsertedAt:        insertedAt,

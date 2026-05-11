@@ -3,7 +3,6 @@
 CREATE TABLE storage_provider (
     provider           TEXT        PRIMARY KEY,
     endpoint           TEXT        NOT NULL,
-    proof              TEXT        NOT NULL,
     weight             INTEGER     NOT NULL,
     replication_weight INTEGER,
     inserted_at        TIMESTAMPTZ NOT NULL,

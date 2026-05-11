@@ -27,6 +27,7 @@ var (
 type (
 	ListConfig = store.PaginationConfig
 	ListOption func(cfg *ListConfig)
+	Blob       = blob.Blob
 )
 
 func WithListLimit(limit int) ListOption {
@@ -43,7 +44,7 @@ func WithListCursor(cursor string) ListOption {
 
 type Record struct {
 	Space      did.DID
-	Blob       blob.Blob
+	Blob       Blob
 	Cause      cid.Cid
 	InsertedAt time.Time
 }
@@ -53,7 +54,7 @@ type Store interface {
 	Get(ctx context.Context, space did.DID, digest multihash.Multihash) (Record, error)
 	// Adds an item into the registry if it does not already exist. May return
 	// [ErrEntryExists] if the blob is already registered in the space.
-	Register(ctx context.Context, space did.DID, blob blob.Blob, cause cid.Cid) error
+	Register(ctx context.Context, space did.DID, blob Blob, cause cid.Cid) error
 	// List entries in the registry for a given space.
 	List(ctx context.Context, space did.DID, options ...ListOption) (store.Page[Record], error)
 	// Removes an item from the registry if it exists.

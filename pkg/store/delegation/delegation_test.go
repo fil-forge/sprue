@@ -9,7 +9,8 @@ import (
 	"github.com/fil-forge/sprue/pkg/store"
 	dlgstore "github.com/fil-forge/sprue/pkg/store/delegation"
 	delegationaws "github.com/fil-forge/sprue/pkg/store/delegation/aws"
-	"github.com/fil-forge/sprue/pkg/store/delegation/memory"
+	delegationmemory "github.com/fil-forge/sprue/pkg/store/delegation/memory"
+	delegationpostgres "github.com/fil-forge/sprue/pkg/store/delegation/postgres"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/delegation"
 	"github.com/google/uuid"
@@ -29,7 +30,7 @@ var storeKinds = []StoreKind{Memory, AWS, Postgres}
 func makeStore(t *testing.T, k StoreKind) dlgstore.Store {
 	switch k {
 	case Memory:
-		return memory.New()
+		return delegationmemory.New()
 	case AWS:
 		return createAWSStore(t)
 	case Postgres:

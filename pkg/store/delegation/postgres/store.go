@@ -11,10 +11,12 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/fil-forge/go-ucanto/core/delegation"
-	"github.com/fil-forge/go-ucanto/did"
 	"github.com/fil-forge/sprue/pkg/store"
 	dlgstore "github.com/fil-forge/sprue/pkg/store/delegation"
+	"github.com/fil-forge/ucantone/did"
+	"github.com/fil-forge/ucantone/ucan"
+	"github.com/fil-forge/ucantone/ucan/delegation"
+	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/ipfs/go-cid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -43,15 +45,27 @@ func (s *Store) Initialize(ctx context.Context) error {
 	return nil
 }
 
-func (s *Store) PutMany(ctx context.Context, delegations []delegation.Delegation, cause cid.Cid) error {
+func (s *Store) PutMany(ctx context.Context, tokens []ucan.Token, cause cid.Cid) error {
 	now := time.Now().UTC()
-	for _, dlg := range delegations {
-		link := dlg.Root().Link().String()
+	for _, token := range tokens {
+		link := token.Link().String()
 
-		body, err := io.ReadAll(dlg.Archive())
-		if err != nil {
-			return fmt.Errorf("archiving delegation %s: %w", link, err)
+		var body []byte
+		var err error
+		if dlg, ok := token.(ucan.Delegation); ok {
+			body, err = delegation.Encode(dlg)
+			if err != nil {
+				return fmt.Errorf("encoding delegation %s: %w", link, err)
+			}
+		} else if inv, ok := token.(ucan.Invocation); ok {
+			body, err = invocation.Encode(inv)
+			if err != nil {
+				return fmt.Errorf("encoding invocation %s: %w", link, err)
+			}
+		} else {
+			return fmt.Errorf("unsupported token type: %T", token)
 		}
+
 		if _, err := s.s3.PutObject(ctx, &s3.PutObjectInput{
 			Bucket: &s.bucketName,
 			Key:    aws.String(link),
@@ -60,13 +74,20 @@ func (s *Store) PutMany(ctx context.Context, delegations []delegation.Delegation
 			return fmt.Errorf("storing delegation %s in S3: %w", link, err)
 		}
 
+		var aud did.DID
+		// audience may be nil if the token is an invocation
+		if token.Audience() != nil {
+			aud = token.Audience().DID()
+		} else {
+			aud = token.Subject().DID()
+		}
 		var causeStr *string
 		if cause != cid.Undef {
 			c := cause.String()
 			causeStr = &c
 		}
 		var expiration *int64
-		if exp := dlg.Expiration(); exp != nil {
+		if exp := token.Expiration(); exp != nil {
 			e := int64(*exp)
 			expiration = &e
 		}
@@ -80,14 +101,14 @@ func (s *Store) PutMany(ctx context.Context, delegations []delegation.Delegation
 			    cause = EXCLUDED.cause,
 			    expiration = EXCLUDED.expiration,
 			    updated_at = EXCLUDED.updated_at
-		`, link, dlg.Audience().DID().String(), dlg.Issuer().DID().String(), causeStr, expiration, now); err != nil {
+		`, link, aud.String(), token.Issuer().DID().String(), causeStr, expiration, now); err != nil {
 			return fmt.Errorf("indexing delegation %s: %w", link, err)
 		}
 	}
 	return nil
 }
 
-func (s *Store) ListByAudience(ctx context.Context, audience did.DID, options ...dlgstore.ListByAudienceOption) (store.Page[delegation.Delegation], error) {
+func (s *Store) ListByAudience(ctx context.Context, audience did.DID, options ...dlgstore.ListByAudienceOption) (store.Page[ucan.Token], error) {
 	cfg := dlgstore.ListByAudienceConfig{}
 	for _, opt := range options {
 		opt(&cfg)
@@ -111,7 +132,7 @@ func (s *Store) ListByAudience(ctx context.Context, audience did.DID, options ..
 
 	rows, err := s.pool.Query(ctx, query, args...)
 	if err != nil {
-		return store.Page[delegation.Delegation]{}, fmt.Errorf("querying delegations by audience: %w", err)
+		return store.Page[ucan.Token]{}, fmt.Errorf("querying delegations by audience: %w", err)
 	}
 	defer rows.Close()
 
@@ -119,12 +140,12 @@ func (s *Store) ListByAudience(ctx context.Context, audience did.DID, options ..
 	for rows.Next() {
 		var link string
 		if err := rows.Scan(&link); err != nil {
-			return store.Page[delegation.Delegation]{}, fmt.Errorf("scanning delegation: %w", err)
+			return store.Page[ucan.Token]{}, fmt.Errorf("scanning delegation: %w", err)
 		}
 		links = append(links, link)
 	}
 	if err := rows.Err(); err != nil {
-		return store.Page[delegation.Delegation]{}, fmt.Errorf("iterating delegations: %w", err)
+		return store.Page[ucan.Token]{}, fmt.Errorf("iterating delegations: %w", err)
 	}
 
 	var cursor *string
@@ -134,35 +155,42 @@ func (s *Store) ListByAudience(ctx context.Context, audience did.DID, options ..
 		links = links[:limit]
 	}
 
-	results := make([]delegation.Delegation, 0, len(links))
+	results := make([]ucan.Token, 0, len(links))
 	for _, link := range links {
-		dlg, err := s.fetchDelegation(ctx, link)
+		token, err := s.fetchToken(ctx, link)
 		if err != nil {
-			return store.Page[delegation.Delegation]{}, fmt.Errorf("fetching delegation %s: %w", link, err)
+			return store.Page[ucan.Token]{}, fmt.Errorf("fetching token %s: %w", link, err)
 		}
-		results = append(results, dlg)
+		results = append(results, token)
 	}
 
-	return store.Page[delegation.Delegation]{Results: results, Cursor: cursor}, nil
+	return store.Page[ucan.Token]{Results: results, Cursor: cursor}, nil
 }
 
-func (s *Store) fetchDelegation(ctx context.Context, link string) (delegation.Delegation, error) {
+// fetchToken retrieves and decodes a delegation/invocation from S3 by its link
+// CID string.
+func (s *Store) fetchToken(ctx context.Context, link string) (ucan.Token, error) {
 	out, err := s.s3.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: &s.bucketName,
 		Key:    aws.String(link),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("getting delegation from S3: %w", err)
+		return nil, fmt.Errorf("getting token %s from S3: %w", link, err)
 	}
 	defer out.Body.Close()
 
-	data, err := io.ReadAll(out.Body)
+	body, err := io.ReadAll(out.Body)
 	if err != nil {
-		return nil, fmt.Errorf("reading delegation from S3: %w", err)
+		return nil, fmt.Errorf("reading token %s body from S3: %w", link, err)
 	}
-	dlg, err := delegation.Extract(data)
+
+	inv, err := invocation.Decode(body)
 	if err != nil {
-		return nil, fmt.Errorf("extracting delegation: %w", err)
+		dlg, err := delegation.Decode(body)
+		if err != nil {
+			return nil, fmt.Errorf("decoding token %s: %w", link, err)
+		}
+		return dlg, nil
 	}
-	return dlg, nil
+	return inv, nil
 }

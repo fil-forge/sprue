@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/fil-forge/go-ucanto/did"
 	"github.com/fil-forge/sprue/pkg/store"
 	"github.com/fil-forge/sprue/pkg/store/subscription"
+	"github.com/fil-forge/ucantone/did"
 	"github.com/ipfs/go-cid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"

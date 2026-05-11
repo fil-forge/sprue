@@ -3,6 +3,7 @@
 CREATE TABLE upload (
     space       TEXT        NOT NULL,
     root        TEXT        NOT NULL,
+    index       TEXT,
     cause       TEXT        NOT NULL,
     inserted_at TIMESTAMPTZ NOT NULL,
     updated_at  TIMESTAMPTZ NOT NULL,

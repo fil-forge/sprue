@@ -111,7 +111,7 @@ func TestWireApp(t *testing.T) {
 						Port: 0,
 					},
 					Identity: config.IdentityConfig{
-						PrivateKey: testutil.Must(ed25519.Format(testutil.WebService))(t),
+						PrivateKey: signer.Format(testutil.WebService),
 						ServiceDID: testutil.WebService.DID().String(),
 					},
 					Indexer: config.IndexerConfig{

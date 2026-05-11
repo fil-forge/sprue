@@ -267,7 +267,7 @@ func (s *Store) Write(ctx context.Context, message ucan.Container, index []agent
 		s3Put: &s3.PutObjectInput{
 			Bucket: &s.bucketName,
 			Key:    aws.String(toMessagePath(msgRoot)),
-			Body:   &buf,
+			Body:   bytes.NewReader(buf.Bytes()),
 		},
 		callback: callback,
 	})

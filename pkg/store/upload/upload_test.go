@@ -8,8 +8,9 @@ import (
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/store"
 	"github.com/fil-forge/sprue/pkg/store/upload"
-	"github.com/fil-forge/sprue/pkg/store/upload/aws"
-	"github.com/fil-forge/sprue/pkg/store/upload/memory"
+	uploadaws "github.com/fil-forge/sprue/pkg/store/upload/aws"
+	uploadmemory "github.com/fil-forge/sprue/pkg/store/upload/memory"
+	uploadpostgres "github.com/fil-forge/sprue/pkg/store/upload/postgres"
 	"github.com/fil-forge/ucantone/did"
 	"github.com/google/uuid"
 	"github.com/ipfs/go-cid"
@@ -29,7 +30,7 @@ var storeKinds = []StoreKind{Memory, AWS, Postgres}
 func makeStore(t *testing.T, k StoreKind) upload.Store {
 	switch k {
 	case Memory:
-		return memory.New()
+		return uploadmemory.New()
 	case AWS:
 		return createAWSStore(t)
 	case Postgres:
@@ -51,7 +52,7 @@ func createPostgresStore(t *testing.T) upload.Store {
 	return uploadpostgres.New(pool)
 }
 
-func createAWSStore(t *testing.T) *aws.Store {
+func createAWSStore(t *testing.T) *uploadaws.Store {
 	// This test expects docker to be running in linux CI environments and fails if it's not
 	if testutil.IsRunningInCI(t) && runtime.GOOS == "linux" {
 		if !testutil.IsDockerAvailable(t) {
@@ -70,7 +71,7 @@ func createAWSStore(t *testing.T) *aws.Store {
 	dynamo := testutil.NewDynamoClient(t, dynamoEndpoint)
 
 	id := uuid.NewString()
-	store := aws.New(dynamo, "upload-"+id, s3, "upload-shards-"+id)
+	store := uploadaws.New(dynamo, "upload-"+id, s3, "upload-shards-"+id)
 
 	err := store.Initialize(t.Context())
 	require.NoError(t, err)
@@ -161,7 +162,7 @@ func TestUploadStore(t *testing.T) {
 
 				// build a second batch of shards that includes one duplicate from the
 				// first batch and enough new shards to push the total over ShardThreshold
-				newShardCount := aws.ShardThreshold - len(initialShards) + 2 // +2 to exceed threshold, accounting for the duplicate
+				newShardCount := uploadaws.ShardThreshold - len(initialShards) + 2 // +2 to exceed threshold, accounting for the duplicate
 				additionalShards := make([]cid.Cid, newShardCount)
 				additionalShards[0] = initialShards[0] // duplicate
 				for i := 1; i < newShardCount; i++ {
@@ -179,7 +180,7 @@ func TestUploadStore(t *testing.T) {
 
 				// total unique shards = initialShards + additionalShards - 1 duplicate
 				wantShards := len(initialShards) + newShardCount - 1
-				require.Greater(t, wantShards, aws.ShardThreshold)
+				require.Greater(t, wantShards, uploadaws.ShardThreshold)
 
 				allShards := listAllShards(t, store, space, root)
 				require.Len(t, allShards, wantShards)
@@ -213,7 +214,7 @@ func TestUploadStore(t *testing.T) {
 					shardCount int
 				}{
 					{"few shards", 3},
-					{"many shards", aws.ShardThreshold + 1},
+					{"many shards", uploadaws.ShardThreshold + 1},
 				}
 				for _, tc := range cases {
 					t.Run(tc.name, func(t *testing.T) {
@@ -258,7 +259,7 @@ func TestUploadStore(t *testing.T) {
 					shardCount int
 				}{
 					{"few shards", 3},
-					{"many shards", aws.ShardThreshold + 1},
+					{"many shards", uploadaws.ShardThreshold + 1},
 				}
 				for _, tc := range cases {
 					t.Run(tc.name, func(t *testing.T) {

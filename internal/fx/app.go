@@ -1,6 +1,8 @@
 package fx
 
 import (
+	"fmt"
+
 	"github.com/fil-forge/sprue/internal/config"
 	"github.com/fil-forge/sprue/internal/fx/service"
 	"github.com/fil-forge/sprue/internal/fx/service/handlers"

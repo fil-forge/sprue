@@ -10,7 +10,8 @@ import (
 	"github.com/fil-forge/sprue/pkg/store"
 	storageprovider "github.com/fil-forge/sprue/pkg/store/storage_provider"
 	storageprovideraws "github.com/fil-forge/sprue/pkg/store/storage_provider/aws"
-	"github.com/fil-forge/sprue/pkg/store/storage_provider/memory"
+	storageprovidermemory "github.com/fil-forge/sprue/pkg/store/storage_provider/memory"
+	storageproviderpostgres "github.com/fil-forge/sprue/pkg/store/storage_provider/postgres"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
@@ -28,7 +29,7 @@ var storeKinds = []StoreKind{Memory, AWS, Postgres}
 func makeStore(t *testing.T, k StoreKind) storageprovider.Store {
 	switch k {
 	case Memory:
-		return memory.New()
+		return storageprovidermemory.New()
 	case AWS:
 		return createAWSStore(t)
 	case Postgres:
