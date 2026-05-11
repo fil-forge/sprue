@@ -43,14 +43,14 @@ func NewAccessRequestHandler(serverCfg config.ServerConfig, id *identity.Identit
 			account, err := didmailto.Parse(args.Issuer.String())
 			if err != nil {
 				log.Warn("failed to parse mailto DID", zap.Stringer("account", args.Issuer))
-				return res.SetFailure(errors.New(InvalidAuthorizationAccountErrorName, "invalid authorization account DID: %v", err))
+				return res.SetFailure(errors.New(access.InvalidAuthorizationAccountErrorName, "invalid authorization account DID: %v", err))
 			}
 			// we should be able to extract the email from the DID since we just
 			// parsed it as a did:mailto:
 			email, err := didmailto.Email(account)
 			if err != nil {
 				log.Warn("failed to extract email from DID", zap.Stringer("account", args.Issuer))
-				return res.SetFailure(errors.New(InvalidAuthorizationAccountErrorName, "invalid authorization account DID: %v", err))
+				return res.SetFailure(errors.New(access.InvalidAuthorizationAccountErrorName, "invalid authorization account DID: %v", err))
 			}
 			audience := req.Invocation().Subject().DID()
 			agent := req.Invocation().Issuer().DID()
