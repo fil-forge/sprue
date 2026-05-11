@@ -3,7 +3,7 @@ module github.com/fil-forge/sprue
 go 1.25.3
 
 require (
-	github.com/alanshaw/dag-json-gen v0.0.4
+	github.com/alanshaw/dag-json-gen v0.0.5
 	github.com/aws/aws-sdk-go-v2 v1.41.3
 	github.com/aws/aws-sdk-go-v2/config v1.32.11
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.11

@@ -31,16 +31,16 @@ func (t *SetArgumentsModel) MarshalDagJSON(w io.Writer) error {
 
 	// t.Provider (did.DID) (struct)
 	if len("provider") > 8192 {
-		return fmt.Errorf("String in field \"provider\" was too long")
+		return fmt.Errorf("string in field \"provider\" was too long")
 	}
 	if err := jw.WriteString(string("provider")); err != nil {
-		return fmt.Errorf("\"provider\": %w", err)
+		return fmt.Errorf("writing string for field \"provider\": %w", err)
 	}
 	if err := jw.WriteObjectColon(); err != nil {
 		return err
 	}
 	if err := t.Provider.MarshalDagJSON(jw); err != nil {
-		return fmt.Errorf("t.Provider: %w", err)
+		return fmt.Errorf("marshaling field t.Provider: %w", err)
 	}
 	written++
 	if written > 0 {
@@ -51,17 +51,17 @@ func (t *SetArgumentsModel) MarshalDagJSON(w io.Writer) error {
 
 	// t.ReplicationWeight (int64) (int64)
 	if len("replicationWeight") > 8192 {
-		return fmt.Errorf("String in field \"replicationWeight\" was too long")
+		return fmt.Errorf("string in field \"replicationWeight\" was too long")
 	}
 	if err := jw.WriteString(string("replicationWeight")); err != nil {
-		return fmt.Errorf("\"replicationWeight\": %w", err)
+		return fmt.Errorf("writing string for field \"replicationWeight\": %w", err)
 	}
 	if err := jw.WriteObjectColon(); err != nil {
 		return err
 	}
 
 	if err := jw.WriteInt64(int64(t.ReplicationWeight)); err != nil {
-		return fmt.Errorf("t.ReplicationWeight: %w", err)
+		return fmt.Errorf("writing int64 for field t.ReplicationWeight: %w", err)
 	}
 
 	written++
@@ -73,17 +73,17 @@ func (t *SetArgumentsModel) MarshalDagJSON(w io.Writer) error {
 
 	// t.Weight (int64) (int64)
 	if len("weight") > 8192 {
-		return fmt.Errorf("String in field \"weight\" was too long")
+		return fmt.Errorf("string in field \"weight\" was too long")
 	}
 	if err := jw.WriteString(string("weight")); err != nil {
-		return fmt.Errorf("\"weight\": %w", err)
+		return fmt.Errorf("writing string for field \"weight\": %w", err)
 	}
 	if err := jw.WriteObjectColon(); err != nil {
 		return err
 	}
 
 	if err := jw.WriteInt64(int64(t.Weight)); err != nil {
-		return fmt.Errorf("t.Weight: %w", err)
+		return fmt.Errorf("writing int64 for field t.Weight: %w", err)
 	}
 
 	written++
@@ -102,27 +102,27 @@ func (t *SetArgumentsModel) UnmarshalDagJSON(r io.Reader) (err error) {
 		}
 	}()
 	if err := jr.ReadObjectOpen(); err != nil {
-		return fmt.Errorf("SetArgumentsModel: %w", err)
+		return fmt.Errorf("reading object open for SetArgumentsModel: %w", err)
 	}
 	close, err := jr.PeekObjectClose()
 	if err != nil {
-		return fmt.Errorf("SetArgumentsModel: %w", err)
+		return fmt.Errorf("peeking object close for SetArgumentsModel: %w", err)
 	}
 	if close {
 		if err := jr.ReadObjectClose(); err != nil {
-			return fmt.Errorf("SetArgumentsModel: %w", err)
+			return fmt.Errorf("reading object close for SetArgumentsModel: %w", err)
 		}
 	} else {
 		for i := uint64(0); i < 8192; i++ {
 			name, err := jr.ReadString(8192)
 			if err != nil {
 				if errors.Is(err, jsg.ErrLimitExceeded) {
-					return fmt.Errorf("SetArgumentsModel: string too large")
+					return fmt.Errorf("reading string for field SetArgumentsModel: string too large")
 				}
-				return fmt.Errorf("SetArgumentsModel: %w", err)
+				return fmt.Errorf("reading string for field SetArgumentsModel: %w", err)
 			}
 			if err := jr.ReadObjectColon(); err != nil {
-				return fmt.Errorf("SetArgumentsModel: %w", err)
+				return fmt.Errorf("reading object colon for field SetArgumentsModel: %w", err)
 			}
 			switch name {
 
@@ -139,7 +139,7 @@ func (t *SetArgumentsModel) UnmarshalDagJSON(r io.Reader) (err error) {
 
 					nval, err := jr.ReadNumberAsInt64()
 					if err != nil {
-						return fmt.Errorf("t.ReplicationWeight: %w", err)
+						return fmt.Errorf("reading int64 for field t.ReplicationWeight: %w", err)
 					}
 					t.ReplicationWeight = int64(nval)
 
@@ -151,7 +151,7 @@ func (t *SetArgumentsModel) UnmarshalDagJSON(r io.Reader) (err error) {
 
 					nval, err := jr.ReadNumberAsInt64()
 					if err != nil {
-						return fmt.Errorf("t.Weight: %w", err)
+						return fmt.Errorf("reading int64 for field t.Weight: %w", err)
 					}
 					t.Weight = int64(nval)
 
@@ -159,19 +159,19 @@ func (t *SetArgumentsModel) UnmarshalDagJSON(r io.Reader) (err error) {
 			default:
 				// Field doesn't exist on this type, so ignore it
 				if err := jr.DiscardType(); err != nil {
-					return fmt.Errorf("SetArgumentsModel: ignoring field %s: %w", name, err)
+					return fmt.Errorf("ignoring field %s for SetArgumentsModel: %w", name, err)
 				}
 			}
 
 			close, err := jr.ReadObjectCloseOrComma()
 			if err != nil {
-				return fmt.Errorf("SetArgumentsModel: %w", err)
+				return fmt.Errorf("reading object close or comma for field SetArgumentsModel: %w", err)
 			}
 			if close {
 				break
 			}
 			if i == 8192-1 {
-				return fmt.Errorf("SetArgumentsModel: map too large")
+				return fmt.Errorf("map too large for SetArgumentsModel")
 			}
 		}
 	}
