@@ -16,11 +16,8 @@ import (
 	"github.com/fil-forge/sprue/pkg/store"
 	"github.com/fil-forge/sprue/pkg/store/upload"
 	"github.com/fil-forge/ucantone/did"
+	"github.com/fil-forge/ucantone/ipld/datamodel"
 	"github.com/ipfs/go-cid"
-	"github.com/ipld/go-ipld-prime/codec/dagcbor"
-	"github.com/ipld/go-ipld-prime/fluent"
-	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
-	basicnode "github.com/ipld/go-ipld-prime/node/basic"
 	"github.com/multiformats/go-multihash"
 )
 
@@ -579,18 +576,12 @@ func itemToShards(item map[string]types.AttributeValue) ([]cid.Cid, error) {
 }
 
 func encodeShards(shards []cid.Cid) (cid.Cid, []byte, error) {
-	n, err := fluent.BuildList(basicnode.Prototype.List, int64(len(shards)), func(la fluent.ListAssembler) {
-		for _, s := range shards {
-			la.AssembleValue().AssignLink(cidlink.Link{Cid: s})
-		}
-	})
-	if err != nil {
-		return cid.Undef, nil, fmt.Errorf("encoding shards: %w", err)
-	}
 	var buf bytes.Buffer
-	if err := dagcbor.Encode(n, &buf); err != nil {
-		return cid.Undef, nil, fmt.Errorf("encoding shards to DAG-CBOR: %w", err)
+	model := datamodel.NewAny(shards)
+	if err := model.MarshalCBOR(&buf); err != nil {
+		return cid.Undef, nil, fmt.Errorf("marshaling shards to DAG-CBOR: %w", err)
 	}
+
 	c, err := cid.Prefix{
 		Version:  1,
 		Codec:    cid.DagCBOR,
@@ -604,34 +595,13 @@ func encodeShards(shards []cid.Cid) (cid.Cid, []byte, error) {
 }
 
 func decodeShards(data []byte) ([]cid.Cid, error) {
-	r := bytes.NewReader(data)
-	nb := basicnode.Prototype.List.NewBuilder()
-	err := dagcbor.Decode(nb, r)
-	if err != nil {
-		return nil, fmt.Errorf("decoding shards from DAG-CBOR: %w", err)
+	model := datamodel.NewAny([]cid.Cid{})
+	if err := model.UnmarshalCBOR(bytes.NewReader(data)); err != nil {
+		return nil, fmt.Errorf("unmarshaling shards from DAG-CBOR: %w", err)
 	}
-	n := nb.Build()
-	shards := []cid.Cid{}
-	iter := n.ListIterator()
-	for !iter.Done() {
-		_, shardNode, err := iter.Next()
-		if err != nil {
-			return nil, fmt.Errorf("iterating over shards list: %w", err)
-		}
-		sl, err := shardNode.AsLink()
-		if err != nil {
-			return nil, fmt.Errorf("getting shard link: %w", err)
-		}
-		var shard cid.Cid
-		if cl, ok := sl.(cidlink.Link); ok {
-			shard = cl.Cid
-		} else {
-			shard, err = cid.Parse(sl.String())
-			if err != nil {
-				return nil, fmt.Errorf("parsing shard CID: %w", err)
-			}
-		}
-		shards = append(shards, shard)
+	shards, ok := model.Value.([]cid.Cid)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type for shards list: %T", model.Value)
 	}
 	return shards, nil
 }
