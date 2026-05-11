@@ -8,6 +8,7 @@ import (
 	"github.com/fil-forge/sprue/internal/fx/service/handlers"
 	"github.com/fil-forge/sprue/internal/fx/store/aws"
 	"github.com/fil-forge/sprue/internal/fx/store/memory"
+	"github.com/fil-forge/sprue/internal/fx/store/postgres"
 	"go.uber.org/fx"
 )
 
