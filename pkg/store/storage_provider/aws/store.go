@@ -11,11 +11,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"github.com/fil-forge/go-ucanto/core/delegation"
-	"github.com/fil-forge/go-ucanto/did"
 	"github.com/fil-forge/sprue/pkg/internal/timeutil"
 	"github.com/fil-forge/sprue/pkg/store"
 	storageprovider "github.com/fil-forge/sprue/pkg/store/storage_provider"
+	"github.com/fil-forge/ucantone/did"
 )
 
 var DynamoStorageProviderTableProps = struct {
@@ -65,16 +64,11 @@ func (s *Store) Initialize(ctx context.Context) error {
 	return nil
 }
 
-func (s *Store) Put(ctx context.Context, endpoint url.URL, proof delegation.Delegation, weight int, replicationWeight *int) error {
-	proofStr, err := delegation.Format(proof)
-	if err != nil {
-		return fmt.Errorf("formatting proof: %w", err)
-	}
-
+func (s *Store) Put(ctx context.Context, id did.DID, endpoint url.URL, weight int, replicationWeight *int) error {
 	now := time.Now().UTC().Format(timeutil.SimplifiedISO8601)
 	input := dynamodb.UpdateItemInput{
 		TableName: aws.String(s.tableName),
-		Key:       map[string]types.AttributeValue{"provider": &types.AttributeValueMemberS{Value: proof.Issuer().DID().String()}},
+		Key:       map[string]types.AttributeValue{"provider": &types.AttributeValueMemberS{Value: id.String()}},
 		UpdateExpression: aws.String(
 			"SET #endpoint = :endpoint, #proof = :proof, #weight = :weight, #replicationWeight = :replicationWeight, #insertedAt = if_not_exists(#insertedAt, :now), #updatedAt = :now",
 		),
@@ -87,7 +81,6 @@ func (s *Store) Put(ctx context.Context, endpoint url.URL, proof delegation.Dele
 		},
 		ExpressionAttributeValues: map[string]types.AttributeValue{
 			":endpoint": &types.AttributeValueMemberS{Value: endpoint.String()},
-			":proof":    &types.AttributeValueMemberS{Value: proofStr},
 			":weight":   &types.AttributeValueMemberN{Value: strconv.Itoa(weight)},
 			":now":      &types.AttributeValueMemberS{Value: now},
 		},
@@ -97,7 +90,7 @@ func (s *Store) Put(ctx context.Context, endpoint url.URL, proof delegation.Dele
 		input.ExpressionAttributeValues[":replicationWeight"] = &types.AttributeValueMemberN{Value: strconv.Itoa(*replicationWeight)}
 	}
 
-	_, err = s.dynamo.UpdateItem(ctx, &input)
+	_, err := s.dynamo.UpdateItem(ctx, &input)
 	if err != nil {
 		return fmt.Errorf("storing storage provider: %w", err)
 	}
@@ -199,15 +192,6 @@ func itemToRecord(item map[string]types.AttributeValue) (storageprovider.Record,
 		return storageprovider.Record{}, fmt.Errorf("parsing endpoint URL: %w", err)
 	}
 
-	proofAttr, ok := item["proof"].(*types.AttributeValueMemberS)
-	if !ok {
-		return storageprovider.Record{}, fmt.Errorf("missing or invalid proof attribute")
-	}
-	proof, err := delegation.Parse(proofAttr.Value)
-	if err != nil {
-		return storageprovider.Record{}, fmt.Errorf("parsing proof: %w", err)
-	}
-
 	weightAttr, ok := item["weight"].(*types.AttributeValueMemberN)
 	if !ok {
 		return storageprovider.Record{}, fmt.Errorf("missing or invalid weight attribute")
@@ -233,7 +217,6 @@ func itemToRecord(item map[string]types.AttributeValue) (storageprovider.Record,
 	rec := storageprovider.Record{
 		Provider:          providerDID,
 		Endpoint:          *endpointURL,
-		Proof:             proof,
 		Weight:            weight,
 		ReplicationWeight: replicationWeight,
 	}

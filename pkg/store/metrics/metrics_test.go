@@ -8,7 +8,6 @@ import (
 	"github.com/fil-forge/sprue/pkg/store/metrics"
 	metricsaws "github.com/fil-forge/sprue/pkg/store/metrics/aws"
 	"github.com/fil-forge/sprue/pkg/store/metrics/memory"
-	metricspostgres "github.com/fil-forge/sprue/pkg/store/metrics/postgres"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )

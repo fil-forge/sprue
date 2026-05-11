@@ -1,31 +1,16 @@
 package provider
 
 import (
-	"github.com/fil-forge/go-ucanto/core/ipld"
-	"github.com/fil-forge/go-ucanto/core/result/ok"
-	"github.com/fil-forge/go-ucanto/core/schema"
-	"github.com/fil-forge/go-ucanto/did"
-	"github.com/fil-forge/go-ucanto/validator"
-	"github.com/ipld/go-ipld-prime/datamodel"
-
-	"github.com/fil-forge/go-libstoracha/capabilities/types"
+	cdm "github.com/fil-forge/libforge/capabilities/datamodel"
+	pdm "github.com/fil-forge/sprue/pkg/capabilities/admin/provider/datamodel"
+	"github.com/fil-forge/ucantone/validator/bindcap"
 )
 
-const DeregisterAbility = "admin/provider/deregister"
+const DeregisterCommand = "/admin/provider/deregister"
 
-type DeregisterCaveats struct {
-	Provider did.DID
-}
-
-func (dc DeregisterCaveats) ToIPLD() (datamodel.Node, error) {
-	return ipld.WrapWithRecovery(&dc, DeregisterCaveatsType(), types.Converters...)
-}
-
-type DeregisterOk = ok.Unit
-
-var Deregister = validator.NewCapability(
-	DeregisterAbility,
-	schema.DIDString(),
-	schema.Struct[DeregisterCaveats](DeregisterCaveatsType(), nil, types.Converters...),
-	validator.DefaultDerives[DeregisterCaveats],
+type (
+	DeregisterArguments = pdm.DeregisterArgumentsModel
+	DeregisterOK        = cdm.UnitModel
 )
+
+var Deregister, _ = bindcap.New[*DeregisterArguments](DeregisterCommand)

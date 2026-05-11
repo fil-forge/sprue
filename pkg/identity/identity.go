@@ -9,10 +9,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/fil-forge/go-ucanto/did"
-	"github.com/fil-forge/go-ucanto/principal"
-	ed25519 "github.com/fil-forge/go-ucanto/principal/ed25519/signer"
-	"github.com/fil-forge/go-ucanto/principal/signer"
+	"github.com/fil-forge/ucantone/did"
+	"github.com/fil-forge/ucantone/principal"
+	"github.com/fil-forge/ucantone/principal/ed25519"
+	"github.com/fil-forge/ucantone/principal/signer"
 )
 
 // Identity holds the service's cryptographic identity.
@@ -53,7 +53,7 @@ func (i *Identity) DID() string {
 // For unwrapped signers, returns the same as DID().
 func (i *Identity) UnderlyingKeyDID() string {
 	// Try to unwrap if it's a wrapped signer
-	if wrapped, ok := i.Signer.(signer.WrappedSigner); ok {
+	if wrapped, ok := i.Signer.(signer.Unwrapper); ok {
 		return wrapped.Unwrap().DID().String()
 	}
 	return i.Signer.DID().String()
@@ -169,5 +169,5 @@ func signerFromEd25519PEMFile(path string) (principal.Signer, error) {
 		return nil, fmt.Errorf("no PRIVATE KEY block found in PEM file")
 	}
 
-	return ed25519.FromRaw(*privateKey)
+	return ed25519.FromRaw(privateKey.Seed())
 }

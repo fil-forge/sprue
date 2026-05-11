@@ -10,7 +10,6 @@ import (
 	"github.com/fil-forge/sprue/pkg/store/customer"
 	customeraws "github.com/fil-forge/sprue/pkg/store/customer/aws"
 	"github.com/fil-forge/sprue/pkg/store/customer/memory"
-	customerpostgres "github.com/fil-forge/sprue/pkg/store/customer/postgres"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )

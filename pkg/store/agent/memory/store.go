@@ -1,51 +1,37 @@
 package memory
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"sync"
 
-	"github.com/fil-forge/go-ucanto/core/dag/blockstore"
-	"github.com/fil-forge/go-ucanto/core/invocation"
-	"github.com/fil-forge/go-ucanto/core/ipld"
-	"github.com/fil-forge/go-ucanto/core/message"
-	"github.com/fil-forge/go-ucanto/core/receipt"
-	"github.com/fil-forge/sprue/pkg/internal/ipldutil"
 	"github.com/fil-forge/sprue/pkg/store/agent"
+	"github.com/fil-forge/ucantone/ipld/codec/dagcbor"
+	"github.com/fil-forge/ucantone/ucan"
+	"github.com/fil-forge/ucantone/ucan/container"
 	"github.com/ipfs/go-cid"
-	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
+	"github.com/multiformats/go-multihash"
 )
-
-type carModel struct {
-	roots  []cid.Cid
-	blocks []ipld.Block
-}
-
-type indexModel struct {
-	// the root CID of the invocation or receipt
-	root cid.Cid
-	// the agent message this invocation or receipt was found in
-	at cid.Cid
-}
 
 type Store struct {
 	mutex sync.RWMutex
-	// agent message CID -> carModel
-	store map[cid.Cid]carModel
-	// "/<task_cid>/<invocation|receipt>/" -> list of invocation/receipt roots found in that message
-	index map[string][]indexModel
+	// agent message CID -> ucan.Container
+	store map[cid.Cid]ucan.Container
+	// "/<task_cid>/<invocation|receipt>/" -> list of agent messages invocation/receipt can be found in
+	index map[string][]cid.Cid
 }
 
 var _ agent.Store = (*Store)(nil)
 
 func New() *Store {
 	return &Store{
-		store: map[cid.Cid]carModel{},
-		index: map[string][]indexModel{},
+		store: map[cid.Cid]ucan.Container{},
+		index: map[string][]cid.Cid{},
 	}
 }
 
-func (s *Store) GetInvocation(ctx context.Context, task cid.Cid) (invocation.Invocation, error) {
+func (s *Store) GetInvocation(ctx context.Context, task cid.Cid) (ucan.Invocation, error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
@@ -54,16 +40,16 @@ func (s *Store) GetInvocation(ctx context.Context, task cid.Cid) (invocation.Inv
 	if !ok || len(records) == 0 {
 		return nil, agent.ErrInvocationNotFound
 	}
-	archive := s.store[records[0].at]
-	root := cidlink.Link{Cid: records[0].root}
-	bs, err := blockstore.NewBlockStore(blockstore.WithBlocks(archive.blocks))
-	if err != nil {
-		return nil, fmt.Errorf("creating blockstore: %w", err)
+	ct := s.store[records[0]]
+	for _, inv := range ct.Invocations() {
+		if inv.Task().Link() == task {
+			return inv, nil
+		}
 	}
-	return invocation.NewInvocationView(root, bs)
+	return nil, agent.ErrInvocationNotFound
 }
 
-func (s *Store) GetReceipt(ctx context.Context, task cid.Cid) (receipt.AnyReceipt, error) {
+func (s *Store) GetReceipt(ctx context.Context, task cid.Cid) (ucan.Receipt, error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 	key := fmt.Sprintf("/%s/receipt/", task)
@@ -71,41 +57,46 @@ func (s *Store) GetReceipt(ctx context.Context, task cid.Cid) (receipt.AnyReceip
 	if !ok || len(records) == 0 {
 		return nil, agent.ErrReceiptNotFound
 	}
-	archive := s.store[records[0].at]
-	root := cidlink.Link{Cid: records[0].root}
-	bs, err := blockstore.NewBlockStore(blockstore.WithBlocks(archive.blocks))
-	if err != nil {
-		return nil, fmt.Errorf("creating blockstore: %w", err)
+	ct := s.store[records[0]]
+	rcpt, ok := ct.Receipt(task)
+	if !ok {
+		return nil, agent.ErrReceiptNotFound
 	}
-	return receipt.NewAnyReceipt(root, bs)
+	return rcpt, nil
 }
 
-func (s *Store) Write(ctx context.Context, message message.AgentMessage, index []agent.IndexEntry, source []byte) error {
+func (s *Store) Write(ctx context.Context, message ucan.Container, index []agent.IndexEntry) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	at, err := ipldutil.ToCID(message.Root().Link())
-	if err != nil {
-		return err
+	c, ok := message.(*container.Container)
+	if !ok {
+		c = container.New(
+			container.WithInvocations(message.Invocations()...),
+			container.WithReceipts(message.Receipts()...),
+			container.WithDelegations(message.Delegations()...),
+		)
 	}
-	model, err := sourceToCARModel(source)
-	if err != nil {
-		return fmt.Errorf("converting to CAR model: %w", err)
+
+	var buf bytes.Buffer
+	if err := c.MarshalCBOR(&buf); err != nil {
+		return fmt.Errorf("marshaling agent message to CBOR: %w", err)
 	}
-	s.store[at] = model
+
+	at, err := cid.V1Builder{Codec: dagcbor.Code, MhType: multihash.SHA2_256}.Sum(buf.Bytes())
+	if err != nil {
+		return fmt.Errorf("hashing agent message: %w", err)
+	}
+
+	s.store[at] = message
 	for _, idx := range index {
 		if idx.Invocation != nil {
-			root := idx.Invocation.Task
-			key := fmt.Sprintf("/%s/invocation/", root)
-			s.index[key] = append(s.index[key], indexModel{root: root, at: at})
+			key := fmt.Sprintf("/%s/invocation/", idx.Invocation.Task)
+			s.index[key] = append(s.index[key], at)
 		}
 		if idx.Receipt != nil {
 			key := fmt.Sprintf("/%s/receipt/", idx.Receipt.Task)
-			receiptRoot, err := ipldutil.ToCID(idx.Receipt.Receipt.Root().Link())
-			if err != nil {
-				return fmt.Errorf("converting receipt root to CID: %w", err)
-			}
-			s.index[key] = append(s.index[key], indexModel{root: receiptRoot, at: at})
+			s.index[key] = append(s.index[key], at)
 		}
 	}
 	return nil

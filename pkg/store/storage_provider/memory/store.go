@@ -9,10 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/fil-forge/go-ucanto/core/delegation"
-	"github.com/fil-forge/go-ucanto/did"
 	"github.com/fil-forge/sprue/pkg/store"
 	storageprovider "github.com/fil-forge/sprue/pkg/store/storage_provider"
+	"github.com/fil-forge/ucantone/did"
 )
 
 type Store struct {
@@ -85,22 +84,20 @@ func (s *Store) List(ctx context.Context, options ...storageprovider.ListOption)
 	return store.Page[storageprovider.Record]{Results: records, Cursor: cursor}, nil
 }
 
-func (s *Store) Put(ctx context.Context, endpoint url.URL, proof delegation.Delegation, weight int, replicationWeight *int) error {
+func (s *Store) Put(ctx context.Context, id did.DID, endpoint url.URL, weight int, replicationWeight *int) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	if sp, ok := s.providers[proof.Issuer().DID()]; ok {
+	if sp, ok := s.providers[id]; ok {
 		sp.Endpoint = endpoint
-		sp.Proof = proof
 		sp.Weight = weight
 		sp.ReplicationWeight = replicationWeight
 		sp.UpdatedAt = time.Now()
-		s.providers[proof.Issuer().DID()] = sp
+		s.providers[id] = sp
 		return nil
 	}
-	s.providers[proof.Issuer().DID()] = storageprovider.Record{
-		Provider:          proof.Issuer().DID(),
+	s.providers[id] = storageprovider.Record{
+		Provider:          id,
 		Endpoint:          endpoint,
-		Proof:             proof,
 		Weight:            weight,
 		ReplicationWeight: replicationWeight,
 		InsertedAt:        time.Now(),

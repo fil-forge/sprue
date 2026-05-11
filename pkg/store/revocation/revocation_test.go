@@ -8,7 +8,6 @@ import (
 	"github.com/fil-forge/sprue/pkg/store/revocation"
 	revocationaws "github.com/fil-forge/sprue/pkg/store/revocation/aws"
 	"github.com/fil-forge/sprue/pkg/store/revocation/memory"
-	revocationpostgres "github.com/fil-forge/sprue/pkg/store/revocation/postgres"
 	"github.com/google/uuid"
 	"github.com/ipfs/go-cid"
 	"github.com/stretchr/testify/require"

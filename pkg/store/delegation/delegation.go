@@ -3,9 +3,9 @@ package delegation
 import (
 	"context"
 
-	"github.com/fil-forge/go-ucanto/core/delegation"
-	"github.com/fil-forge/go-ucanto/did"
 	"github.com/fil-forge/sprue/pkg/store"
+	"github.com/fil-forge/ucantone/did"
+	"github.com/fil-forge/ucantone/ucan"
 	"github.com/ipfs/go-cid"
 )
 
@@ -28,6 +28,6 @@ type Store interface {
 	// Implementations MAY choose to avoid storing delegations as long as they can
 	// reliably retrieve the invocation by CID when they need to return the given
 	// delegations.
-	PutMany(ctx context.Context, delegations []delegation.Delegation, cause cid.Cid) error
-	ListByAudience(ctx context.Context, audience did.DID, options ...ListByAudienceOption) (store.Page[delegation.Delegation], error)
+	PutMany(ctx context.Context, tokens []ucan.Token, cause cid.Cid) error
+	ListByAudience(ctx context.Context, audience did.DID, options ...ListByAudienceOption) (store.Page[ucan.Token], error)
 }

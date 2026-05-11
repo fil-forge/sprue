@@ -6,13 +6,12 @@ import (
 	"net/url"
 	"slices"
 
-	"github.com/fil-forge/go-libstoracha/capabilities/types"
-	"github.com/fil-forge/go-libstoracha/digestutil"
-	"github.com/fil-forge/go-ucanto/core/delegation"
-	"github.com/fil-forge/go-ucanto/ucan"
-	"github.com/fil-forge/sprue/pkg/lib/errors"
+	"github.com/fil-forge/libforge/capabilities/blob"
+	"github.com/fil-forge/libforge/digestutil"
 	"github.com/fil-forge/sprue/pkg/store"
 	storageprovider "github.com/fil-forge/sprue/pkg/store/storage_provider"
+	"github.com/fil-forge/ucantone/errors"
+	"github.com/fil-forge/ucantone/ucan"
 	"go.uber.org/zap"
 )
 
@@ -39,12 +38,6 @@ func WithExclusions(providers ...ucan.Principal) SelectOption {
 type StorageProviderInfo struct {
 	ID       ucan.Principal
 	Endpoint url.URL
-	// FIXME: the client should authorize the upload service to blob/allocate and
-	// blob/accept in the blob/add invocation. The upload service should use that
-	// delegation to authorize allocate and accept calls to the storage provider.
-	// This removes the need for storage providers to grant love lived delegations
-	// to the upload service. We will fix this in UCAN 1.0.
-	Proof delegation.Delegation
 }
 
 type Service struct {
@@ -69,14 +62,13 @@ func (s *Service) GetProviderInfo(ctx context.Context, provider ucan.Principal) 
 	return StorageProviderInfo{
 		ID:       rec.Provider,
 		Endpoint: rec.Endpoint,
-		Proof:    rec.Proof,
 	}, nil
 }
 
 // SelectStorageProvider selects a candidate for blob allocation from the
 // current list of available storage nodes. It may return
 // [ErrCandidateUnavailable] if no candidates are available.
-func (s *Service) SelectStorageProvider(ctx context.Context, blob types.Blob, options ...SelectOption) (StorageProviderInfo, error) {
+func (s *Service) SelectStorageProvider(ctx context.Context, blob blob.Blob, options ...SelectOption) (StorageProviderInfo, error) {
 	cfg := &selectCfg{}
 	for _, option := range options {
 		option(cfg)
@@ -113,14 +105,13 @@ func (s *Service) SelectStorageProvider(ctx context.Context, blob types.Blob, op
 	return StorageProviderInfo{
 		ID:       selected.Provider,
 		Endpoint: selected.Endpoint,
-		Proof:    selected.Proof,
 	}, nil
 }
 
 // SelectReplicationProvider selects a candidate for blob allocation from the
 // current list of available storage nodes, excluding the primary node. It may
 // return [ErrCandidateUnavailable] if no candidates are available.
-func (s *Service) SelectReplicationProvider(ctx context.Context, primary ucan.Principal, blob types.Blob, options ...SelectOption) (StorageProviderInfo, error) {
+func (s *Service) SelectReplicationProvider(ctx context.Context, primary ucan.Principal, blob blob.Blob, options ...SelectOption) (StorageProviderInfo, error) {
 	cfg := &selectCfg{}
 	for _, option := range options {
 		option(cfg)
@@ -144,7 +135,6 @@ func (s *Service) SelectReplicationProvider(ctx context.Context, primary ucan.Pr
 	return StorageProviderInfo{
 		ID:       selected.Provider,
 		Endpoint: selected.Endpoint,
-		Proof:    selected.Proof,
 	}, nil
 }
 

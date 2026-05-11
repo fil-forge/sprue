@@ -8,7 +8,6 @@ import (
 	"github.com/fil-forge/sprue/pkg/store/replica"
 	replicaaws "github.com/fil-forge/sprue/pkg/store/replica/aws"
 	"github.com/fil-forge/sprue/pkg/store/replica/memory"
-	replicapostgres "github.com/fil-forge/sprue/pkg/store/replica/postgres"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )

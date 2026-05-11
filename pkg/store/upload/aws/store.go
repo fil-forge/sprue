@@ -12,10 +12,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/fil-forge/go-ucanto/did"
 	"github.com/fil-forge/sprue/pkg/internal/timeutil"
 	"github.com/fil-forge/sprue/pkg/store"
 	"github.com/fil-forge/sprue/pkg/store/upload"
+	"github.com/fil-forge/ucantone/did"
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime/codec/dagcbor"
 	"github.com/ipld/go-ipld-prime/fluent"
@@ -336,7 +336,7 @@ func (d *Store) Remove(ctx context.Context, space did.DID, root cid.Cid) error {
 	return nil
 }
 
-func (d *Store) Upsert(ctx context.Context, space did.DID, root cid.Cid, shards []cid.Cid, cause cid.Cid) error {
+func (d *Store) Upsert(ctx context.Context, space did.DID, root cid.Cid, index *cid.Cid, shards []cid.Cid, cause cid.Cid) error {
 	// Fetch the current item to get existing shards before merging.
 	current, err := d.dynamo.GetItem(ctx, &dynamodb.GetItemInput{
 		TableName: aws.String(d.tableName),
@@ -370,12 +370,16 @@ func (d *Store) Upsert(ctx context.Context, space did.DID, root cid.Cid, shards 
 		"#insertedAt": "insertedAt",
 		"#updatedAt":  "updatedAt",
 		"#cause":      "cause",
+		"#index":      "index",
 		"#shardsRef":  "shardsRef",
 		"#shards":     "shards",
 	}
 	exprAttrValues := map[string]types.AttributeValue{
 		":now":   &types.AttributeValueMemberS{Value: now},
 		":cause": &types.AttributeValueMemberS{Value: cause.String()},
+	}
+	if index != nil {
+		exprAttrValues[":index"] = &types.AttributeValueMemberS{Value: index.String()}
 	}
 
 	var updateExpr string
@@ -394,16 +398,28 @@ func (d *Store) Upsert(ctx context.Context, space did.DID, root cid.Cid, shards 
 			return fmt.Errorf("storing shards in S3: %w", err)
 		}
 		exprAttrValues[":shardsRef"] = &types.AttributeValueMemberS{Value: newShardsRef}
-		updateExpr = "SET #insertedAt = if_not_exists(#insertedAt, :now), #updatedAt = :now, #cause = :cause, #shardsRef = :shardsRef REMOVE #shards"
+		if index != nil {
+			updateExpr = "SET #insertedAt = if_not_exists(#insertedAt, :now), #updatedAt = :now, #cause = :cause, #shardsRef = :shardsRef, #index = :index REMOVE #shards"
+		} else {
+			updateExpr = "SET #insertedAt = if_not_exists(#insertedAt, :now), #updatedAt = :now, #cause = :cause, #shardsRef = :shardsRef REMOVE #shards, #index"
+		}
 	} else if len(merged) > 0 {
 		shardStrs := make([]string, len(merged))
 		for i, s := range merged {
 			shardStrs[i] = s.String()
 		}
 		exprAttrValues[":shards"] = &types.AttributeValueMemberSS{Value: shardStrs}
-		updateExpr = "SET #insertedAt = if_not_exists(#insertedAt, :now), #updatedAt = :now, #cause = :cause, #shards = :shards REMOVE #shardsRef"
+		if index != nil {
+			updateExpr = "SET #insertedAt = if_not_exists(#insertedAt, :now), #updatedAt = :now, #cause = :cause, #shards = :shards, #index = :index REMOVE #shardsRef"
+		} else {
+			updateExpr = "SET #insertedAt = if_not_exists(#insertedAt, :now), #updatedAt = :now, #cause = :cause, #shards = :shards REMOVE #shardsRef, #index"
+		}
 	} else {
-		updateExpr = "SET #insertedAt = if_not_exists(#insertedAt, :now), #updatedAt = :now, #cause = :cause REMOVE #shards, #shardsRef"
+		if index != nil {
+			updateExpr = "SET #insertedAt = if_not_exists(#insertedAt, :now), #updatedAt = :now, #cause = :cause, #index = :index REMOVE #shards, #shardsRef"
+		} else {
+			updateExpr = "SET #insertedAt = if_not_exists(#insertedAt, :now), #updatedAt = :now, #cause = :cause REMOVE #shards, #shardsRef, #index"
+		}
 	}
 
 	_, err = d.dynamo.UpdateItem(ctx, &dynamodb.UpdateItemInput{
@@ -497,6 +513,19 @@ func itemToRecord(item map[string]types.AttributeValue) (upload.UploadRecord, er
 		return upload.UploadRecord{}, fmt.Errorf("parsing root CID: %w", err)
 	}
 
+	var index *cid.Cid
+	if _, ok := item["index"]; ok {
+		indexAttr, ok := item["index"].(*types.AttributeValueMemberS)
+		if !ok {
+			return upload.UploadRecord{}, fmt.Errorf("missing or invalid index attribute")
+		}
+		c, err := cid.Parse(indexAttr.Value)
+		if err != nil {
+			return upload.UploadRecord{}, fmt.Errorf("parsing index CID: %w", err)
+		}
+		index = &c
+	}
+
 	causeAttr, ok := item["cause"].(*types.AttributeValueMemberS)
 	if !ok {
 		return upload.UploadRecord{}, fmt.Errorf("missing or invalid cause attribute")
@@ -522,6 +551,7 @@ func itemToRecord(item map[string]types.AttributeValue) (upload.UploadRecord, er
 	return upload.UploadRecord{
 		Space:      space,
 		Root:       root,
+		Index:      index,
 		Cause:      cause,
 		InsertedAt: insertedAt,
 		UpdatedAt:  updatedAt,

@@ -4,8 +4,8 @@ import (
 	"context"
 	"sync"
 
-	"github.com/fil-forge/go-ucanto/did"
 	"github.com/fil-forge/sprue/pkg/store/metrics"
+	"github.com/fil-forge/ucantone/did"
 )
 
 type Store struct {

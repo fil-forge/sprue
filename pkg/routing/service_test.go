@@ -4,9 +4,7 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/fil-forge/go-libstoracha/capabilities/types"
-	"github.com/fil-forge/go-ucanto/core/delegation"
-	"github.com/fil-forge/go-ucanto/ucan"
+	"github.com/fil-forge/libforge/capabilities/blob"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/routing"
 	storageprovider "github.com/fil-forge/sprue/pkg/store/storage_provider"
@@ -20,15 +18,7 @@ func addProvider(t *testing.T, store *spmemory.Store, weight int, replicationWei
 	ctx := t.Context()
 	storageProvider := testutil.RandomSigner(t)
 	endpoint := testutil.Must(url.Parse("https://piri.example.com"))(t)
-	proof, err := delegation.Delegate(
-		storageProvider,
-		testutil.WebService,
-		[]ucan.Capability[ucan.NoCaveats]{
-			ucan.NewCapability("blob/allocate", storageProvider.DID().String(), ucan.NoCaveats{}),
-		},
-	)
-	require.NoError(t, err)
-	err = store.Put(ctx, *endpoint, proof, weight, replicationWeight)
+	err := store.Put(ctx, storageProvider.DID(), *endpoint, weight, replicationWeight)
 	require.NoError(t, err)
 	rec, err := store.Get(ctx, storageProvider.DID())
 	require.NoError(t, err)
@@ -63,7 +53,7 @@ func TestGetProviderInfo(t *testing.T) {
 func TestSelectStorageProvider(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	ctx := t.Context()
-	blob := types.Blob{Size: 1024}
+	blob := blob.Blob{Size: 1024}
 
 	t.Run("no providers", func(t *testing.T) {
 		store := spmemory.New()
@@ -136,7 +126,7 @@ func TestSelectStorageProvider(t *testing.T) {
 func TestSelectReplicationProvider(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	ctx := t.Context()
-	blob := types.Blob{Size: 1024}
+	blob := blob.Blob{Size: 1024}
 
 	t.Run("excludes primary", func(t *testing.T) {
 		store := spmemory.New()

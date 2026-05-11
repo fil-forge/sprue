@@ -5,13 +5,12 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/fil-forge/go-ucanto/did"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/store"
 	"github.com/fil-forge/sprue/pkg/store/upload"
 	"github.com/fil-forge/sprue/pkg/store/upload/aws"
 	"github.com/fil-forge/sprue/pkg/store/upload/memory"
-	uploadpostgres "github.com/fil-forge/sprue/pkg/store/upload/postgres"
+	"github.com/fil-forge/ucantone/did"
 	"github.com/google/uuid"
 	"github.com/ipfs/go-cid"
 	"github.com/stretchr/testify/require"
@@ -99,10 +98,11 @@ func TestUploadStore(t *testing.T) {
 			t.Run("adds an upload", func(t *testing.T) {
 				space := testutil.RandomDID(t)
 				root := testutil.RandomCID(t)
+				index := testutil.RandomCID(t)
 				shards := []cid.Cid{testutil.RandomCID(t), testutil.RandomCID(t)}
 				cause := testutil.RandomCID(t)
 
-				err := store.Upsert(t.Context(), space, root, shards, cause)
+				err := store.Upsert(t.Context(), space, root, &index, shards, cause)
 				require.NoError(t, err)
 
 				exists, err := store.Exists(t.Context(), space, root)
@@ -119,10 +119,11 @@ func TestUploadStore(t *testing.T) {
 			t.Run("lists uploads", func(t *testing.T) {
 				space := testutil.RandomDID(t)
 				roots := []cid.Cid{testutil.RandomCID(t), testutil.RandomCID(t), testutil.RandomCID(t)}
+				indexes := []cid.Cid{testutil.RandomCID(t), testutil.RandomCID(t), testutil.RandomCID(t)}
 				cause := testutil.RandomCID(t)
 
-				for _, root := range roots {
-					err := store.Upsert(t.Context(), space, root, nil, cause)
+				for i, root := range roots {
+					err := store.Upsert(t.Context(), space, root, &indexes[i], nil, cause)
 					require.NoError(t, err)
 				}
 
@@ -147,6 +148,7 @@ func TestUploadStore(t *testing.T) {
 			t.Run("updates an upload", func(t *testing.T) {
 				space := testutil.RandomDID(t)
 				root := testutil.RandomCID(t)
+				index := testutil.RandomCID(t)
 				cause := testutil.RandomCID(t)
 
 				initialShards := make([]cid.Cid, 3)
@@ -154,7 +156,7 @@ func TestUploadStore(t *testing.T) {
 					initialShards[i] = testutil.RandomCID(t)
 				}
 
-				err := store.Upsert(t.Context(), space, root, initialShards, cause)
+				err := store.Upsert(t.Context(), space, root, nil, initialShards, cause)
 				require.NoError(t, err)
 
 				// build a second batch of shards that includes one duplicate from the
@@ -167,7 +169,7 @@ func TestUploadStore(t *testing.T) {
 				}
 
 				newCause := testutil.RandomCID(t)
-				err = store.Upsert(t.Context(), space, root, additionalShards, newCause)
+				err = store.Upsert(t.Context(), space, root, &index, additionalShards, newCause)
 				require.NoError(t, err)
 
 				// cause should be updated
@@ -185,6 +187,7 @@ func TestUploadStore(t *testing.T) {
 
 			t.Run("inspects an upload", func(t *testing.T) {
 				root := testutil.RandomCID(t)
+				index := testutil.RandomCID(t)
 				cause := testutil.RandomCID(t)
 
 				// inspecting a root not in any space returns empty spaces
@@ -195,8 +198,8 @@ func TestUploadStore(t *testing.T) {
 				// upsert the root into two different spaces
 				space1 := testutil.RandomDID(t)
 				space2 := testutil.RandomDID(t)
-				require.NoError(t, store.Upsert(t.Context(), space1, root, nil, cause))
-				require.NoError(t, store.Upsert(t.Context(), space2, root, nil, cause))
+				require.NoError(t, store.Upsert(t.Context(), space1, root, &index, nil, cause))
+				require.NoError(t, store.Upsert(t.Context(), space2, root, &index, nil, cause))
 
 				record, err = store.Inspect(t.Context(), root)
 				require.NoError(t, err)
@@ -216,6 +219,7 @@ func TestUploadStore(t *testing.T) {
 					t.Run(tc.name, func(t *testing.T) {
 						space := testutil.RandomDID(t)
 						root := testutil.RandomCID(t)
+						index := testutil.RandomCID(t)
 						cause := testutil.RandomCID(t)
 
 						// removing a non-existent upload returns an error
@@ -227,7 +231,7 @@ func TestUploadStore(t *testing.T) {
 							shards[i] = testutil.RandomCID(t)
 						}
 
-						err = store.Upsert(t.Context(), space, root, shards, cause)
+						err = store.Upsert(t.Context(), space, root, &index, shards, cause)
 						require.NoError(t, err)
 
 						err = store.Remove(t.Context(), space, root)
@@ -260,6 +264,7 @@ func TestUploadStore(t *testing.T) {
 					t.Run(tc.name, func(t *testing.T) {
 						space := testutil.RandomDID(t)
 						root := testutil.RandomCID(t)
+						index := testutil.RandomCID(t)
 						cause := testutil.RandomCID(t)
 
 						shards := make([]cid.Cid, tc.shardCount)
@@ -267,7 +272,7 @@ func TestUploadStore(t *testing.T) {
 							shards[i] = testutil.RandomCID(t)
 						}
 
-						err := store.Upsert(t.Context(), space, root, shards, cause)
+						err := store.Upsert(t.Context(), space, root, &index, shards, cause)
 						require.NoError(t, err)
 
 						// list with a limit of 2 - should return first 2 and a cursor

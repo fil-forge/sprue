@@ -5,14 +5,13 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/fil-forge/go-ucanto/core/delegation"
-	"github.com/fil-forge/go-ucanto/ucan"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/store"
 	dlgstore "github.com/fil-forge/sprue/pkg/store/delegation"
 	delegationaws "github.com/fil-forge/sprue/pkg/store/delegation/aws"
 	"github.com/fil-forge/sprue/pkg/store/delegation/memory"
-	delegationpostgres "github.com/fil-forge/sprue/pkg/store/delegation/postgres"
+	"github.com/fil-forge/ucantone/ucan"
+	"github.com/fil-forge/ucantone/ucan/delegation"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
@@ -83,16 +82,13 @@ func createAWSStore(t *testing.T) dlgstore.Store {
 }
 
 // makeDelegation creates a delegation from Alice to the given audience.
-// A random nonce is included so each delegation has a unique CID.
-func makeDelegation(t *testing.T, audience ucan.Principal) delegation.Delegation {
+func makeDelegation(t *testing.T, audience ucan.Principal) ucan.Delegation {
 	t.Helper()
 	dlg, err := delegation.Delegate(
 		testutil.Alice,
 		audience,
-		[]ucan.Capability[ucan.NoCaveats]{
-			ucan.NewCapability("test/delegate", testutil.Alice.DID().String(), ucan.NoCaveats{}),
-		},
-		delegation.WithNonce(uuid.NewString()),
+		testutil.Alice,
+		"/test/delegate",
 	)
 	require.NoError(t, err)
 	return dlg
@@ -108,12 +104,12 @@ func TestDelegationStore(t *testing.T) {
 				dlg := makeDelegation(t, audience)
 				cause := testutil.RandomCID(t)
 
-				require.NoError(t, s.PutMany(t.Context(), []delegation.Delegation{dlg}, cause))
+				require.NoError(t, s.PutMany(t.Context(), []ucan.Token{dlg}, cause))
 
 				page, err := s.ListByAudience(t.Context(), audience.DID())
 				require.NoError(t, err)
 				require.Len(t, page.Results, 1)
-				require.Equal(t, dlg.Root().Link().String(), page.Results[0].Root().Link().String())
+				require.Equal(t, dlg.Link().String(), page.Results[0].Link().String())
 			})
 
 			t.Run("ListByAudience returns empty page for unknown audience", func(t *testing.T) {
@@ -131,7 +127,7 @@ func TestDelegationStore(t *testing.T) {
 				dlg2 := makeDelegation(t, audience)
 				cause := testutil.RandomCID(t)
 
-				require.NoError(t, s.PutMany(t.Context(), []delegation.Delegation{dlg1, dlg2}, cause))
+				require.NoError(t, s.PutMany(t.Context(), []ucan.Token{dlg1, dlg2}, cause))
 
 				page, err := s.ListByAudience(t.Context(), audience.DID())
 				require.NoError(t, err)
@@ -145,17 +141,17 @@ func TestDelegationStore(t *testing.T) {
 				dlg2 := makeDelegation(t, aud2)
 				cause := testutil.RandomCID(t)
 
-				require.NoError(t, s.PutMany(t.Context(), []delegation.Delegation{dlg1, dlg2}, cause))
+				require.NoError(t, s.PutMany(t.Context(), []ucan.Token{dlg1, dlg2}, cause))
 
 				page1, err := s.ListByAudience(t.Context(), aud1.DID())
 				require.NoError(t, err)
 				require.Len(t, page1.Results, 1)
-				require.Equal(t, dlg1.Root().Link().String(), page1.Results[0].Root().Link().String())
+				require.Equal(t, dlg1.Link().String(), page1.Results[0].Link().String())
 
 				page2, err := s.ListByAudience(t.Context(), aud2.DID())
 				require.NoError(t, err)
 				require.Len(t, page2.Results, 1)
-				require.Equal(t, dlg2.Root().Link().String(), page2.Results[0].Root().Link().String())
+				require.Equal(t, dlg2.Link().String(), page2.Results[0].Link().String())
 			})
 
 			t.Run("ListByAudience isolates delegations by audience", func(t *testing.T) {
@@ -164,9 +160,9 @@ func TestDelegationStore(t *testing.T) {
 				cause := testutil.RandomCID(t)
 
 				for range 3 {
-					require.NoError(t, s.PutMany(t.Context(), []delegation.Delegation{makeDelegation(t, aud1)}, cause))
+					require.NoError(t, s.PutMany(t.Context(), []ucan.Token{makeDelegation(t, aud1)}, cause))
 				}
-				require.NoError(t, s.PutMany(t.Context(), []delegation.Delegation{makeDelegation(t, aud2)}, cause))
+				require.NoError(t, s.PutMany(t.Context(), []ucan.Token{makeDelegation(t, aud2)}, cause))
 
 				page, err := s.ListByAudience(t.Context(), aud1.DID())
 				require.NoError(t, err)
@@ -178,10 +174,10 @@ func TestDelegationStore(t *testing.T) {
 				cause := testutil.RandomCID(t)
 
 				for range 5 {
-					require.NoError(t, s.PutMany(t.Context(), []delegation.Delegation{makeDelegation(t, audience)}, cause))
+					require.NoError(t, s.PutMany(t.Context(), []ucan.Token{makeDelegation(t, audience)}, cause))
 				}
 
-				all, err := store.Collect(t.Context(), func(ctx context.Context, opts store.PaginationConfig) (store.Page[delegation.Delegation], error) {
+				all, err := store.Collect(t.Context(), func(ctx context.Context, opts store.PaginationConfig) (store.Page[ucan.Token], error) {
 					var listOpts []dlgstore.ListByAudienceOption
 					if opts.Cursor != nil {
 						listOpts = append(listOpts, dlgstore.WithListByAudienceCursor(*opts.Cursor))

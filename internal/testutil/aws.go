@@ -10,7 +10,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/fil-forge/go-libstoracha/testutil"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	tcdynamodb "github.com/testcontainers/testcontainers-go/modules/dynamodb"
@@ -27,7 +26,7 @@ func CreateDynamo(t *testing.T) *url.URL {
 	require.NoError(t, err)
 
 	t.Logf("DynamoDB listening on: http://%s", endpoint)
-	return testutil.Must(url.Parse("http://" + endpoint))(t)
+	return Must(url.Parse("http://" + endpoint))(t)
 }
 
 func NewDynamoClient(t *testing.T, endpoint *url.URL) *dynamodb.Client {
@@ -62,7 +61,7 @@ func CreateS3(t *testing.T) *url.URL {
 	require.NoError(t, err)
 
 	t.Logf("S3 listening on: http://%s", endpoint)
-	return testutil.Must(url.Parse("http://" + endpoint))(t)
+	return Must(url.Parse("http://" + endpoint))(t)
 }
 
 func NewS3Client(t *testing.T, endpoint *url.URL) *s3.Client {

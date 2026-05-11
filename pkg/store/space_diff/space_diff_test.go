@@ -11,7 +11,6 @@ import (
 	spacediff "github.com/fil-forge/sprue/pkg/store/space_diff"
 	spacediffaws "github.com/fil-forge/sprue/pkg/store/space_diff/aws"
 	"github.com/fil-forge/sprue/pkg/store/space_diff/memory"
-	spacediffpostgres "github.com/fil-forge/sprue/pkg/store/space_diff/postgres"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )

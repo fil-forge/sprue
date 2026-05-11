@@ -5,21 +5,18 @@ import (
 	"runtime"
 	"testing"
 
-	captypes "github.com/fil-forge/go-libstoracha/capabilities/types"
+	"github.com/fil-forge/libforge/capabilities/blob"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/store"
 	blobregistry "github.com/fil-forge/sprue/pkg/store/blob_registry"
 	blobregistryaws "github.com/fil-forge/sprue/pkg/store/blob_registry/aws"
 	"github.com/fil-forge/sprue/pkg/store/blob_registry/memory"
-	blobregistrypostgres "github.com/fil-forge/sprue/pkg/store/blob_registry/postgres"
 	"github.com/fil-forge/sprue/pkg/store/consumer"
 	consumeraws "github.com/fil-forge/sprue/pkg/store/consumer/aws"
 	memoryconsumer "github.com/fil-forge/sprue/pkg/store/consumer/memory"
-	consumerpostgres "github.com/fil-forge/sprue/pkg/store/consumer/postgres"
 	"github.com/fil-forge/sprue/pkg/store/metrics"
 	metricsaws "github.com/fil-forge/sprue/pkg/store/metrics/aws"
 	memorymetrics "github.com/fil-forge/sprue/pkg/store/metrics/memory"
-	metricspostgres "github.com/fil-forge/sprue/pkg/store/metrics/postgres"
 	spacediffaws "github.com/fil-forge/sprue/pkg/store/space_diff/aws"
 	memoryspacediff "github.com/fil-forge/sprue/pkg/store/space_diff/memory"
 	"github.com/google/uuid"
@@ -130,9 +127,9 @@ func createAWSStores(t *testing.T) storeBundle {
 }
 
 // randomBlob returns a blob with a random digest and the given size.
-func randomBlob(t *testing.T, size uint64) captypes.Blob {
+func randomBlob(t *testing.T, size uint64) blob.Blob {
 	t.Helper()
-	return captypes.Blob{Digest: testutil.RandomMultihash(t), Size: size}
+	return blob.Blob{Digest: testutil.RandomMultihash(t), Size: size}
 }
 
 func TestBlobRegistryStore(t *testing.T) {
