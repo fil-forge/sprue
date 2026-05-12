@@ -1,6 +1,7 @@
 package handlers_test
 
 import (
+	"bytes"
 	"net/url"
 	"testing"
 
@@ -12,8 +13,6 @@ import (
 	storage_provider_store "github.com/fil-forge/sprue/pkg/store/storage_provider/memory"
 	edm "github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
-	"github.com/fil-forge/ucantone/ipld/datamodel"
-	"github.com/fil-forge/ucantone/result"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/stretchr/testify/require"
@@ -72,12 +71,11 @@ func TestAdminProviderDeregisterHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		_, fail := result.Unwrap(res.Receipt().Out())
-		require.NotNil(t, fail)
+		_, x := res.Receipt().Out().Unpack()
+		require.NotNil(t, x)
 
-		model := edm.ErrorModel{}
-		err = datamodel.Rebind(datamodel.NewAny(fail), &model)
-		require.NoError(t, err)
+		var model edm.ErrorModel
+		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
 		require.Equal(t, "Unauthorized", model.Name())
 
 		// Record should still be present.
@@ -109,10 +107,7 @@ func TestAdminProviderDeregisterHandler(t *testing.T) {
 
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
-
-		o, fail := result.Unwrap(res.Receipt().Out())
-		require.Nil(t, fail)
-		require.NotNil(t, o)
+		require.False(t, res.Receipt().Out().IsErr())
 
 		_, err = spStore.Get(ctx, storageProvider.DID())
 		require.ErrorIs(t, err, storageprovider.ErrStorageProviderNotFound)
@@ -138,12 +133,11 @@ func TestAdminProviderDeregisterHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		_, fail := result.Unwrap(res.Receipt().Out())
-		require.NotNil(t, fail)
+		_, x := res.Receipt().Out().Unpack()
+		require.NotNil(t, x)
 
-		model := edm.ErrorModel{}
-		err = datamodel.Rebind(datamodel.NewAny(fail), &model)
-		require.NoError(t, err)
+		var model edm.ErrorModel
+		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
 		require.Equal(t, storageprovider.StorageProviderNotFoundErrorName, model.Name())
 	})
 }

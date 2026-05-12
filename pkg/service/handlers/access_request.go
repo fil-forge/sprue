@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"fmt"
 	"net/url"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/fil-forge/sprue/pkg/mailer"
 	"github.com/fil-forge/ucantone/errors"
 	"github.com/fil-forge/ucantone/execution/bindexec"
+	"github.com/fil-forge/ucantone/ipld/datamodel"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/container"
 	"github.com/fil-forge/ucantone/ucan/invocation"
@@ -63,6 +65,15 @@ func NewAccessRequestHandler(serverCfg config.ServerConfig, id *identity.Identit
 
 			exp := int(time.Now().Add(confirmationTTL).Unix())
 
+			metaBytes := req.Invocation().MetadataBytes()
+			meta := datamodel.Map{}
+			if len(metaBytes) > 0 {
+				if err := meta.UnmarshalCBOR(bytes.NewReader(metaBytes)); err != nil {
+					log.Error("failed to unmarshal invocation metadata", zap.Error(err))
+					return fmt.Errorf("unmarshaling invocation metadata: %w", err)
+				}
+			}
+
 			// We issue an `/access/confirm` invocation which will be embedded in the
 			// URL that we send to the user. When the user clicks the link we'll get
 			// this invocation back in the `/validate-email` endpoint which will allow
@@ -98,7 +109,7 @@ func NewAccessRequestHandler(serverCfg config.ServerConfig, id *identity.Identit
 				// capability - we use this, for example, to let bsky.storage users
 				// specify that they should be redirected back to bsky.storage after
 				// completing the Stripe plan selection flow
-				invocation.WithMetadata(req.Invocation().Metadata()),
+				invocation.WithMetadata(meta),
 			)
 			if err != nil {
 				log.Error("failed to create confirmation delegation", zap.Error(err))

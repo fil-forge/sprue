@@ -13,7 +13,6 @@ import (
 	subscriptionmemory "github.com/fil-forge/sprue/pkg/store/subscription/memory"
 	"github.com/fil-forge/ucantone/did"
 	"github.com/fil-forge/ucantone/execution"
-	"github.com/fil-forge/ucantone/result"
 	"github.com/fil-forge/ucantone/ucan/delegation"
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/ipfs/go-cid"
@@ -78,9 +77,7 @@ func TestAccessDelegateHandler(t *testing.T) {
 
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
-
-		_, fail := result.Unwrap(res.Receipt().Out())
-		require.NotNil(t, fail)
+		require.True(t, res.Receipt().Out().IsErr())
 	})
 
 	t.Run("success with delegation", func(t *testing.T) {
@@ -117,9 +114,7 @@ func TestAccessDelegateHandler(t *testing.T) {
 
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
-
-		_, fail := result.Unwrap(res.Receipt().Out())
-		require.Nil(t, fail)
+		require.False(t, res.Receipt().Out().IsErr())
 
 		// Verify the delegation was stored.
 		page, err := dlgStore.ListByAudience(t.Context(), agent.DID())
@@ -154,9 +149,7 @@ func TestAccessDelegateHandler(t *testing.T) {
 
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
-
-		_, fail := result.Unwrap(res.Receipt().Out())
-		require.Nil(t, fail)
+		require.False(t, res.Receipt().Out().IsErr())
 	})
 
 	t.Run("delegation not found in metadata", func(t *testing.T) {

@@ -1,6 +1,7 @@
 package handlers_test
 
 import (
+	"bytes"
 	"context"
 	"testing"
 
@@ -16,9 +17,7 @@ import (
 	"github.com/fil-forge/ucantone/did"
 	edm "github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
-	"github.com/fil-forge/ucantone/ipld/datamodel"
 	"github.com/fil-forge/ucantone/principal"
-	"github.com/fil-forge/ucantone/result"
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/ipfs/go-cid"
 	"github.com/stretchr/testify/require"
@@ -101,11 +100,11 @@ func TestUploadAddHandler(t *testing.T) {
 		err := deps.handler.Handler(req, res)
 		require.NoError(t, err)
 
-		_, fail := result.Unwrap(res.Receipt().Out())
-		require.NotNil(t, fail)
+		_, x := res.Receipt().Out().Unpack()
+		require.NotNil(t, x)
 
-		model := edm.ErrorModel{}
-		require.NoError(t, datamodel.Rebind(datamodel.NewAny(fail), &model))
+		var model edm.ErrorModel
+		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
 		require.Equal(t, accesscaps.InsufficientStorageErrorName, model.Name())
 
 		// Nothing should have been persisted.
@@ -126,8 +125,7 @@ func TestUploadAddHandler(t *testing.T) {
 		err := deps.handler.Handler(req, res)
 		require.NoError(t, err)
 
-		_, fail := result.Unwrap(res.Receipt().Out())
-		require.Nil(t, fail)
+		require.False(t, res.Receipt().Out().IsErr())
 
 		// Upload should be persisted.
 		exists, err := deps.store.Exists(ctx, space.DID(), root)
@@ -158,8 +156,7 @@ func TestUploadAddHandler(t *testing.T) {
 		err := deps.handler.Handler(req, res)
 		require.NoError(t, err)
 
-		_, fail := result.Unwrap(res.Receipt().Out())
-		require.Nil(t, fail)
+		require.False(t, res.Receipt().Out().IsErr())
 
 		exists, err := deps.store.Exists(ctx, space.DID(), root)
 		require.NoError(t, err)
@@ -183,8 +180,7 @@ func TestUploadAddHandler(t *testing.T) {
 		err := deps.handler.Handler(req, res)
 		require.NoError(t, err)
 
-		_, fail := result.Unwrap(res.Receipt().Out())
-		require.Nil(t, fail)
+		require.False(t, res.Receipt().Out().IsErr())
 
 		exists, err := deps.store.Exists(ctx, space.DID(), root)
 		require.NoError(t, err)
@@ -205,8 +201,7 @@ func TestUploadAddHandler(t *testing.T) {
 			Shards: []cid.Cid{shard1},
 		})
 		require.NoError(t, deps.handler.Handler(req1, res1))
-		_, fail1 := result.Unwrap(res1.Receipt().Out())
-		require.Nil(t, fail1)
+		require.False(t, res1.Receipt().Out().IsErr())
 
 		// Add again with a new shard.
 		shard2 := testutil.RandomCID(t)
@@ -215,8 +210,7 @@ func TestUploadAddHandler(t *testing.T) {
 			Shards: []cid.Cid{shard2},
 		})
 		require.NoError(t, deps.handler.Handler(req2, res2))
-		_, fail2 := result.Unwrap(res2.Receipt().Out())
-		require.Nil(t, fail2)
+		require.False(t, res2.Receipt().Out().IsErr())
 
 		// Upload should still exist.
 		exists, err := deps.store.Exists(ctx, space.DID(), root)

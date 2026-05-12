@@ -1,6 +1,7 @@
 package handlers_test
 
 import (
+	"bytes"
 	"net/url"
 	"testing"
 
@@ -11,8 +12,6 @@ import (
 	storage_provider_store "github.com/fil-forge/sprue/pkg/store/storage_provider/memory"
 	edm "github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
-	"github.com/fil-forge/ucantone/ipld/datamodel"
-	"github.com/fil-forge/ucantone/result"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/stretchr/testify/require"
@@ -67,12 +66,11 @@ func TestAdminProviderWeightSetHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		_, x := result.Unwrap(res.Receipt().Out())
+		_, x := res.Receipt().Out().Unpack()
 		require.NotNil(t, x)
 
-		model := edm.ErrorModel{}
-		err = datamodel.Rebind(datamodel.NewAny(x), &model)
-		require.NoError(t, err)
+		var model edm.ErrorModel
+		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
 		require.Equal(t, "Unauthorized", model.Name())
 	})
 
@@ -98,12 +96,11 @@ func TestAdminProviderWeightSetHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		_, x := result.Unwrap(res.Receipt().Out())
+		_, x := res.Receipt().Out().Unpack()
 		require.NotNil(t, x)
 
-		model := edm.ErrorModel{}
-		err = datamodel.Rebind(datamodel.NewAny(x), &model)
-		require.NoError(t, err)
+		var model edm.ErrorModel
+		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
 		require.Equal(t, "Failed to get existing provider", model.Name())
 	})
 
@@ -136,9 +133,7 @@ func TestAdminProviderWeightSetHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		o, x := result.Unwrap(res.Receipt().Out())
-		require.Nil(t, x)
-		require.NotNil(t, o)
+		require.False(t, res.Receipt().Out().IsErr())
 
 		// Verify weights were updated.
 		rec, err := spStore.Get(ctx, storageProvider.DID())

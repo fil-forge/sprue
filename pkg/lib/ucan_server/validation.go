@@ -1,11 +1,11 @@
 package ucan_server
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 
 	"github.com/fil-forge/libforge/capabilities/ucan/attest"
-	"github.com/fil-forge/ucantone/ipld/datamodel"
 	"github.com/fil-forge/ucantone/principal"
 	ed_verifier "github.com/fil-forge/ucantone/principal/ed25519/verifier"
 	secp_verifier "github.com/fil-forge/ucantone/principal/secp256k1/verifier"
@@ -44,9 +44,8 @@ func NewAttestationVerifier(authority principal.Verifier) validator.NonStandardS
 			if inv.Issuer().DID() != authority.DID() || inv.Subject() == nil || inv.Subject().DID() != authority.DID() {
 				continue
 			}
-			args := attest.ProofArguments{}
-			err := datamodel.Rebind(datamodel.NewAny(inv.Arguments()), &args)
-			if err != nil {
+			var args attest.ProofArguments
+			if err := args.UnmarshalCBOR(bytes.NewReader(inv.ArgumentsBytes())); err != nil {
 				continue
 			}
 			// make sure the attestation is for the delegation in question

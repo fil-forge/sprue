@@ -18,8 +18,6 @@ import (
 	metrics_store "github.com/fil-forge/sprue/pkg/store/metrics/memory"
 	spacediff_store "github.com/fil-forge/sprue/pkg/store/space_diff/memory"
 	storage_provider_store "github.com/fil-forge/sprue/pkg/store/storage_provider/memory"
-	"github.com/fil-forge/ucantone/ipld"
-	"github.com/fil-forge/ucantone/result"
 	"github.com/fil-forge/ucantone/ucan/container"
 	"github.com/fil-forge/ucantone/ucan/delegation"
 	"github.com/fil-forge/ucantone/ucan/invocation"
@@ -85,10 +83,10 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		putRcpt, err := receipt.Issue(
+		putRcpt, err := receipt.IssueOK(
 			blobProvider,
 			putInv.Task().Link(),
-			result.OK[ipld.Map, ipld.Any](mustRebindMap(t, &httpcaps.PutOK{})),
+			&httpcaps.PutOK{},
 		)
 		require.NoError(t, err)
 
@@ -114,10 +112,10 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 			invocation.WithAudience(storageProvider),
 		)
 		require.NoError(t, err)
-		allocRcpt, err := receipt.Issue(
+		allocRcpt, err := receipt.IssueOK(
 			storageProvider,
 			allocInv.Task().Link(),
-			result.OK[ipld.Map, ipld.Any](mustRebindMap(t, &blobcaps.AllocateOK{Size: blob.Size})),
+			&blobcaps.AllocateOK{Size: blob.Size},
 		)
 		require.NoError(t, err)
 		msg := container.New(
@@ -137,10 +135,10 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 			invocation.WithAudience(blobProvider),
 		)
 		require.NoError(t, err)
-		putRcpt, err := receipt.Issue(
+		putRcpt, err := receipt.IssueOK(
 			blobProvider,
 			putInv.Task().Link(),
-			result.OK[ipld.Map, ipld.Any](mustRebindMap(t, &httpcaps.PutOK{})),
+			&httpcaps.PutOK{},
 		)
 		require.NoError(t, err)
 
@@ -184,10 +182,10 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 			invocation.WithAudience(storageProvider),
 		)
 		require.NoError(t, err)
-		allocRcpt, err := receipt.Issue(
+		allocRcpt, err := receipt.IssueOK(
 			storageProvider,
 			allocInv.Task().Link(),
-			result.OK[ipld.Map, ipld.Any](mustRebindMap(t, &blobcaps.AllocateOK{Size: blob.Size})),
+			&blobcaps.AllocateOK{Size: blob.Size},
 		)
 		require.NoError(t, err)
 		msg := container.New(
@@ -208,10 +206,10 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 			invocation.WithAudience(blobProvider),
 		)
 		require.NoError(t, err)
-		putRcpt, err := receipt.Issue(
+		putRcpt, err := receipt.IssueOK(
 			blobProvider,
 			putInv.Task().Link(),
-			result.OK[ipld.Map, ipld.Any](mustRebindMap(t, &httpcaps.PutOK{})),
+			&httpcaps.PutOK{},
 		)
 		require.NoError(t, err)
 

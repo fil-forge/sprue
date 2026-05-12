@@ -1,14 +1,14 @@
 package ucan_server
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 
+	"github.com/fil-forge/sprue/pkg/lib/zapipld"
 	"github.com/fil-forge/sprue/pkg/store/agent"
-	edm "github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
 	"github.com/fil-forge/ucantone/ipld/datamodel"
-	"github.com/fil-forge/ucantone/result"
 	"github.com/fil-forge/ucantone/server"
 	"github.com/fil-forge/ucantone/ucan"
 	"go.uber.org/zap"
@@ -22,22 +22,26 @@ var _ server.ResponseEncodeListener = (*ErrorHandler)(nil)
 
 func (l ErrorHandler) OnResponseEncode(ctx context.Context, ct ucan.Container) error {
 	for _, inv := range ct.Invocations() {
-		if r, ok := ct.Receipt(inv.Task().Link()); ok {
-			_, x := result.Unwrap(r.Out())
-			if x != nil {
-				var model edm.ErrorModel
-				datamodel.Rebind(datamodel.NewAny(x), &model)
-				if model.ErrorName == execution.HandlerExecutionErrorName {
-					l.Logger.Error(
-						"handler execution error",
-						zap.Stringer("task", inv.Task().Link()),
-						zap.Stringer("command", inv.Command()),
-						zap.Any("args", inv.Arguments()),
-						zap.Error(model),
-					)
-				}
-			}
+		r, ok := ct.Receipt(inv.Task().Link())
+		if !ok || !r.Out().IsErr() {
+			continue
 		}
+		_, x := r.Out().Unpack()
+		var model datamodel.Map
+		if err := model.UnmarshalCBOR(bytes.NewReader(x)); err != nil {
+			l.Logger.Error("failed to unmarshal handler execution error", zap.Error(err), zap.Binary("input", x))
+			continue
+		}
+		if model["name"].(string) != execution.HandlerExecutionErrorName {
+			continue
+		}
+		l.Logger.Error(
+			"handler execution error",
+			zap.Stringer("task", inv.Task().Link()),
+			zap.Stringer("command", inv.Command()),
+			zap.Any("arguments", zapipld.RawMap(inv.ArgumentsBytes())),
+			zap.Any("error", model),
+		)
 	}
 	return nil
 }

@@ -1,6 +1,7 @@
 package handlers_test
 
 import (
+	"bytes"
 	"context"
 	"testing"
 
@@ -14,9 +15,7 @@ import (
 	"github.com/fil-forge/ucantone/did"
 	edm "github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
-	"github.com/fil-forge/ucantone/ipld/datamodel"
 	"github.com/fil-forge/ucantone/principal"
-	"github.com/fil-forge/ucantone/result"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/stretchr/testify/require"
@@ -74,12 +73,12 @@ func TestSpaceInfoHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		o, fail := result.Unwrap(res.Receipt().Out())
-		require.Nil(t, fail)
+		o, x := res.Receipt().Out().Unpack()
+		require.Nil(t, x)
 		require.NotNil(t, o)
 
-		ok := spacecaps.InfoOK{}
-		require.NoError(t, datamodel.Rebind(datamodel.NewAny(o), &ok))
+		var ok spacecaps.InfoOK
+		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
 		require.Len(t, ok.Providers, 1)
 		require.Equal(t, uploadService.DID(), ok.Providers[0])
 	})
@@ -100,11 +99,11 @@ func TestSpaceInfoHandler(t *testing.T) {
 		err := handler.Handler(req, res)
 		require.NoError(t, err)
 
-		o, fail := result.Unwrap(res.Receipt().Out())
-		require.Nil(t, fail)
+		o, x := res.Receipt().Out().Unpack()
+		require.Nil(t, x)
 
-		ok := spacecaps.InfoOK{}
-		require.NoError(t, datamodel.Rebind(datamodel.NewAny(o), &ok))
+		var ok spacecaps.InfoOK
+		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
 		require.Empty(t, ok.Providers)
 	})
 
@@ -125,11 +124,11 @@ func TestSpaceInfoHandler(t *testing.T) {
 		err := handler.Handler(req, res)
 		require.NoError(t, err)
 
-		_, fail := result.Unwrap(res.Receipt().Out())
-		require.NotNil(t, fail)
+		_, x := res.Receipt().Out().Unpack()
+		require.NotNil(t, x)
 
-		model := edm.ErrorModel{}
-		require.NoError(t, datamodel.Rebind(datamodel.NewAny(fail), &model))
+		var model edm.ErrorModel
+		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
 		require.Equal(t, spacecaps.UnknownSpaceErrorName, model.Name())
 	})
 }

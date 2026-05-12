@@ -11,9 +11,7 @@ import (
 	agentaws "github.com/fil-forge/sprue/pkg/store/agent/aws"
 	agentmemory "github.com/fil-forge/sprue/pkg/store/agent/memory"
 	agentpostgres "github.com/fil-forge/sprue/pkg/store/agent/postgres"
-	"github.com/fil-forge/ucantone/ipld"
 	"github.com/fil-forge/ucantone/ipld/datamodel"
-	"github.com/fil-forge/ucantone/result"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/container"
 	"github.com/fil-forge/ucantone/ucan/invocation"
@@ -111,10 +109,10 @@ func makeInvocation(t *testing.T) ucan.Invocation {
 
 func makeReceipt(t *testing.T, inv ucan.Invocation) ucan.Receipt {
 	t.Helper()
-	rcpt, err := receipt.Issue(
+	rcpt, err := receipt.IssueOK(
 		testutil.Alice,
 		inv.Task().Link(),
-		result.OK[ipld.Any, ipld.Any](datamodel.Map{}),
+		datamodel.Map{},
 	)
 	require.NoError(t, err)
 	return rcpt

@@ -1,15 +1,13 @@
 package ucan_server
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 
 	"github.com/fil-forge/libforge/capabilities/access"
 	"github.com/fil-forge/libforge/didmailto"
 	"github.com/fil-forge/ucantone/execution"
-	"github.com/fil-forge/ucantone/ipld"
-	"github.com/fil-forge/ucantone/ipld/datamodel"
-	"github.com/fil-forge/ucantone/result"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/container"
 )
@@ -18,7 +16,7 @@ type AccessConfirmResult struct {
 	Email    string
 	Audience string
 	UCAN     string
-	Meta     ipld.Map
+	Meta     []byte
 }
 
 // ExecBase64urlAccessConfirm executes an /access/confirm UCAN invocation
@@ -51,15 +49,14 @@ func ExecBase64urlAccessConfirm(ctx context.Context, executor execution.Executor
 		return AccessConfirmResult{}, fmt.Errorf("executing confirm task %s: %w", confirmation.Task().Link(), err)
 	}
 
-	_, x := result.Unwrap(res.Receipt().Out())
+	_, x := res.Receipt().Out().Unpack()
 	if x != nil {
 		return AccessConfirmResult{}, fmt.Errorf("invocation failure: %v", x)
 	}
 
 	confirmArgs := access.ConfirmArguments{}
-	err = datamodel.Rebind(datamodel.NewAny(confirmation.Arguments()), &confirmArgs)
-	if err != nil {
-		return AccessConfirmResult{}, fmt.Errorf("binding confirmation arguments: %w", err)
+	if err := confirmArgs.UnmarshalCBOR(bytes.NewReader(confirmation.ArgumentsBytes())); err != nil {
+		return AccessConfirmResult{}, fmt.Errorf("unmarshaling confirmation arguments: %w", err)
 	}
 
 	email, err := didmailto.Email(confirmArgs.Issuer)
@@ -91,6 +88,6 @@ func ExecBase64urlAccessConfirm(ctx context.Context, executor execution.Executor
 		Email:    email,
 		Audience: confirmArgs.Audience.String(),
 		UCAN:     string(output),
-		Meta:     confirmation.Metadata(),
+		Meta:     confirmation.MetadataBytes(),
 	}, nil
 }
