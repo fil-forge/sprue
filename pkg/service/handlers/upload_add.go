@@ -21,7 +21,7 @@ func NewUploadAddHandler(provisioningSvc *provisioning.Service, uploadStore uplo
 			req *bindexec.Request[*uploadcaps.AddArguments],
 			res *bindexec.Response[*uploadcaps.AddOK],
 		) error {
-			args := req.Task().BindArguments()
+			args := req.Task().Arguments()
 			space := req.Invocation().Subject()
 			cause := req.Invocation().Task().Link()
 			log := log.With(

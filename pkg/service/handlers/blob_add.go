@@ -40,7 +40,7 @@ func NewBlobAddHandler(id *identity.Identity, provisioningSvc *provisioning.Serv
 			req *bindexec.Request[*blobcaps.AddArguments],
 			res *bindexec.Response[*blobcaps.AddOK],
 		) error {
-			args := req.Task().BindArguments()
+			args := req.Task().Arguments()
 			blob := args.Blob
 			space := req.Invocation().Subject().DID()
 			b58digest := digestutil.Format(blob.Digest)
@@ -368,7 +368,7 @@ func maybeAccept(
 	var accRcpt ucan.Receipt
 
 	// If put has already succeeded, we can execute `/blob/accept` right away.
-	if putRcpt != nil && putRcpt.Out().IsOk() {
+	if putRcpt != nil && putRcpt.Out().IsOK() {
 		res, inv, rcpt, err := c.Accept(ctx, &accReq, proofStore, invocation.WithNoNonce())
 		if err != nil {
 			log.Error("failed to execute accept on piri", zap.Error(err))

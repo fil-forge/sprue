@@ -41,7 +41,7 @@ func NewAccessRequestHandler(serverCfg config.ServerConfig, id *identity.Identit
 			req *bindexec.Request[*access.RequestArguments],
 			res *bindexec.Response[*access.RequestOK],
 		) error {
-			args := req.Task().BindArguments()
+			args := req.Task().Arguments()
 			account, err := didmailto.Parse(args.Issuer.String())
 			if err != nil {
 				log.Warn("failed to parse mailto DID", zap.Stringer("account", args.Issuer))

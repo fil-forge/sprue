@@ -24,7 +24,7 @@ func NewIndexAddHandler(id *identity.Identity, provisioningSvc *provisioning.Ser
 			req *bindexec.Request[*indexcaps.AddArguments],
 			res *bindexec.Response[*indexcaps.AddOK],
 		) error {
-			args := req.Task().BindArguments()
+			args := req.Task().Arguments()
 			space := req.Invocation().Subject()
 			index := args.Index
 

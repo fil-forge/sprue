@@ -21,7 +21,7 @@ func NewAccessDelegateHandler(delegationStore delegation_store.Store, provisioni
 			req *bindexec.Request[*access.DelegateArguments],
 			res *bindexec.Response[*access.DelegateOK],
 		) error {
-			args := req.Task().BindArguments()
+			args := req.Task().Arguments()
 			agent := req.Invocation().Issuer().DID()
 			space := req.Invocation().Subject().DID()
 

@@ -40,7 +40,7 @@ func NewUCANConcludeHandler(id *identity.Identity, agentStore agent.Store, handl
 			req *bindexec.Request[*ucancaps.ConcludeArguments],
 			res *bindexec.Response[*ucancaps.ConcludeOK],
 		) error {
-			args := req.Task().BindArguments()
+			args := req.Task().Arguments()
 			rcptRoot := args.Receipt
 
 			log := log.With(zap.Stringer("receipt", rcptRoot))
