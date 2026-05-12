@@ -92,8 +92,8 @@ github.com/ebitengine/purego v0.10.0 h1:QIw4xfpWT6GWTzaW5XEKy3HXoqrJGx1ijYHzTF0/
 github.com/ebitengine/purego v0.10.0/go.mod h1:iIjxzd6CiRiOG0UyXP+V1+jWqUXVjPKLAI0mRfJZTmQ=
 github.com/felixge/httpsnoop v1.0.4 h1:NFTV2Zj1bL4mc9sqWACXbQFVBBg2W3GPvqp8/ESS2Wg=
 github.com/felixge/httpsnoop v1.0.4/go.mod h1:m8KPJKqk1gH5J9DgRY2ASl2lWCfGKXixSwevea8zH2U=
-github.com/fil-forge/libforge v0.0.0-20260512174255-8f6462f7461e h1:MlvAAXDZnWgOdwL5pi8seGQAvWM2EWABLQFoghgCL3k=
-github.com/fil-forge/libforge v0.0.0-20260512174255-8f6462f7461e/go.mod h1:muFokjvd+LB7EGfsftSTpj5RZ1be1yjXe3XBXPswtuw=
+github.com/fil-forge/libforge v0.0.0-20260512195724-a514bd7a6c50 h1:+UmG/EqW+OIRWS0JfOmvVneNoWIWKPbMzbBcvbF4Auw=
+github.com/fil-forge/libforge v0.0.0-20260512195724-a514bd7a6c50/go.mod h1:muFokjvd+LB7EGfsftSTpj5RZ1be1yjXe3XBXPswtuw=
 github.com/fil-forge/ucantone v0.0.0-20260512173820-ea7128569686 h1:Weu36rT9cQrmM41qX1EL3ML1K1a+bdidVGacy75HSro=
 github.com/fil-forge/ucantone v0.0.0-20260512173820-ea7128569686/go.mod h1:vqgVEsy6LEEsY24Zyjxem0vSofj1XTIx29GbV635f+I=
 github.com/frankban/quicktest v1.14.6 h1:7Xjx+VpznH+oBnejlPUj8oUpdxnVs4f8XU8WnHkI4W8=
