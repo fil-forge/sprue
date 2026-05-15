@@ -18,7 +18,7 @@ func NewUploadShardListHandler(uploadStore upload_store.Store, logger *zap.Logge
 			req *bindexec.Request[*shardcaps.ListArguments],
 			res *bindexec.Response[*shardcaps.ListOK],
 		) error {
-			args := req.Task().BindArguments()
+			args := req.Task().Arguments()
 			space := req.Invocation().Subject()
 			root := args.Root
 			log := log.With(zap.Stringer("space", space.DID()), zap.Stringer("root", root))

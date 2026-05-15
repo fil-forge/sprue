@@ -17,7 +17,7 @@ func NewUploadListHandler(uploadStore upload_store.Store, logger *zap.Logger) Ha
 			req *bindexec.Request[*uploadcaps.ListArguments],
 			res *bindexec.Response[*uploadcaps.ListOK],
 		) error {
-			args := req.Task().BindArguments()
+			args := req.Task().Arguments()
 			space := req.Invocation().Subject()
 			log := log.With(zap.Stringer("space", space.DID()))
 

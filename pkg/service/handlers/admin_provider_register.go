@@ -24,7 +24,7 @@ func NewAdminProviderRegisterHandler(id *identity.Identity, providerStore storag
 			req *bindexec.Request[*provider.RegisterArguments],
 			res *bindexec.Response[*provider.RegisterOK],
 		) error {
-			args := req.Task().BindArguments()
+			args := req.Task().Arguments()
 			if req.Invocation().Issuer().DID() != id.Signer.DID() {
 				log.Warn("Unauthorized access attempt", zap.Stringer("issuer", req.Invocation().Issuer().DID()))
 				return res.SetFailure(errors.New("Unauthorized", "only the service identity can register providers"))

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"crypto/ed25519"
 	"fmt"
@@ -19,11 +20,9 @@ import (
 	"github.com/fil-forge/ucantone/did"
 	"github.com/fil-forge/ucantone/errors"
 	"github.com/fil-forge/ucantone/execution/bindexec"
-	"github.com/fil-forge/ucantone/ipld"
 	"github.com/fil-forge/ucantone/ipld/datamodel"
 	"github.com/fil-forge/ucantone/principal"
 	ed25519signer "github.com/fil-forge/ucantone/principal/ed25519"
-	"github.com/fil-forge/ucantone/result"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/container"
 	"github.com/fil-forge/ucantone/ucan/invocation"
@@ -41,7 +40,7 @@ func NewBlobAddHandler(id *identity.Identity, provisioningSvc *provisioning.Serv
 			req *bindexec.Request[*blobcaps.AddArguments],
 			res *bindexec.Response[*blobcaps.AddOK],
 		) error {
-			args := req.Task().BindArguments()
+			args := req.Task().Arguments()
 			blob := args.Blob
 			space := req.Invocation().Subject().DID()
 			b58digest := digestutil.Format(blob.Digest)
@@ -87,26 +86,17 @@ func NewBlobAddHandler(id *identity.Identity, provisioningSvc *provisioning.Serv
 					return err
 				}
 
-				addOK, err := result.MatchResultR2(
-					addRcpt.Out(),
-					func(o ipld.Any) (*blobcaps.AddOK, error) {
-						var addOK blobcaps.AddOK
-						err := datamodel.Rebind(datamodel.NewAny(o), &addOK)
-						if err != nil {
-							log.Error("failed to rebind add OK result", zap.Error(err))
-							return nil, fmt.Errorf("rebinding add OK result: %w", err)
-						}
-						return &addOK, nil
-					},
-					func(x ipld.Any) (*blobcaps.AddOK, error) {
-						// should not have been registered on error
-						log.Error("blob registration receipt contains failure", zap.Any("error", x))
-						return nil, fmt.Errorf("blob registration receipt contains failure: %v", x)
-					},
-				)
-				if err != nil {
-					log.Error("failed to match blob add receipt result", zap.Error(err))
-					return fmt.Errorf("matching blob add receipt result: %w", err)
+				// should not have been registered on error
+				if addRcpt.Out().IsErr() {
+					log.Error("blob registration receipt contains failure")
+					return fmt.Errorf("blob registration receipt contains failure")
+				}
+
+				o, _ := addRcpt.Out().Unpack()
+				var addOK blobcaps.AddOK
+				if err := addOK.UnmarshalCBOR(bytes.NewReader(o)); err != nil {
+					log.Error("failed to unmarshal add OK result", zap.Error(err))
+					return fmt.Errorf("unmarshaling add OK result: %w", err)
 				}
 
 				accRcpt, err := agentStore.GetReceipt(req.Context(), addOK.Site.Task)
@@ -121,9 +111,8 @@ func NewBlobAddHandler(id *identity.Identity, provisioningSvc *provisioning.Serv
 					return fmt.Errorf("getting invocation for blob accept: %w", err)
 				}
 
-				accArgs := blobcaps.AcceptArguments{}
-				err = datamodel.Rebind(datamodel.NewAny(accInv.Arguments()), &accArgs)
-				if err != nil {
+				var accArgs blobcaps.AcceptArguments
+				if err := accArgs.UnmarshalCBOR(bytes.NewReader(accInv.ArgumentsBytes())); err != nil {
 					log.Error("failed to rebind accept OK result", zap.Error(err))
 					return fmt.Errorf("rebinding accept OK result: %w", err)
 				}
@@ -140,11 +129,10 @@ func NewBlobAddHandler(id *identity.Identity, provisioningSvc *provisioning.Serv
 					return fmt.Errorf("getting invocation for HTTP PUT: %w", err)
 				}
 
-				putArgs := httpcaps.PutArguments{}
-				err = datamodel.Rebind(datamodel.NewAny(putInv.Arguments()), &putArgs)
-				if err != nil {
-					log.Error("failed to rebind HTTP PUT arguments", zap.Error(err))
-					return fmt.Errorf("rebinding HTTP PUT arguments: %w", err)
+				var putArgs httpcaps.PutArguments
+				if err := putArgs.UnmarshalCBOR(bytes.NewReader(putInv.ArgumentsBytes())); err != nil {
+					log.Error("failed to unmarshal HTTP PUT arguments", zap.Error(err))
+					return fmt.Errorf("unmarshaling HTTP PUT arguments: %w", err)
 				}
 
 				allocRcpt, err := agentStore.GetReceipt(req.Context(), putArgs.Destination.Task)
@@ -164,7 +152,7 @@ func NewBlobAddHandler(id *identity.Identity, provisioningSvc *provisioning.Serv
 					container.WithReceipts(allocRcpt, putRcpt, accRcpt),
 				))
 
-				return res.SetSuccess(addOK)
+				return res.SetSuccess(&addOK)
 			}
 
 			cause := req.Invocation().Task().Link()
@@ -316,15 +304,10 @@ func genPut(blob blobcaps.Blob, allocInv ucan.Invocation, allocOK blobcaps.Alloc
 	// a receipt for the `/http/put` without requiring blob to be provided.
 	if allocOK.Address == nil {
 		log.Debug("blob present on provider, issuing receipt for put")
-		var ok datamodel.Map
-		err = datamodel.Rebind(&httpcaps.PutOK{}, &ok)
-		if err != nil {
-			return nil, nil, fmt.Errorf("rebinding %q OK: %w", httpcaps.PutCommand, err)
-		}
-		putRcpt, err = receipt.Issue(
+		putRcpt, err = receipt.IssueOK(
 			blobProvider,
 			putInv.Task().Link(),
-			result.OK[ipld.Map, ipld.Any](ok),
+			&httpcaps.PutOK{},
 		)
 		if err != nil {
 			return nil, nil, fmt.Errorf("issuing %q receipt: %w", httpcaps.PutCommand, err)
@@ -385,31 +368,28 @@ func maybeAccept(
 	var accRcpt ucan.Receipt
 
 	// If put has already succeeded, we can execute `/blob/accept` right away.
-	if putRcpt != nil {
-		_, x := result.Unwrap(putRcpt.Out())
-		if x == nil {
-			res, inv, rcpt, err := c.Accept(ctx, &accReq, proofStore, invocation.WithNoNonce())
-			if err != nil {
-				log.Error("failed to execute accept on piri", zap.Error(err))
-				return nil, nil, err
-			}
-			log.Debug("blob accepted", zap.Stringer("site", res.Site))
-
-			err = writeAgentMessage(ctx, agentStore, []ucan.Invocation{inv}, []ucan.Receipt{rcpt})
-			if err != nil {
-				log.Error("failed to write agent message for accept", zap.Error(err))
-				return nil, nil, err
-			}
-
-			err = blobRegistry.Register(ctx, space.DID(), blob, cause)
-			if err != nil {
-				log.Error("failed to register blob", zap.Error(err))
-				return nil, nil, err
-			}
-
-			accInv = inv
-			accRcpt = rcpt
+	if putRcpt != nil && putRcpt.Out().IsOK() {
+		res, inv, rcpt, err := c.Accept(ctx, &accReq, proofStore, invocation.WithNoNonce())
+		if err != nil {
+			log.Error("failed to execute accept on piri", zap.Error(err))
+			return nil, nil, err
 		}
+		log.Debug("blob accepted", zap.Stringer("site", res.Site))
+
+		err = writeAgentMessage(ctx, agentStore, []ucan.Invocation{inv}, []ucan.Receipt{rcpt})
+		if err != nil {
+			log.Error("failed to write agent message for accept", zap.Error(err))
+			return nil, nil, err
+		}
+
+		err = blobRegistry.Register(ctx, space.DID(), blob, cause)
+		if err != nil {
+			log.Error("failed to register blob", zap.Error(err))
+			return nil, nil, err
+		}
+
+		accInv = inv
+		accRcpt = rcpt
 	}
 
 	return accInv, accRcpt, nil

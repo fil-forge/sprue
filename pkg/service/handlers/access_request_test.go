@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"net/url"
@@ -14,8 +15,6 @@ import (
 	"github.com/fil-forge/sprue/pkg/identity"
 	edm "github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
-	"github.com/fil-forge/ucantone/ipld/datamodel"
-	"github.com/fil-forge/ucantone/result"
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
@@ -80,13 +79,12 @@ func TestAccessRequestHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		o, x := result.Unwrap(res.Receipt().Out())
+		o, x := res.Receipt().Out().Unpack()
 		require.Nil(t, x)
 		require.NotNil(t, o)
 
-		ok := access.RequestOK{}
-		err = datamodel.Rebind(datamodel.NewAny(o), &ok)
-		require.NoError(t, err)
+		var ok access.RequestOK
+		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
 		require.Equal(t, inv.Link(), ok.Request)
 		require.NotZero(t, ok.Expiration)
 
@@ -126,12 +124,11 @@ func TestAccessRequestHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		_, x := result.Unwrap(res.Receipt().Out())
+		_, x := res.Receipt().Out().Unpack()
 		require.NotNil(t, x)
 
-		model := edm.ErrorModel{}
-		err = datamodel.Rebind(datamodel.NewAny(x), &model)
-		require.NoError(t, err)
+		var model edm.ErrorModel
+		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
 		require.Equal(t, access.InvalidAuthorizationAccountErrorName, model.Name())
 	})
 

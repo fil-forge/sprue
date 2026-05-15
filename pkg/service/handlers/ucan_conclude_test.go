@@ -1,6 +1,7 @@
 package handlers_test
 
 import (
+	"bytes"
 	"context"
 	"testing"
 
@@ -12,9 +13,7 @@ import (
 	agent_store "github.com/fil-forge/sprue/pkg/store/agent/memory"
 	edm "github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
-	"github.com/fil-forge/ucantone/ipld"
 	"github.com/fil-forge/ucantone/ipld/datamodel"
-	"github.com/fil-forge/ucantone/result"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/container"
 	"github.com/fil-forge/ucantone/ucan/invocation"
@@ -34,10 +33,10 @@ func TestUCANConcludeHandler(t *testing.T) {
 		t.Helper()
 		taskInv, err := invocation.Invoke(uploadService, uploadService, cmd, datamodel.Map{})
 		require.NoError(t, err)
-		rcpt, err := receipt.Issue(
+		rcpt, err := receipt.IssueOK(
 			uploadService,
 			taskInv.Task().Link(),
-			result.OK[int64, ipld.Any](int64(1)),
+			datamodel.NewAny(int64(1)),
 		)
 		require.NoError(t, err)
 		return taskInv, rcpt
@@ -70,12 +69,11 @@ func TestUCANConcludeHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		_, fail := result.Unwrap(res.Receipt().Out())
-		require.NotNil(t, fail)
+		_, x := res.Receipt().Out().Unpack()
+		require.NotNil(t, x)
 
-		model := edm.ErrorModel{}
-		err = datamodel.Rebind(datamodel.NewAny(fail), &model)
-		require.NoError(t, err)
+		var model edm.ErrorModel
+		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
 		require.Equal(t, ucancaps.ConclusionReceiptNotFoundErrorName, model.Name())
 	})
 
@@ -106,8 +104,7 @@ func TestUCANConcludeHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		_, fail := result.Unwrap(res.Receipt().Out())
-		require.Nil(t, fail)
+		require.False(t, res.Receipt().Out().IsErr())
 	})
 
 	t.Run("dispatches to registered handler", func(t *testing.T) {
@@ -156,8 +153,7 @@ func TestUCANConcludeHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		_, fail := result.Unwrap(res.Receipt().Out())
-		require.Nil(t, fail)
+		require.False(t, res.Receipt().Out().IsErr())
 
 		require.True(t, called)
 		require.Equal(t, taskInv.Task().Link(), gotInv.Task().Link())
@@ -196,8 +192,7 @@ func TestUCANConcludeHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		_, fail := result.Unwrap(res.Receipt().Out())
-		require.Nil(t, fail)
+		require.False(t, res.Receipt().Out().IsErr())
 	})
 
 	t.Run("invocation supplied via metadata", func(t *testing.T) {
@@ -237,8 +232,7 @@ func TestUCANConcludeHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		_, fail := result.Unwrap(res.Receipt().Out())
-		require.Nil(t, fail)
+		require.False(t, res.Receipt().Out().IsErr())
 		require.True(t, called)
 	})
 }

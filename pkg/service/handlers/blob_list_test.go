@@ -1,6 +1,7 @@
 package handlers_test
 
 import (
+	"bytes"
 	"context"
 	"testing"
 
@@ -13,9 +14,7 @@ import (
 	metrics_store "github.com/fil-forge/sprue/pkg/store/metrics/memory"
 	spacediff_store "github.com/fil-forge/sprue/pkg/store/space_diff/memory"
 	"github.com/fil-forge/ucantone/execution"
-	"github.com/fil-forge/ucantone/ipld/datamodel"
 	"github.com/fil-forge/ucantone/principal"
-	"github.com/fil-forge/ucantone/result"
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
@@ -75,12 +74,12 @@ func TestBlobListHandler(t *testing.T) {
 		err := handler.Handler(req, res)
 		require.NoError(t, err)
 
-		o, fail := result.Unwrap(res.Receipt().Out())
-		require.Nil(t, fail)
+		o, x := res.Receipt().Out().Unpack()
+		require.Nil(t, x)
 		require.NotNil(t, o)
 
-		ok := blobcaps.ListOK{}
-		require.NoError(t, datamodel.Rebind(datamodel.NewAny(o), &ok))
+		var ok blobcaps.ListOK
+		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
 		require.Empty(t, ok.Results)
 	})
 
@@ -101,10 +100,10 @@ func TestBlobListHandler(t *testing.T) {
 		err := handler.Handler(req, res)
 		require.NoError(t, err)
 
-		o, fail := result.Unwrap(res.Receipt().Out())
-		require.Nil(t, fail)
-		ok := blobcaps.ListOK{}
-		require.NoError(t, datamodel.Rebind(datamodel.NewAny(o), &ok))
+		o, x := res.Receipt().Out().Unpack()
+		require.Nil(t, x)
+		var ok blobcaps.ListOK
+		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
 		require.Len(t, ok.Results, 2)
 	})
 
@@ -129,10 +128,10 @@ func TestBlobListHandler(t *testing.T) {
 		err := handler.Handler(req, res)
 		require.NoError(t, err)
 
-		o, fail := result.Unwrap(res.Receipt().Out())
-		require.Nil(t, fail)
-		ok := blobcaps.ListOK{}
-		require.NoError(t, datamodel.Rebind(datamodel.NewAny(o), &ok))
+		o, x := res.Receipt().Out().Unpack()
+		require.Nil(t, x)
+		var ok blobcaps.ListOK
+		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
 		require.Len(t, ok.Results, 2)
 		require.NotNil(t, ok.Cursor)
 	})
@@ -156,10 +155,10 @@ func TestBlobListHandler(t *testing.T) {
 		req1, res1 := invokeBlobList(t, ctx, alice, uploadService, space, &blobcaps.ListArguments{Size: &size})
 		require.NoError(t, handler.Handler(req1, res1))
 
-		o1, fail := result.Unwrap(res1.Receipt().Out())
-		require.Nil(t, fail)
-		ok1 := blobcaps.ListOK{}
-		require.NoError(t, datamodel.Rebind(datamodel.NewAny(o1), &ok1))
+		o1, x := res1.Receipt().Out().Unpack()
+		require.Nil(t, x)
+		var ok1 blobcaps.ListOK
+		require.NoError(t, ok1.UnmarshalCBOR(bytes.NewReader(o1)))
 		require.Len(t, ok1.Results, 1)
 		require.NotNil(t, ok1.Cursor)
 
@@ -168,10 +167,10 @@ func TestBlobListHandler(t *testing.T) {
 		req2, res2 := invokeBlobList(t, ctx, alice, uploadService, space, &blobcaps.ListArguments{Cursor: &cursor, Size: &size})
 		require.NoError(t, handler.Handler(req2, res2))
 
-		o2, fail := result.Unwrap(res2.Receipt().Out())
-		require.Nil(t, fail)
-		ok2 := blobcaps.ListOK{}
-		require.NoError(t, datamodel.Rebind(datamodel.NewAny(o2), &ok2))
+		o2, x := res2.Receipt().Out().Unpack()
+		require.Nil(t, x)
+		var ok2 blobcaps.ListOK
+		require.NoError(t, ok2.UnmarshalCBOR(bytes.NewReader(o2)))
 		require.Len(t, ok2.Results, 1)
 		require.NotEqual(t, ok1.Results[0].Blob.Digest.HexString(), ok2.Results[0].Blob.Digest.HexString())
 	})
@@ -194,10 +193,10 @@ func TestBlobListHandler(t *testing.T) {
 		req, res := invokeBlobList(t, ctx, alice, uploadService, space2, &blobcaps.ListArguments{})
 		require.NoError(t, handler.Handler(req, res))
 
-		o, fail := result.Unwrap(res.Receipt().Out())
-		require.Nil(t, fail)
-		ok := blobcaps.ListOK{}
-		require.NoError(t, datamodel.Rebind(datamodel.NewAny(o), &ok))
+		o, x := res.Receipt().Out().Unpack()
+		require.Nil(t, x)
+		var ok blobcaps.ListOK
+		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
 		require.Empty(t, ok.Results)
 	})
 }

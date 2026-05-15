@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/fil-forge/libforge/capabilities/access"
@@ -10,8 +11,6 @@ import (
 	dlgmemory "github.com/fil-forge/sprue/pkg/store/delegation/memory"
 	edm "github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
-	"github.com/fil-forge/ucantone/ipld/datamodel"
-	"github.com/fil-forge/ucantone/result"
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
@@ -54,12 +53,12 @@ func TestAccessConfirmHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		_, fail := result.Unwrap(res.Receipt().Out())
-		require.NotNil(t, fail)
+		o, x := res.Receipt().Out().Unpack()
+		require.Nil(t, o)
+		require.NotNil(t, x)
 
-		model := edm.ErrorModel{}
-		err = datamodel.Rebind(datamodel.NewAny(fail), &model)
-		require.NoError(t, err)
+		var model edm.ErrorModel
+		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
 		require.Equal(t, access.InvalidAccessConfirmSubjectErrorName, model.Name())
 	})
 
@@ -96,12 +95,12 @@ func TestAccessConfirmHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		_, fail := result.Unwrap(res.Receipt().Out())
-		require.NotNil(t, fail)
+		o, x := res.Receipt().Out().Unpack()
+		require.Nil(t, o)
+		require.NotNil(t, x)
 
-		model := edm.ErrorModel{}
-		err = datamodel.Rebind(datamodel.NewAny(fail), &model)
-		require.NoError(t, err)
+		var model edm.ErrorModel
+		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
 		require.Equal(t, access.InvalidAccessConfirmIssuerErrorName, model.Name())
 	})
 
@@ -137,13 +136,12 @@ func TestAccessConfirmHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		o, fail := result.Unwrap(res.Receipt().Out())
-		require.Nil(t, fail)
+		o, x := res.Receipt().Out().Unpack()
+		require.Nil(t, x)
 		require.NotNil(t, o)
 
-		ok := access.ConfirmOK{}
-		err = datamodel.Rebind(datamodel.NewAny(o), &ok)
-		require.NoError(t, err)
+		var ok access.ConfirmOK
+		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
 		// One delegation link per attenuation.
 		require.Len(t, ok.Delegations, 1)
 
@@ -186,12 +184,12 @@ func TestAccessConfirmHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		o, fail := result.Unwrap(res.Receipt().Out())
-		require.Nil(t, fail)
+		o, x := res.Receipt().Out().Unpack()
+		require.Nil(t, x)
+		require.NotNil(t, o)
 
-		ok := access.ConfirmOK{}
-		err = datamodel.Rebind(datamodel.NewAny(o), &ok)
-		require.NoError(t, err)
+		var ok access.ConfirmOK
+		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
 		require.Len(t, ok.Delegations, 2)
 
 		// Two attenuations → two delegations and two attestations stored.

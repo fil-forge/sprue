@@ -1,6 +1,7 @@
 package handlers_test
 
 import (
+	"bytes"
 	"context"
 	"crypto/ed25519"
 	"net/http/httptest"
@@ -31,13 +32,9 @@ import (
 	edm "github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
 	"github.com/fil-forge/ucantone/execution/bindexec"
-	"github.com/fil-forge/ucantone/ipld"
-	"github.com/fil-forge/ucantone/ipld/codec/dagcbor"
-	"github.com/fil-forge/ucantone/ipld/datamodel"
 	"github.com/fil-forge/ucantone/principal"
 	ed25519signer "github.com/fil-forge/ucantone/principal/ed25519"
 	"github.com/fil-forge/ucantone/principal/signer"
-	"github.com/fil-forge/ucantone/result"
 	"github.com/fil-forge/ucantone/server"
 	"github.com/fil-forge/ucantone/ucan/container"
 	"github.com/fil-forge/ucantone/ucan/delegation"
@@ -184,12 +181,11 @@ func TestBlobAddHandler(t *testing.T) {
 		err = deps.handler.Handler(req, res)
 		require.NoError(t, err)
 
-		_, fail := result.Unwrap(res.Receipt().Out())
-		require.NotNil(t, fail)
+		_, x := res.Receipt().Out().Unpack()
+		require.NotNil(t, x)
 
-		model := edm.ErrorModel{}
-		err = datamodel.Rebind(datamodel.NewAny(fail), &model)
-		require.NoError(t, err)
+		var model edm.ErrorModel
+		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
 		require.Equal(t, accesscaps.InsufficientStorageErrorName, model.Name())
 	})
 
@@ -219,12 +215,11 @@ func TestBlobAddHandler(t *testing.T) {
 		err = deps.handler.Handler(req, res)
 		require.NoError(t, err)
 
-		_, fail := result.Unwrap(res.Receipt().Out())
-		require.NotNil(t, fail)
+		_, x := res.Receipt().Out().Unpack()
+		require.NotNil(t, x)
 
-		model := edm.ErrorModel{}
-		err = datamodel.Rebind(datamodel.NewAny(fail), &model)
-		require.NoError(t, err)
+		var model edm.ErrorModel
+		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
 		require.Equal(t, routing.CandidateUnavailableErrorName, model.Name())
 	})
 
@@ -259,12 +254,11 @@ func TestBlobAddHandler(t *testing.T) {
 		err = deps.handler.Handler(req, res)
 		require.NoError(t, err)
 
-		_, fail := result.Unwrap(res.Receipt().Out())
-		require.NotNil(t, fail)
+		_, x := res.Receipt().Out().Unpack()
+		require.NotNil(t, x)
 
-		model := edm.ErrorModel{}
-		err = datamodel.Rebind(datamodel.NewAny(fail), &model)
-		require.NoError(t, err)
+		var model edm.ErrorModel
+		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
 		require.Equal(t, routing.CandidateUnavailableErrorName, model.Name())
 	})
 
@@ -319,9 +313,7 @@ func TestBlobAddHandler(t *testing.T) {
 		err = deps.handler.Handler(req, res)
 		require.NoError(t, err)
 
-		o, fail := result.Unwrap(res.Receipt().Out())
-		require.Nil(t, fail)
-		require.NotNil(t, o)
+		require.False(t, res.Receipt().Out().IsErr())
 
 		// Response metadata should carry the allocate, put, and accept invocations.
 		require.NotNil(t, res.Metadata())
@@ -368,9 +360,7 @@ func TestBlobAddHandler(t *testing.T) {
 		err = deps.handler.Handler(req, res)
 		require.NoError(t, err)
 
-		o, fail := result.Unwrap(res.Receipt().Out())
-		require.Nil(t, fail)
-		require.NotNil(t, o)
+		require.False(t, res.Receipt().Out().IsErr())
 
 		// Both invocations and receipts should be in the metadata since accept ran.
 		require.NotNil(t, res.Metadata())
@@ -399,11 +389,10 @@ func TestBlobAddHandler(t *testing.T) {
 			&blobcaps.AllocateArguments{Blob: blob, Cause: testutil.RandomCID(t)},
 			invocation.WithAudience(storageProvider),
 		))(t)
-		allocOK := mustRebindMap(t, &blobcaps.AllocateOK{Size: blob.Size})
-		allocRcpt := testutil.Must(receipt.Issue(
+		allocRcpt := testutil.Must(receipt.IssueOK(
 			storageProvider,
 			allocInv.Task().Link(),
-			result.OK[ipld.Map, ipld.Any](allocOK),
+			&blobcaps.AllocateOK{Size: blob.Size},
 		))(t)
 
 		// /http/put — issued by the principal derived from the blob digest.
@@ -416,11 +405,10 @@ func TestBlobAddHandler(t *testing.T) {
 			},
 			invocation.WithAudience(blobProvider),
 		))(t)
-		putOK := mustRebindMap(t, &httpcaps.PutOK{})
-		putRcpt := testutil.Must(receipt.Issue(
+		putRcpt := testutil.Must(receipt.IssueOK(
 			blobProvider,
 			putInv.Task().Link(),
-			result.OK[ipld.Map, ipld.Any](putOK),
+			&httpcaps.PutOK{},
 		))(t)
 
 		// /blob/accept
@@ -433,11 +421,10 @@ func TestBlobAddHandler(t *testing.T) {
 			},
 			invocation.WithAudience(storageProvider),
 		))(t)
-		accOK := mustRebindMap(t, &blobcaps.AcceptOK{Site: testutil.RandomCID(t)})
-		accRcpt := testutil.Must(receipt.Issue(
+		accRcpt := testutil.Must(receipt.IssueOK(
 			storageProvider,
 			accInv.Task().Link(),
-			result.OK[ipld.Map, ipld.Any](accOK),
+			&blobcaps.AcceptOK{Site: testutil.RandomCID(t)},
 		))(t)
 
 		// The original /space/blob/add invocation and receipt — its receipt's
@@ -448,13 +435,12 @@ func TestBlobAddHandler(t *testing.T) {
 			&blobcaps.AddArguments{Blob: blob},
 			invocation.WithAudience(uploadService),
 		))(t)
-		addOK := mustRebindMap(t, &blobcaps.AddOK{
-			Site: promise.AwaitOK{Task: accInv.Task().Link()},
-		})
-		prevAddRcpt := testutil.Must(receipt.Issue(
+		prevAddRcpt := testutil.Must(receipt.IssueOK(
 			uploadService,
 			prevAddInv.Task().Link(),
-			result.OK[ipld.Map, ipld.Any](addOK),
+			&blobcaps.AddOK{
+				Site: promise.AwaitOK{Task: accInv.Task().Link()},
+			},
 		))(t)
 
 		// Persist the chain in the agent store and register the blob with cause
@@ -483,13 +469,13 @@ func TestBlobAddHandler(t *testing.T) {
 		err = deps.handler.Handler(req, res)
 		require.NoError(t, err)
 
-		o, fail := result.Unwrap(res.Receipt().Out())
-		require.Nil(t, fail)
+		o, x := res.Receipt().Out().Unpack()
+		require.Nil(t, x)
 		require.NotNil(t, o)
 
 		// The returned AddOK should match the one from the prior receipt.
-		gotAddOK := blobcaps.AddOK{}
-		require.NoError(t, datamodel.Rebind(datamodel.NewAny(o), &gotAddOK))
+		var gotAddOK blobcaps.AddOK
+		require.NoError(t, gotAddOK.UnmarshalCBOR(bytes.NewReader(o)))
 		require.Equal(t, accInv.Task().Link(), gotAddOK.Site.Task)
 
 		// Response metadata should carry all three invocations and all three
@@ -509,13 +495,4 @@ func deriveBlobProvider(t *testing.T, digest multihash.Multihash) principal.Sign
 	s, err := ed25519signer.FromRaw(seed)
 	require.NoError(t, err)
 	return s
-}
-
-// mustRebindMap rebinds a model into a datamodel.Map for use as receipt output —
-// receipt.Issue can't marshal arbitrary struct pointers via ipld.Any.
-func mustRebindMap(t *testing.T, model dagcbor.Marshaler) datamodel.Map {
-	t.Helper()
-	m := datamodel.Map{}
-	require.NoError(t, datamodel.Rebind(model, &m))
-	return m
 }

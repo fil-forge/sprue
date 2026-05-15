@@ -1,24 +1,23 @@
 package ucan_client
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"reflect"
 
+	"github.com/fil-forge/sprue/pkg/lib/zapipld"
 	"github.com/fil-forge/ucantone/client"
 	edm "github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
-	"github.com/fil-forge/ucantone/ipld"
-	"github.com/fil-forge/ucantone/ipld/codec/dagcbor"
-	"github.com/fil-forge/ucantone/ipld/datamodel"
-	"github.com/fil-forge/ucantone/result"
 	"github.com/fil-forge/ucantone/ucan"
+	cbg "github.com/whyrusleeping/cbor-gen"
 	"go.uber.org/zap"
 )
 
 // Execute sends the given invocation using the provided client and decodes the
 // response into the specified type.
-func Execute[T dagcbor.Unmarshaler](
+func Execute[T cbg.CBORUnmarshaler](
 	ctx context.Context,
 	client *client.HTTPClient,
 	logger *zap.Logger,
@@ -29,13 +28,13 @@ func Execute[T dagcbor.Unmarshaler](
 		zap.Stringer("issuer", inv.Issuer().DID()),
 		zap.Stringer("subject", inv.Subject().DID()),
 		zap.Stringer("command", inv.Command()),
-		zap.Any("arguments", inv.Arguments()),
+		zap.Object("arguments", zapipld.RawMap(inv.ArgumentsBytes())),
 	}
 	if inv.Audience() != nil {
 		fields = append(fields, zap.Stringer("audience", inv.Audience().DID()))
 	}
-	if len(inv.Metadata()) > 0 {
-		fields = append(fields, zap.Any("metadata", inv.Metadata()))
+	if len(inv.MetadataBytes()) > 0 {
+		fields = append(fields, zap.Object("metadata", zapipld.RawMap(inv.MetadataBytes())))
 	}
 	if len(inv.Proofs()) > 0 {
 		fields = append(fields, zap.Stringers("proofs", inv.Proofs()))
@@ -51,34 +50,28 @@ func Execute[T dagcbor.Unmarshaler](
 	}
 
 	rcpt := resp.Receipt()
-	ok, err := result.MatchResultR2(
-		rcpt.Out(),
-		func(o ipld.Any) (T, error) {
-			var ok T
-			// if ok is a pointer type, then we need to create an instance of it
-			// because rebind requires a non-nil pointer.
-			typ := reflect.TypeOf(ok)
-			if typ.Kind() == reflect.Ptr {
-				ok = reflect.New(typ.Elem()).Interface().(T)
-			}
-			err := datamodel.Rebind(datamodel.NewAny(o), ok)
-			if err != nil {
-				log.Error("failed to bind invocation response", zap.Error(err))
-				return zero, fmt.Errorf("binding invocation response: %w", err)
-			}
-			return ok, nil
-		},
-		func(x ipld.Any) (T, error) {
-			var model edm.ErrorModel
-			err := datamodel.Rebind(datamodel.NewAny(x), &model)
-			if err != nil {
-				log.Error("failed to bind execution failure", zap.Error(err))
-				log.Error("failed execution", zap.Any("error", x))
-				return zero, fmt.Errorf("executing invocation: %v", x)
-			}
-			log.Error("failed execution", zap.String("name", model.ErrorName), zap.Error(model))
-			return zero, fmt.Errorf("executing invocation: %w", model)
-		},
-	)
-	return ok, rcpt, err
+
+	o, x := rcpt.Out().Unpack()
+	if rcpt.Out().IsErr() {
+		var model edm.ErrorModel
+		if err := model.UnmarshalCBOR(bytes.NewReader(x)); err != nil {
+			log.Error("failed to unmarshal execution failure", zap.Error(err), zap.Binary("input", x))
+			return zero, nil, fmt.Errorf("executing invocation")
+		}
+		log.Error("failed execution", zap.String("name", model.ErrorName), zap.Error(model))
+		return zero, nil, fmt.Errorf("executing invocation: %w", model)
+	}
+
+	// if ok is a pointer type, allocate the underlying value so
+	// UnmarshalCBOR has a non-nil pointer to write into.
+	var ok T
+	typ := reflect.TypeOf(ok)
+	if typ.Kind() == reflect.Ptr {
+		ok = reflect.New(typ.Elem()).Interface().(T)
+	}
+	if err := ok.UnmarshalCBOR(bytes.NewReader(o)); err != nil {
+		log.Error("failed to unmarshal invocation response", zap.Error(err), zap.Binary("input", o))
+		return zero, nil, fmt.Errorf("unmarshaling invocation response: %w", err)
+	}
+	return ok, rcpt, nil
 }

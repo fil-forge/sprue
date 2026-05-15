@@ -1,6 +1,7 @@
 package handlers_test
 
 import (
+	"bytes"
 	"context"
 	"testing"
 
@@ -17,9 +18,7 @@ import (
 	"github.com/fil-forge/ucantone/did"
 	edm "github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
-	"github.com/fil-forge/ucantone/ipld/datamodel"
 	"github.com/fil-forge/ucantone/principal"
-	"github.com/fil-forge/ucantone/result"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/stretchr/testify/require"
@@ -103,12 +102,12 @@ func TestProviderAddHandler(t *testing.T) {
 		err := handler.Handler(req, res)
 		require.NoError(t, err)
 
-		o, fail := result.Unwrap(res.Receipt().Out())
-		require.Nil(t, fail)
+		o, x := res.Receipt().Out().Unpack()
+		require.Nil(t, x)
 		require.NotNil(t, o)
 
-		ok := providercaps.AddOK{}
-		require.NoError(t, datamodel.Rebind(datamodel.NewAny(o), &ok))
+		var ok providercaps.AddOK
+		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
 		require.NotEmpty(t, ok.ID)
 	})
 
@@ -135,10 +134,10 @@ func TestProviderAddHandler(t *testing.T) {
 		err := handler.Handler(req, res)
 		require.NoError(t, err)
 
-		o, fail := result.Unwrap(res.Receipt().Out())
-		require.Nil(t, fail)
-		ok := providercaps.AddOK{}
-		require.NoError(t, datamodel.Rebind(datamodel.NewAny(o), &ok))
+		o, x := res.Receipt().Out().Unpack()
+		require.Nil(t, x)
+		var ok providercaps.AddOK
+		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
 		require.NotEmpty(t, ok.ID)
 	})
 
@@ -165,11 +164,11 @@ func TestProviderAddHandler(t *testing.T) {
 		err := handler.Handler(req, res)
 		require.NoError(t, err)
 
-		_, fail := result.Unwrap(res.Receipt().Out())
-		require.NotNil(t, fail)
+		_, x := res.Receipt().Out().Unpack()
+		require.NotNil(t, x)
 
-		model := edm.ErrorModel{}
-		require.NoError(t, datamodel.Rebind(datamodel.NewAny(fail), &model))
+		var model edm.ErrorModel
+		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
 		require.Equal(t, providercaps.InvalidAccountErrorName, model.Name())
 	})
 
@@ -196,11 +195,11 @@ func TestProviderAddHandler(t *testing.T) {
 		err := handler.Handler(req, res)
 		require.NoError(t, err)
 
-		_, fail := result.Unwrap(res.Receipt().Out())
-		require.NotNil(t, fail)
+		_, x := res.Receipt().Out().Unpack()
+		require.NotNil(t, x)
 
-		model := edm.ErrorModel{}
-		require.NoError(t, datamodel.Rebind(datamodel.NewAny(fail), &model))
+		var model edm.ErrorModel
+		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
 		require.Equal(t, providercaps.AccountPlanMissingErrorName, model.Name())
 	})
 
@@ -228,11 +227,11 @@ func TestProviderAddHandler(t *testing.T) {
 		err := handler.Handler(req, res)
 		require.NoError(t, err)
 
-		_, fail := result.Unwrap(res.Receipt().Out())
-		require.NotNil(t, fail)
+		_, x := res.Receipt().Out().Unpack()
+		require.NotNil(t, x)
 
-		model := edm.ErrorModel{}
-		require.NoError(t, datamodel.Rebind(datamodel.NewAny(fail), &model))
+		var model edm.ErrorModel
+		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
 		require.Equal(t, provisioning.ProviderNotAllowedErrorName, model.Name())
 	})
 }

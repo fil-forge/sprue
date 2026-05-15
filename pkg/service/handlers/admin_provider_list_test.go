@@ -1,6 +1,7 @@
 package handlers_test
 
 import (
+	"bytes"
 	"net/url"
 	"testing"
 
@@ -11,8 +12,6 @@ import (
 	storage_provider_store "github.com/fil-forge/sprue/pkg/store/storage_provider/memory"
 	edm "github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
-	"github.com/fil-forge/ucantone/ipld/datamodel"
-	"github.com/fil-forge/ucantone/result"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/stretchr/testify/require"
@@ -60,12 +59,11 @@ func TestAdminProviderListHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		_, fail := result.Unwrap(res.Receipt().Out())
-		require.NotNil(t, fail)
+		_, x := res.Receipt().Out().Unpack()
+		require.NotNil(t, x)
 
-		model := edm.ErrorModel{}
-		err = datamodel.Rebind(datamodel.NewAny(fail), &model)
-		require.NoError(t, err)
+		var model edm.ErrorModel
+		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
 		require.Equal(t, "Unauthorized", model.Name())
 	})
 
@@ -83,13 +81,12 @@ func TestAdminProviderListHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		ok, fail := result.Unwrap(res.Receipt().Out())
-		require.Nil(t, fail)
-		require.NotNil(t, ok)
+		o, x := res.Receipt().Out().Unpack()
+		require.Nil(t, x)
+		require.NotNil(t, o)
 
-		listOK := provider.ListOK{}
-		err = datamodel.Rebind(datamodel.NewAny(ok), &listOK)
-		require.NoError(t, err)
+		var listOK provider.ListOK
+		require.NoError(t, listOK.UnmarshalCBOR(bytes.NewReader(o)))
 		require.Empty(t, listOK.Providers)
 	})
 
@@ -119,13 +116,12 @@ func TestAdminProviderListHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		ok, fail := result.Unwrap(res.Receipt().Out())
-		require.Nil(t, fail)
-		require.NotNil(t, ok)
+		o, x := res.Receipt().Out().Unpack()
+		require.Nil(t, x)
+		require.NotNil(t, o)
 
-		listOK := provider.ListOK{}
-		err = datamodel.Rebind(datamodel.NewAny(ok), &listOK)
-		require.NoError(t, err)
+		var listOK provider.ListOK
+		require.NoError(t, listOK.UnmarshalCBOR(bytes.NewReader(o)))
 		require.Len(t, listOK.Providers, 2)
 
 		byDID := map[string]provider.Provider{}

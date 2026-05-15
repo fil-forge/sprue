@@ -17,7 +17,7 @@ func NewAdminProviderDeregisterHandler(id *identity.Identity, providerStore stor
 			req *bindexec.Request[*provider.DeregisterArguments],
 			res *bindexec.Response[*provider.DeregisterOK],
 		) error {
-			args := req.Task().BindArguments()
+			args := req.Task().Arguments()
 
 			if req.Invocation().Issuer().DID() != id.Signer.DID() {
 				log.Warn("Unauthorized access attempt", zap.Stringer("issuer", req.Invocation().Issuer().DID()))

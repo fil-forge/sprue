@@ -1,14 +1,13 @@
 package handlers
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/fil-forge/libforge/capabilities/access"
 	"github.com/fil-forge/sprue/internal/testutil"
 	dlgmemory "github.com/fil-forge/sprue/pkg/store/delegation/memory"
 	"github.com/fil-forge/ucantone/execution"
-	"github.com/fil-forge/ucantone/ipld/datamodel"
-	"github.com/fil-forge/ucantone/result"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/delegation"
 	"github.com/fil-forge/ucantone/ucan/invocation"
@@ -43,13 +42,12 @@ func TestAccessClaimHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		o, fail := result.Unwrap(res.Receipt().Out())
-		require.Nil(t, fail)
+		o, x := res.Receipt().Out().Unpack()
+		require.Nil(t, x)
 		require.NotNil(t, o)
 
-		ok := access.ClaimOK{}
-		err = datamodel.Rebind(datamodel.NewAny(o), &ok)
-		require.NoError(t, err)
+		var ok access.ClaimOK
+		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
 		require.Empty(t, ok.Delegations)
 	})
 
@@ -82,12 +80,12 @@ func TestAccessClaimHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		o, fail := result.Unwrap(res.Receipt().Out())
-		require.Nil(t, fail)
+		o, x := res.Receipt().Out().Unpack()
+		require.Nil(t, x)
+		require.NotNil(t, o)
 
-		ok := access.ClaimOK{}
-		err = datamodel.Rebind(datamodel.NewAny(o), &ok)
-		require.NoError(t, err)
+		var ok access.ClaimOK
+		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
 		require.Equal(t, []cid.Cid{dlg.Link()}, ok.Delegations)
 	})
 
@@ -123,12 +121,12 @@ func TestAccessClaimHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		o, fail := result.Unwrap(res.Receipt().Out())
-		require.Nil(t, fail)
+		o, x := res.Receipt().Out().Unpack()
+		require.Nil(t, x)
+		require.NotNil(t, o)
 
-		ok := access.ClaimOK{}
-		err = datamodel.Rebind(datamodel.NewAny(o), &ok)
-		require.NoError(t, err)
+		var ok access.ClaimOK
+		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
 		require.Len(t, ok.Delegations, 2)
 		require.ElementsMatch(t, []cid.Cid{dlg1.Link(), dlg2.Link()}, ok.Delegations)
 	})
@@ -164,12 +162,12 @@ func TestAccessClaimHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		o, fail := result.Unwrap(res.Receipt().Out())
-		require.Nil(t, fail)
+		o, x := res.Receipt().Out().Unpack()
+		require.Nil(t, x)
+		require.NotNil(t, o)
 
-		ok := access.ClaimOK{}
-		err = datamodel.Rebind(datamodel.NewAny(o), &ok)
-		require.NoError(t, err)
+		var ok access.ClaimOK
+		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
 		require.Empty(t, ok.Delegations)
 	})
 }

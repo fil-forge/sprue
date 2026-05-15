@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 
@@ -15,9 +16,6 @@ import (
 	blobregistry "github.com/fil-forge/sprue/pkg/store/blob_registry"
 	"github.com/fil-forge/ucantone/errors"
 	edm "github.com/fil-forge/ucantone/errors/datamodel"
-	"github.com/fil-forge/ucantone/ipld"
-	"github.com/fil-forge/ucantone/ipld/datamodel"
-	"github.com/fil-forge/ucantone/result"
 	"github.com/fil-forge/ucantone/ucan"
 	"go.uber.org/zap"
 )
@@ -39,11 +37,10 @@ func NewHTTPPutConcludeHandler(
 			log := log.With(zap.Stringer("ran", putRcpt.Ran()))
 			log.Debug("handling conclude")
 
-			putArgs := httpcaps.PutArguments{}
-			err := datamodel.Rebind(datamodel.NewAny(putInv.Arguments()), &putArgs)
-			if err != nil {
-				log.Error("failed to rebind HTTP PUT arguments", zap.Error(err))
-				return fmt.Errorf("rebinding HTTP PUT arguments: %w", err)
+			var putArgs httpcaps.PutArguments
+			if err := putArgs.UnmarshalCBOR(bytes.NewReader(putInv.ArgumentsBytes())); err != nil {
+				log.Error("failed to unmarshal HTTP PUT arguments", zap.Error(err))
+				return fmt.Errorf("unmarshaling HTTP PUT arguments: %w", err)
 			}
 
 			allocTaskLink := putArgs.Destination.Task
@@ -67,11 +64,10 @@ func NewHTTPPutConcludeHandler(
 				zap.Stringer("provider", provider.DID()),
 			)
 
-			allocArgs := blobcaps.AllocateArguments{}
-			err = datamodel.Rebind(datamodel.NewAny(allocInv.Arguments()), &allocArgs)
-			if err != nil {
-				log.Error("failed to rebind allocate arguments", zap.Error(err))
-				return fmt.Errorf("rebinding allocate arguments: %w", err)
+			var allocArgs blobcaps.AllocateArguments
+			if err := allocArgs.UnmarshalCBOR(bytes.NewReader(allocInv.ArgumentsBytes())); err != nil {
+				log.Error("failed to unmarshal allocate arguments", zap.Error(err))
+				return fmt.Errorf("unmarshaling allocate arguments: %w", err)
 			}
 			log = log.With(zap.String("digest", digestutil.Format(allocArgs.Blob.Digest)))
 
@@ -106,30 +102,24 @@ func NewHTTPPutConcludeHandler(
 				return fmt.Errorf("writing agent message: %w", err)
 			}
 
-			// if accept task was not successful do not register the blob in the space
-			return result.MatchResultR1(
-				accRcpt.Out(),
-				func(o ipld.Any) error {
-					log.Debug("accept success")
-					err := blobRegistry.Register(ctx, space.DID(), allocArgs.Blob, allocArgs.Cause)
-					// it's ok if there's already a registration of this blob in this space
-					if err != nil && !errors.Is(err, blobregistry.ErrEntryExists) {
-						return err
-					}
-					return nil
-				},
-				func(x ipld.Any) error {
-					var model edm.ErrorModel
-					err := datamodel.Rebind(datamodel.NewAny(x), &model)
-					if err != nil {
-						log.Error("failed to bind execution failure", zap.Error(err))
-						log.Error("failed execution", zap.Any("error", x))
-						return fmt.Errorf("executing blob accept: %v", x)
-					}
-					log.Error("failed execution", zap.String("name", model.ErrorName), zap.Error(model))
-					return fmt.Errorf("executing blob accept: %w", model)
-				},
-			)
+			if accRcpt.Out().IsErr() {
+				_, x := accRcpt.Out().Unpack()
+				var model edm.ErrorModel
+				if err := model.UnmarshalCBOR(bytes.NewReader(x)); err != nil {
+					log.Error("failed to unmarshal blob accept execution failure", zap.Error(err), zap.Binary("input", x))
+					return fmt.Errorf("executing blob accept: %v", x)
+				}
+				log.Error("failed execution of blob accept", zap.String("name", model.ErrorName), zap.Error(model))
+				return fmt.Errorf("executing blob accept: %w", model)
+			}
+
+			log.Debug("accept success")
+			err = blobRegistry.Register(ctx, space.DID(), allocArgs.Blob, allocArgs.Cause)
+			// it's ok if there's already a registration of this blob in this space
+			if err != nil && !errors.Is(err, blobregistry.ErrEntryExists) {
+				return err
+			}
+			return nil
 		},
 	}
 }

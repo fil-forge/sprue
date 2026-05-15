@@ -28,7 +28,7 @@ func NewAccessConfirmHandler(id *identity.Identity, delegationStore delegation_s
 			req *bindexec.Request[*access.ConfirmArguments],
 			res *bindexec.Response[*access.ConfirmOK],
 		) error {
-			args := req.Task().BindArguments()
+			args := req.Task().Arguments()
 			if req.Invocation().Subject().DID() != id.Signer.DID() {
 				log.Warn("not a valid invocation", zap.Stringer("subject", req.Invocation().Subject().DID()))
 				return res.SetFailure(access.ErrInvalidAccessConfirmSubject)

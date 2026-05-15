@@ -17,7 +17,7 @@ func NewBlobListHandler(blobRegistry blobregistry.Store, logger *zap.Logger) Han
 			req *bindexec.Request[*blobcaps.ListArguments],
 			res *bindexec.Response[*blobcaps.ListOK],
 		) error {
-			args := req.Task().BindArguments()
+			args := req.Task().Arguments()
 			space := req.Invocation().Subject()
 			log := log.With(zap.Stringer("space", space.DID()))
 

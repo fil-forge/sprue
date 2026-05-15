@@ -1,6 +1,7 @@
 package handlers_test
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/fil-forge/sprue/internal/testutil"
@@ -10,8 +11,6 @@ import (
 	storage_provider_store "github.com/fil-forge/sprue/pkg/store/storage_provider/memory"
 	edm "github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
-	"github.com/fil-forge/ucantone/ipld/datamodel"
-	"github.com/fil-forge/ucantone/result"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/stretchr/testify/require"
@@ -67,12 +66,11 @@ func TestAdminProviderRegisterHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		_, fail := result.Unwrap(res.Receipt().Out())
-		require.NotNil(t, fail)
+		_, x := res.Receipt().Out().Unpack()
+		require.NotNil(t, x)
 
-		model := edm.ErrorModel{}
-		err = datamodel.Rebind(datamodel.NewAny(fail), &model)
-		require.NoError(t, err)
+		var model edm.ErrorModel
+		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
 		require.Equal(t, "Unauthorized", model.Name())
 	})
 
@@ -97,10 +95,7 @@ func TestAdminProviderRegisterHandler(t *testing.T) {
 
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
-
-		o, x := result.Unwrap(res.Receipt().Out())
-		require.Nil(t, x)
-		require.NotNil(t, o)
+		require.False(t, res.Receipt().Out().IsErr())
 
 		// Second registration should fail
 		req2 := issueRegisterInvocation(t, uploadService, uploadService, args)
@@ -109,13 +104,13 @@ func TestAdminProviderRegisterHandler(t *testing.T) {
 
 		err = handler.Handler(req2, res2)
 		require.NoError(t, err)
+		require.True(t, res2.Receipt().Out().IsErr())
 
-		_, x2 := result.Unwrap(res2.Receipt().Out())
-		require.NotNil(t, x2)
+		_, x := res2.Receipt().Out().Unpack()
+		require.NotNil(t, x)
 
-		model := edm.ErrorModel{}
-		err = datamodel.Rebind(datamodel.NewAny(x2), &model)
-		require.NoError(t, err)
+		var model edm.ErrorModel
+		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
 		require.Equal(t, "ProviderAlreadyRegistered", model.Name())
 	})
 
@@ -139,10 +134,7 @@ func TestAdminProviderRegisterHandler(t *testing.T) {
 
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
-
-		o, x := result.Unwrap(res.Receipt().Out())
-		require.Nil(t, x)
-		require.NotNil(t, o)
+		require.False(t, res.Receipt().Out().IsErr())
 
 		// Verify provider was stored
 		rec, err := spStore.Get(ctx, storageProvider.DID())
