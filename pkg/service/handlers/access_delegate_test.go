@@ -65,9 +65,9 @@ func TestAccessDelegateHandler(t *testing.T) {
 
 		inv, err := access.Delegate.Invoke(
 			agent,
-			space,
+			space.DID(),
 			&args,
-			invocation.WithAudience(id.Signer),
+			invocation.WithAudience(id.Signer.DID()),
 		)
 		require.NoError(t, err)
 
@@ -92,7 +92,7 @@ func TestAccessDelegateHandler(t *testing.T) {
 		agent := testutil.RandomSigner(t)
 
 		// Create a delegation from the space to the agent for some capability.
-		dlg, err := delegation.Delegate(space, agent, space, "/space/blob/add")
+		dlg, err := delegation.Delegate(space, agent.DID(), space.DID(), "/space/blob/add")
 		require.NoError(t, err)
 
 		args := access.DelegateArguments{
@@ -101,9 +101,9 @@ func TestAccessDelegateHandler(t *testing.T) {
 
 		inv, err := access.Delegate.Invoke(
 			agent,
-			space,
+			space.DID(),
 			&args,
-			invocation.WithAudience(id.Signer),
+			invocation.WithAudience(id.Signer.DID()),
 		)
 		require.NoError(t, err)
 
@@ -137,9 +137,9 @@ func TestAccessDelegateHandler(t *testing.T) {
 
 		inv, err := access.Delegate.Invoke(
 			agent,
-			space,
+			space.DID(),
 			&args,
-			invocation.WithAudience(id.Signer),
+			invocation.WithAudience(id.Signer.DID()),
 		)
 		require.NoError(t, err)
 
@@ -165,10 +165,10 @@ func TestAccessDelegateHandler(t *testing.T) {
 
 		// Reference a delegation by CID, but don't include it in the request metadata.
 		// We still need at least one delegation in the request so req.Metadata() is non-nil.
-		other, err := delegation.Delegate(space, agent, space, "/other")
+		other, err := delegation.Delegate(space, agent.DID(), space.DID(), "/other")
 		require.NoError(t, err)
 
-		missing, err := delegation.Delegate(space, agent, space, "/space/blob/add")
+		missing, err := delegation.Delegate(space, agent.DID(), space.DID(), "/space/blob/add")
 		require.NoError(t, err)
 
 		args := access.DelegateArguments{
@@ -177,9 +177,9 @@ func TestAccessDelegateHandler(t *testing.T) {
 
 		inv, err := access.Delegate.Invoke(
 			agent,
-			space,
+			space.DID(),
 			&args,
-			invocation.WithAudience(id.Signer),
+			invocation.WithAudience(id.Signer.DID()),
 		)
 		require.NoError(t, err)
 

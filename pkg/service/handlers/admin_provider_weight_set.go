@@ -19,8 +19,8 @@ func NewAdminProviderWeightSetHandler(id *identity.Identity, providerStore stora
 			res *bindexec.Response[*weight.SetOK],
 		) error {
 			args := req.Task().Arguments()
-			if req.Invocation().Issuer().DID() != id.Signer.DID() {
-				log.Warn("Unauthorized access attempt", zap.Stringer("issuer", req.Invocation().Issuer().DID()))
+			if req.Invocation().Issuer() != id.Signer.DID() {
+				log.Warn("Unauthorized access attempt", zap.Stringer("issuer", req.Invocation().Issuer()))
 				return res.SetFailure(errors.New("Unauthorized", "only the service identity can set provider weights"))
 			}
 

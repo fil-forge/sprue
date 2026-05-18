@@ -44,9 +44,9 @@ func invokeBlobList(
 	t.Helper()
 	inv, err := blobcaps.List.Invoke(
 		agent,
-		space,
+		space.DID(),
 		args,
-		invocation.WithAudience(uploadService),
+		invocation.WithAudience(uploadService.DID()),
 	)
 	require.NoError(t, err)
 	req := execution.NewRequest(ctx, inv)
@@ -122,7 +122,7 @@ func TestBlobListHandler(t *testing.T) {
 			))
 		}
 
-		size := int64(2)
+		size := uint64(2)
 		req, res := invokeBlobList(t, ctx, alice, uploadService, space, &blobcaps.ListArguments{Size: &size})
 
 		err := handler.Handler(req, res)
@@ -151,7 +151,7 @@ func TestBlobListHandler(t *testing.T) {
 			))
 		}
 
-		size := int64(1)
+		size := uint64(1)
 		req1, res1 := invokeBlobList(t, ctx, alice, uploadService, space, &blobcaps.ListArguments{Size: &size})
 		require.NoError(t, handler.Handler(req1, res1))
 

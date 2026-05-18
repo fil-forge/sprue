@@ -1,7 +1,7 @@
 package weight
 
 import (
-	cdm "github.com/fil-forge/libforge/capabilities/datamodel"
+	cdm "github.com/fil-forge/libforge/capabilities"
 	wdm "github.com/fil-forge/sprue/pkg/capabilities/admin/provider/weight/datamodel"
 	"github.com/fil-forge/ucantone/ucan/delegation/policy"
 	"github.com/fil-forge/ucantone/validator/bindcap"
@@ -12,7 +12,7 @@ const SetCommand = "/provider/weight/set"
 
 type (
 	SetArguments = wdm.SetArgumentsModel
-	SetOK        = cdm.UnitModel
+	SetOK        = cdm.Unit
 )
 
 var Set, _ = bindcap.New[*SetArguments](

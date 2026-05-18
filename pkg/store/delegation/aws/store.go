@@ -135,18 +135,18 @@ func (s *Store) PutMany(ctx context.Context, tokens []ucan.Token, cause cid.Cid)
 		}
 
 		var aud did.DID
-		// audience may be nil if the token is an invocation
-		if token.Audience() != nil {
-			aud = token.Audience().DID()
+		// audience may be undefined if the token is an invocation
+		if token.Audience().Defined() {
+			aud = token.Audience()
 		} else {
-			aud = token.Subject().DID()
+			aud = token.Subject()
 		}
 
 		// Write the index entry to DynamoDB.
 		item := map[string]types.AttributeValue{
 			"link":       &types.AttributeValueMemberS{Value: link},
 			"audience":   &types.AttributeValueMemberS{Value: aud.String()},
-			"issuer":     &types.AttributeValueMemberS{Value: token.Issuer().DID().String()},
+			"issuer":     &types.AttributeValueMemberS{Value: token.Issuer().String()},
 			"insertedAt": &types.AttributeValueMemberS{Value: now},
 			"updatedAt":  &types.AttributeValueMemberS{Value: now},
 		}

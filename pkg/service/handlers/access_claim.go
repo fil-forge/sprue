@@ -21,8 +21,8 @@ func NewAccessClaimHandler(id *identity.Identity, delegationStore delegation_sto
 			req *bindexec.Request[*access.ClaimArguments],
 			res *bindexec.Response[*access.ClaimOK],
 		) error {
-			agent := req.Invocation().Issuer().DID()
-			audience := req.Invocation().Subject().DID()
+			agent := req.Invocation().Issuer()
+			audience := req.Invocation().Subject()
 
 			log := log.With(
 				zap.Stringer("agent", agent),

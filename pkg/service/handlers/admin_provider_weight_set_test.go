@@ -11,6 +11,7 @@ import (
 	"github.com/fil-forge/sprue/pkg/service/handlers"
 	storage_provider_store "github.com/fil-forge/sprue/pkg/store/storage_provider/memory"
 	edm "github.com/fil-forge/ucantone/errors/datamodel"
+	"github.com/fil-forge/ucantone/did"
 	"github.com/fil-forge/ucantone/execution"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/invocation"
@@ -21,7 +22,7 @@ import (
 func issueWeightSetInvocation(
 	t *testing.T,
 	issuer ucan.Signer,
-	audience ucan.Principal,
+	audience did.DID,
 	args weight.SetArguments,
 ) execution.Request {
 	t.Helper()
@@ -59,7 +60,7 @@ func TestAdminProviderWeightSetHandler(t *testing.T) {
 			ReplicationWeight: 25,
 		}
 
-		req := issueWeightSetInvocation(t, unauthorizedIssuer, uploadService, args)
+		req := issueWeightSetInvocation(t, unauthorizedIssuer, uploadService.DID(), args)
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
 		require.NoError(t, err)
 
@@ -89,7 +90,7 @@ func TestAdminProviderWeightSetHandler(t *testing.T) {
 			ReplicationWeight: 25,
 		}
 
-		req := issueWeightSetInvocation(t, uploadService, uploadService, args)
+		req := issueWeightSetInvocation(t, uploadService, uploadService.DID(), args)
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
 		require.NoError(t, err)
 
@@ -126,7 +127,7 @@ func TestAdminProviderWeightSetHandler(t *testing.T) {
 			ReplicationWeight: 30,
 		}
 
-		req := issueWeightSetInvocation(t, uploadService, uploadService, args)
+		req := issueWeightSetInvocation(t, uploadService, uploadService.DID(), args)
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
 		require.NoError(t, err)
 

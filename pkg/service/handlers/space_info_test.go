@@ -16,7 +16,6 @@ import (
 	edm "github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
 	"github.com/fil-forge/ucantone/principal"
-	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
@@ -29,14 +28,14 @@ func invokeSpaceInfo(
 	ctx context.Context,
 	agent principal.Signer,
 	uploadService principal.Signer,
-	space ucan.Principal,
+	space did.DID,
 ) (execution.Request, *execution.ExecResponse) {
 	t.Helper()
 	inv, err := spacecaps.Info.Invoke(
 		agent,
 		space,
 		&spacecaps.InfoArguments{},
-		invocation.WithAudience(uploadService),
+		invocation.WithAudience(uploadService.DID()),
 	)
 	require.NoError(t, err)
 	req := execution.NewRequest(ctx, inv)
@@ -68,7 +67,7 @@ func TestSpaceInfoHandler(t *testing.T) {
 		_, err := provisioningSvc.Provision(ctx, account, space.DID(), uploadService.DID(), testutil.RandomCID(t))
 		require.NoError(t, err)
 
-		req, res := invokeSpaceInfo(t, ctx, testutil.Alice, uploadService, space)
+		req, res := invokeSpaceInfo(t, ctx, testutil.Alice, uploadService, space.DID())
 
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
@@ -94,7 +93,7 @@ func TestSpaceInfoHandler(t *testing.T) {
 
 		space := testutil.RandomSigner(t)
 
-		req, res := invokeSpaceInfo(t, ctx, testutil.Alice, uploadService, space)
+		req, res := invokeSpaceInfo(t, ctx, testutil.Alice, uploadService, space.DID())
 
 		err := handler.Handler(req, res)
 		require.NoError(t, err)

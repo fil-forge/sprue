@@ -12,6 +12,7 @@ import (
 	storageprovider "github.com/fil-forge/sprue/pkg/store/storage_provider"
 	storage_provider_store "github.com/fil-forge/sprue/pkg/store/storage_provider/memory"
 	edm "github.com/fil-forge/ucantone/errors/datamodel"
+	"github.com/fil-forge/ucantone/did"
 	"github.com/fil-forge/ucantone/execution"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/invocation"
@@ -22,7 +23,7 @@ import (
 func issueDeregisterInvocation(
 	t *testing.T,
 	issuer ucan.Signer,
-	audience ucan.Principal,
+	audience did.DID,
 	args provider.DeregisterArguments,
 ) execution.Request {
 	t.Helper()
@@ -64,7 +65,7 @@ func TestAdminProviderDeregisterHandler(t *testing.T) {
 			Provider: storageProvider.DID(),
 		}
 
-		req := issueDeregisterInvocation(t, unauthorizedIssuer, uploadService, args)
+		req := issueDeregisterInvocation(t, unauthorizedIssuer, uploadService.DID(), args)
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
 		require.NoError(t, err)
 
@@ -101,7 +102,7 @@ func TestAdminProviderDeregisterHandler(t *testing.T) {
 			Provider: storageProvider.DID(),
 		}
 
-		req := issueDeregisterInvocation(t, uploadService, uploadService, args)
+		req := issueDeregisterInvocation(t, uploadService, uploadService.DID(), args)
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
 		require.NoError(t, err)
 
@@ -126,7 +127,7 @@ func TestAdminProviderDeregisterHandler(t *testing.T) {
 			Provider: storageProvider.DID(),
 		}
 
-		req := issueDeregisterInvocation(t, uploadService, uploadService, args)
+		req := issueDeregisterInvocation(t, uploadService, uploadService.DID(), args)
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
 		require.NoError(t, err)
 

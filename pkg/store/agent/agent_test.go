@@ -98,10 +98,10 @@ func makeInvocation(t *testing.T) ucan.Invocation {
 	t.Helper()
 	inv, err := invocation.Invoke(
 		testutil.Alice,
-		testutil.Alice,
+		testutil.Alice.DID(),
 		"/test/invoke",
 		datamodel.Map{},
-		invocation.WithAudience(testutil.Bob),
+		invocation.WithAudience(testutil.Bob.DID()),
 	)
 	require.NoError(t, err)
 	return inv
@@ -173,11 +173,11 @@ func TestAgentStore(t *testing.T) {
 
 				concludeInv, err := ucancap.Conclude.Invoke(
 					testutil.Alice,
-					testutil.Alice,
+					testutil.Alice.DID(),
 					&ucancap.ConcludeArguments{
 						Receipt: rcpt.Link(),
 					},
-					invocation.WithAudience(testutil.Bob),
+					invocation.WithAudience(testutil.Bob.DID()),
 				)
 				require.NoError(t, err)
 

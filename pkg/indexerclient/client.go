@@ -48,11 +48,11 @@ func New(endpoint *url.URL, indexerDID did.DID, signer ucan.Signer, logger *zap.
 // The proofStore parameter is used to build the delegation chain authorizing
 // the upload service to retrieve the index blob via `/content/retrieve` command.
 func (c *Client) PublishIndexClaim(ctx context.Context, space did.DID, index cid.Cid, proofStore ucan_server.ProofStore, options ...invocation.Option) (ucan.Receipt, error) {
-	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.signer, contentcaps.RetrieveCommand, space)
+	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.signer.DID(), contentcaps.RetrieveCommand, space)
 	if err != nil {
 		return nil, fmt.Errorf("building proof chain: %w", err)
 	}
-	attestations, err := proofStore.ProofAttestations(ctx, prfs, c.signer)
+	attestations, err := proofStore.ProofAttestations(ctx, prfs, c.signer.DID())
 	if err != nil {
 		return nil, fmt.Errorf("building attestations: %w", err)
 	}
@@ -64,7 +64,7 @@ func (c *Client) PublishIndexClaim(ctx context.Context, space did.DID, index cid
 
 	inv, err := assertcaps.Index.Invoke(
 		c.signer,
-		c.signer,
+		c.signer.DID(),
 		&assertcaps.IndexArguments{Index: index},
 		invocation.WithAudience(c.indexerDID),
 		invocation.WithMetadata(

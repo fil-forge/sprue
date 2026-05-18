@@ -54,8 +54,8 @@ func NewAccessRequestHandler(serverCfg config.ServerConfig, id *identity.Identit
 				log.Warn("failed to extract email from DID", zap.Stringer("account", args.Issuer))
 				return res.SetFailure(errors.New(access.InvalidAuthorizationAccountErrorName, "invalid authorization account DID: %v", err))
 			}
-			audience := req.Invocation().Subject().DID()
-			agent := req.Invocation().Issuer().DID()
+			audience := req.Invocation().Subject()
+			agent := req.Invocation().Issuer()
 			log := log.With(
 				zap.Stringer("agent", agent),
 				zap.Stringer("account", account),
@@ -87,7 +87,7 @@ func NewAccessRequestHandler(serverCfg config.ServerConfig, id *identity.Identit
 			// requests in an attempt to confuse a user into clicking the wrong link.
 			confirmation, err := access.Confirm.Invoke(
 				id.Signer,
-				id.Signer,
+				id.Signer.DID(),
 				// We link to the authorization request so that this invocation can
 				// not be used to authorize a different request.
 				&access.ConfirmArguments{
@@ -102,8 +102,8 @@ func NewAccessRequestHandler(serverCfg config.ServerConfig, id *identity.Identit
 				// audience same as issuer because this is a service invocation
 				// that will get handled by /access/confirm handler
 				// but only if the receiver of this email wants it to be
-				invocation.WithAudience(id.Signer),
-				invocation.WithExpiration(ucan.UTCUnixTimestamp(exp)),
+				invocation.WithAudience(id.Signer.DID()),
+				invocation.WithExpiration(ucan.UnixTimestamp(exp)),
 				// we copy the facts in so that information can be passed
 				// from the invoker of this capability to the invoker of the confirm
 				// capability - we use this, for example, to let bsky.storage users

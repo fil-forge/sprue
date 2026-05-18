@@ -8,6 +8,7 @@ import (
 	"github.com/fil-forge/libforge/didmailto"
 	"github.com/fil-forge/sprue/pkg/identity"
 	delegation_store "github.com/fil-forge/sprue/pkg/store/delegation"
+	"github.com/fil-forge/ucantone/did"
 	"github.com/fil-forge/ucantone/execution/bindexec"
 	"github.com/fil-forge/ucantone/ipld"
 	"github.com/fil-forge/ucantone/ipld/datamodel"
@@ -29,14 +30,14 @@ func NewAccessConfirmHandler(id *identity.Identity, delegationStore delegation_s
 			res *bindexec.Response[*access.ConfirmOK],
 		) error {
 			args := req.Task().Arguments()
-			if req.Invocation().Subject().DID() != id.Signer.DID() {
-				log.Warn("not a valid invocation", zap.Stringer("subject", req.Invocation().Subject().DID()))
+			if req.Invocation().Subject() != id.Signer.DID() {
+				log.Warn("not a valid invocation", zap.Stringer("subject", req.Invocation().Subject()))
 				return res.SetFailure(access.ErrInvalidAccessConfirmSubject)
 			}
 
-			accountDID, err := didmailto.Parse(args.Issuer.DID().String())
+			accountDID, err := didmailto.Parse(args.Issuer.String())
 			if err != nil {
-				log.Warn("invalid issuer DID", zap.Stringer("issuer", args.Issuer.DID()), zap.Error(err))
+				log.Warn("invalid issuer DID", zap.Stringer("issuer", args.Issuer), zap.Error(err))
 				return res.SetFailure(access.ErrInvalidAccessConfirmIssuer)
 			}
 
@@ -50,7 +51,7 @@ func NewAccessConfirmHandler(id *identity.Identity, delegationStore delegation_s
 			}
 
 			log := log.With(
-				zap.Stringer("agent", agent.DID()),
+				zap.Stringer("agent", agent),
 				zap.Stringer("account", account.DID()),
 				zap.Stringer("cause", args.Cause),
 				zap.Strings("commands", cmds),
@@ -110,7 +111,7 @@ func NewAccessConfirmHandler(id *identity.Identity, delegationStore delegation_s
 func createSessionProofs(
 	service ucan.Signer,
 	account absentee.Signer,
-	agent ucan.Principal,
+	agent did.DID,
 	attenuations []access.CapabilityRequest,
 	meta ipld.Map,
 ) ([]ucan.Delegation, []ucan.Invocation, error) {
@@ -123,7 +124,7 @@ func createSessionProofs(
 			agent,
 			// TODO: optionally set subject in capability request
 			// no subject (powerline) will apply to all spaces present and future
-			nil,
+			did.Undef,
 			req.Command,
 			delegation.WithMetadata(meta),
 			// default to Infinity is reasonable here because
@@ -137,7 +138,7 @@ func createSessionProofs(
 
 		attestation, err := attest.Proof.Invoke(
 			service,
-			service,
+			service.DID(),
 			&attest.ProofArguments{
 				Proof: dlg.Link(),
 			},

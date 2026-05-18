@@ -29,9 +29,9 @@ func TestAccessClaimHandler(t *testing.T) {
 		args := access.ClaimArguments{}
 		inv, err := access.Claim.Invoke(
 			agent,
-			agent,
+			agent.DID(),
 			&args,
-			invocation.WithAudience(id.Signer),
+			invocation.WithAudience(id.Signer.DID()),
 		)
 		require.NoError(t, err)
 
@@ -58,7 +58,7 @@ func TestAccessClaimHandler(t *testing.T) {
 
 		agent := testutil.RandomSigner(t)
 
-		dlg, err := delegation.Delegate(testutil.Alice, agent, testutil.Alice, "/test/thing")
+		dlg, err := delegation.Delegate(testutil.Alice, agent.DID(), testutil.Alice.DID(), "/test/thing")
 		require.NoError(t, err)
 
 		err = store.PutMany(t.Context(), []ucan.Token{dlg}, testutil.RandomCID(t))
@@ -67,9 +67,9 @@ func TestAccessClaimHandler(t *testing.T) {
 		args := access.ClaimArguments{}
 		inv, err := access.Claim.Invoke(
 			agent,
-			agent,
+			agent.DID(),
 			&args,
-			invocation.WithAudience(id.Signer),
+			invocation.WithAudience(id.Signer.DID()),
 		)
 		require.NoError(t, err)
 
@@ -96,10 +96,10 @@ func TestAccessClaimHandler(t *testing.T) {
 
 		agent := testutil.RandomSigner(t)
 
-		dlg1, err := delegation.Delegate(testutil.Alice, agent, testutil.Alice, "/test/one")
+		dlg1, err := delegation.Delegate(testutil.Alice, agent.DID(), testutil.Alice.DID(), "/test/one")
 		require.NoError(t, err)
 
-		dlg2, err := delegation.Delegate(testutil.Bob, agent, testutil.Bob, "/test/two")
+		dlg2, err := delegation.Delegate(testutil.Bob, agent.DID(), testutil.Bob.DID(), "/test/two")
 		require.NoError(t, err)
 
 		err = store.PutMany(t.Context(), []ucan.Token{dlg1, dlg2}, testutil.RandomCID(t))
@@ -108,9 +108,9 @@ func TestAccessClaimHandler(t *testing.T) {
 		args := access.ClaimArguments{}
 		inv, err := access.Claim.Invoke(
 			agent,
-			agent,
+			agent.DID(),
 			&args,
-			invocation.WithAudience(id.Signer),
+			invocation.WithAudience(id.Signer.DID()),
 		)
 		require.NoError(t, err)
 
@@ -140,7 +140,7 @@ func TestAccessClaimHandler(t *testing.T) {
 		otherAgent := testutil.RandomSigner(t)
 
 		// Delegation is for otherAgent, not agent.
-		dlg, err := delegation.Delegate(testutil.Alice, otherAgent, testutil.Alice, "/test/thing")
+		dlg, err := delegation.Delegate(testutil.Alice, otherAgent.DID(), testutil.Alice.DID(), "/test/thing")
 		require.NoError(t, err)
 
 		err = store.PutMany(t.Context(), []ucan.Token{dlg}, testutil.RandomCID(t))
@@ -149,9 +149,9 @@ func TestAccessClaimHandler(t *testing.T) {
 		args := access.ClaimArguments{}
 		inv, err := access.Claim.Invoke(
 			agent,
-			agent,
+			agent.DID(),
 			&args,
-			invocation.WithAudience(id.Signer),
+			invocation.WithAudience(id.Signer.DID()),
 		)
 		require.NoError(t, err)
 

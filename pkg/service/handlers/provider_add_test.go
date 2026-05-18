@@ -19,7 +19,6 @@ import (
 	edm "github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
 	"github.com/fil-forge/ucantone/principal"
-	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
@@ -54,7 +53,7 @@ func invokeProviderAdd(
 	ctx context.Context,
 	agent principal.Signer,
 	uploadService principal.Signer,
-	account ucan.Principal,
+	account did.DID,
 	args *providercaps.AddArguments,
 ) (execution.Request, *execution.ExecResponse) {
 	t.Helper()
@@ -62,7 +61,7 @@ func invokeProviderAdd(
 		agent,
 		account,
 		args,
-		invocation.WithAudience(uploadService),
+		invocation.WithAudience(uploadService.DID()),
 	)
 	require.NoError(t, err)
 	req := execution.NewRequest(ctx, inv)
@@ -154,7 +153,7 @@ func TestProviderAddHandler(t *testing.T) {
 		notAMailto := testutil.RandomSigner(t)
 		space := testutil.RandomSigner(t)
 		agent := testutil.RandomSigner(t)
-		req, res := invokeProviderAdd(t, ctx, agent, uploadService, notAMailto,
+		req, res := invokeProviderAdd(t, ctx, agent, uploadService, notAMailto.DID(),
 			&providercaps.AddArguments{
 				Provider: serviceProvider.DID(),
 				Consumer: space.DID(),

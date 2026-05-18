@@ -72,8 +72,8 @@ func (c *Client) Allocate(ctx context.Context, req *AllocateRequest, proofStore 
 	}
 
 	c.logger.Debug("ALLOCATE invocation created",
-		zap.Stringer("issuer", inv.Issuer().DID()),
-		zap.Stringer("audience", inv.Audience().DID()),
+		zap.Stringer("issuer", inv.Issuer()),
+		zap.Stringer("audience", inv.Audience()),
 		zap.Int("proofs", len(prfs)),
 		zap.Int("attestations", len(attestations)),
 	)
@@ -94,12 +94,12 @@ func (c *Client) Allocate(ctx context.Context, req *AllocateRequest, proofStore 
 
 // AllocateInvocation returns the invocation for the allocate request (for use in effects).
 func (c *Client) AllocateInvocation(ctx context.Context, req *AllocateRequest, proofStore ucan_server.ProofStore, options ...invocation.Option) (ucan.Invocation, []ucan.Delegation, []ucan.Invocation, error) {
-	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.signer, blobcap.AllocateCommand, req.Space)
+	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.signer.DID(), blobcap.AllocateCommand, req.Space)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("building proof chain: %w", err)
 	}
 
-	attestations, err := proofStore.ProofAttestations(ctx, prfs, c.signer)
+	attestations, err := proofStore.ProofAttestations(ctx, prfs, c.signer.DID())
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("getting proof attestations: %w", err)
 	}
@@ -148,8 +148,8 @@ func (c *Client) Accept(ctx context.Context, req *AcceptRequest, proofStore ucan
 	}
 
 	c.logger.Debug("ACCEPT invocation created",
-		zap.Stringer("issuer", inv.Issuer().DID()),
-		zap.Stringer("audience", inv.Audience().DID()),
+		zap.Stringer("issuer", inv.Issuer()),
+		zap.Stringer("audience", inv.Audience()),
 		zap.Int("proofs", len(prfs)),
 		zap.Int("attestations", len(attestations)),
 	)
@@ -170,12 +170,12 @@ func (c *Client) Accept(ctx context.Context, req *AcceptRequest, proofStore ucan
 
 // AcceptInvocation returns the invocation for the accept request (for use in effects).
 func (c *Client) AcceptInvocation(ctx context.Context, req *AcceptRequest, proofStore ucan_server.ProofStore, options ...invocation.Option) (ucan.Invocation, []ucan.Delegation, []ucan.Invocation, error) {
-	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.signer, blobcap.AcceptCommand, req.Space)
+	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.signer.DID(), blobcap.AcceptCommand, req.Space)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("building proof chain: %w", err)
 	}
 
-	attestations, err := proofStore.ProofAttestations(ctx, prfs, c.signer)
+	attestations, err := proofStore.ProofAttestations(ctx, prfs, c.signer.DID())
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("getting proof attestations: %w", err)
 	}
@@ -216,12 +216,12 @@ type ReplicaAllocateRequest struct {
 // Returns the response data, the invocation that was sent, and the receipt from
 // piri. It returns an error if the receipt contains a failure result.
 func (c *Client) ReplicaAllocate(ctx context.Context, req *ReplicaAllocateRequest, proofStore ucan_server.ProofStore, options ...invocation.Option) (*blobreplicacap.AllocateOK, ucan.Invocation, ucan.Receipt, error) {
-	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.signer, blobreplicacap.AllocateCommand, req.Space)
+	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.signer.DID(), blobreplicacap.AllocateCommand, req.Space)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("building proof chain: %w", err)
 	}
 
-	attestations, err := proofStore.ProofAttestations(ctx, prfs, c.signer)
+	attestations, err := proofStore.ProofAttestations(ctx, prfs, c.signer.DID())
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("getting proof attestations: %w", err)
 	}
@@ -234,7 +234,7 @@ func (c *Client) ReplicaAllocate(ctx context.Context, req *ReplicaAllocateReques
 		// We set a reasonably large expiration as replication nodes use the
 		// invocation as proof for obtaining a retrieval delegation, and we want to
 		// allow for retries and/or job queue delays.
-		invocation.WithExpiration(uint64(time.Now().Add(replicaAllocationTTL).Unix())),
+		invocation.WithExpiration(ucan.UnixTimestamp(time.Now().Add(replicaAllocationTTL).Unix())),
 	)
 
 	inv, err := blobreplicacap.Allocate.Invoke(
@@ -252,8 +252,8 @@ func (c *Client) ReplicaAllocate(ctx context.Context, req *ReplicaAllocateReques
 	}
 
 	c.logger.Debug("REPLICA ALLOCATE invocation created",
-		zap.Stringer("issuer", inv.Issuer().DID()),
-		zap.Stringer("audience", inv.Audience().DID()),
+		zap.Stringer("issuer", inv.Issuer()),
+		zap.Stringer("audience", inv.Audience()),
 		zap.Int("proofs", len(inv.Proofs())))
 
 	allocOK, rcpt, err := ucan_client.Execute[*blobreplicacap.AllocateOK](

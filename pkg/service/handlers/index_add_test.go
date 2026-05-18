@@ -86,9 +86,9 @@ func invokeIndexAdd(
 	t.Helper()
 	inv, err := indexcaps.Add.Invoke(
 		agent,
-		space,
+		space.DID(),
 		&indexcaps.AddArguments{Index: index},
-		invocation.WithAudience(uploadService),
+		invocation.WithAudience(uploadService.DID()),
 	)
 	require.NoError(t, err)
 	req := execution.NewRequest(ctx, inv, reqOpts...)
@@ -185,7 +185,7 @@ func TestIndexAddHandler(t *testing.T) {
 		// /content/retrieve delegation from space → upload service so the
 		// handler can build a proof chain that authorizes the indexer to
 		// retrieve the index blob.
-		retrievalAuth, err := delegation.Delegate(space, uploadService, space, contentcaps.RetrieveCommand)
+		retrievalAuth, err := delegation.Delegate(space, uploadService.DID(), space.DID(), contentcaps.RetrieveCommand)
 		require.NoError(t, err)
 
 		req, res := invokeIndexAdd(t, ctx, alice, uploadService, space, indexCID,

@@ -23,9 +23,9 @@ func NewProviderAddHandler(deploymentCfg config.DeploymentConfig, provisioningSv
 			res *bindexec.Response[*providercaps.AddOK],
 		) error {
 			args := req.Task().Arguments()
-			account, err := didmailto.Parse(req.Invocation().Subject().DID().String())
+			account, err := didmailto.Parse(req.Invocation().Subject().String())
 			if err != nil {
-				log.Warn("invalid account", zap.Stringer("account", req.Invocation().Subject().DID()))
+				log.Warn("invalid account", zap.Stringer("account", req.Invocation().Subject()))
 				return res.SetFailure(errors.New(providercaps.InvalidAccountErrorName, "invalid account DID: %v", err))
 			}
 			serviceProvider := args.Provider

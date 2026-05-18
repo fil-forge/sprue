@@ -45,7 +45,7 @@ func TestGetProviderInfo(t *testing.T) {
 		svc := routing.NewService(store, logger)
 		unknown := testutil.RandomSigner(t)
 
-		_, err := svc.GetProviderInfo(ctx, unknown)
+		_, err := svc.GetProviderInfo(ctx, unknown.DID())
 		require.ErrorIs(t, err, storageprovider.ErrStorageProviderNotFound)
 	})
 }
@@ -115,11 +115,11 @@ func TestSelectStorageProvider(t *testing.T) {
 		for range 100 {
 			info, err := svc.SelectStorageProvider(ctx, blob)
 			require.NoError(t, err)
-			seen[info.ID.DID().String()] = true
+			seen[info.ID.String()] = true
 		}
 		// With equal weights over 100 iterations, both should be selected
-		require.True(t, seen[p1.Provider.DID().String()])
-		require.True(t, seen[p2.Provider.DID().String()])
+		require.True(t, seen[p1.Provider.String()])
+		require.True(t, seen[p2.Provider.String()])
 	})
 }
 

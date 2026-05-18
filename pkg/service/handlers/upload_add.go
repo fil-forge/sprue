@@ -25,7 +25,7 @@ func NewUploadAddHandler(provisioningSvc *provisioning.Service, uploadStore uplo
 			space := req.Invocation().Subject()
 			cause := req.Invocation().Task().Link()
 			log := log.With(
-				zap.Stringer("space", space.DID()),
+				zap.Stringer("space", space),
 				zap.Stringer("root", args.Root),
 			)
 			if args.Index != nil {
@@ -33,7 +33,7 @@ func NewUploadAddHandler(provisioningSvc *provisioning.Service, uploadStore uplo
 			}
 			log.Debug("adding upload")
 
-			provs, err := provisioningSvc.ListServiceProviders(req.Context(), space.DID())
+			provs, err := provisioningSvc.ListServiceProviders(req.Context(), space)
 			if err != nil {
 				log.Error("failed to list service providers", zap.Error(err))
 				return fmt.Errorf("listing service providers: %w", err)
@@ -43,7 +43,7 @@ func NewUploadAddHandler(provisioningSvc *provisioning.Service, uploadStore uplo
 				return res.SetFailure(errors.New(accesscaps.InsufficientStorageErrorName, "space has no service provider"))
 			}
 
-			err = uploadStore.Upsert(req.Context(), space.DID(), args.Root, args.Index, args.Shards, cause)
+			err = uploadStore.Upsert(req.Context(), space, args.Root, args.Index, args.Shards, cause)
 			if err != nil {
 				log.Error("failed to upsert upload", zap.Error(err))
 				return fmt.Errorf("upserting upload: %w", err)

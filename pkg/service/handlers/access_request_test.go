@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/fil-forge/libforge/capabilities/access"
-	adm "github.com/fil-forge/libforge/capabilities/access/datamodel"
 	"github.com/fil-forge/libforge/didmailto"
 	"github.com/fil-forge/sprue/internal/config"
 	"github.com/fil-forge/sprue/internal/testutil"
@@ -57,7 +56,7 @@ func TestAccessRequestHandler(t *testing.T) {
 
 		args := access.RequestArguments{
 			Issuer: account,
-			Attenuations: []adm.CapabilityRequestModel{
+			Attenuations: []access.CapabilityRequest{
 				{Command: "/"},
 			},
 		}
@@ -66,9 +65,9 @@ func TestAccessRequestHandler(t *testing.T) {
 
 		inv, err := access.Request.Invoke(
 			agent,
-			id.Signer,
+			id.Signer.DID(),
 			&args,
-			invocation.WithAudience(id.Signer),
+			invocation.WithAudience(id.Signer.DID()),
 		)
 		require.NoError(t, err)
 
@@ -102,7 +101,7 @@ func TestAccessRequestHandler(t *testing.T) {
 		nonMailtoSigner := testutil.RandomSigner(t)
 		args := access.RequestArguments{
 			Issuer: nonMailtoSigner.DID(),
-			Attenuations: []adm.CapabilityRequestModel{
+			Attenuations: []access.CapabilityRequest{
 				{Command: "/"},
 			},
 		}
@@ -111,9 +110,9 @@ func TestAccessRequestHandler(t *testing.T) {
 
 		inv, err := access.Request.Invoke(
 			agent,
-			id.Signer,
+			id.Signer.DID(),
 			&args,
-			invocation.WithAudience(id.Signer),
+			invocation.WithAudience(id.Signer.DID()),
 		)
 		require.NoError(t, err)
 
@@ -142,7 +141,7 @@ func TestAccessRequestHandler(t *testing.T) {
 
 		args := access.RequestArguments{
 			Issuer: account,
-			Attenuations: []adm.CapabilityRequestModel{
+			Attenuations: []access.CapabilityRequest{
 				{Command: "/"},
 			},
 		}
@@ -151,9 +150,9 @@ func TestAccessRequestHandler(t *testing.T) {
 
 		inv, err := access.Request.Invoke(
 			agent,
-			id.Signer,
+			id.Signer.DID(),
 			&args,
-			invocation.WithAudience(id.Signer),
+			invocation.WithAudience(id.Signer.DID()),
 		)
 		require.NoError(t, err)
 
@@ -180,7 +179,7 @@ func TestAccessRequestHandler(t *testing.T) {
 
 		args := access.RequestArguments{
 			Issuer: account,
-			Attenuations: []adm.CapabilityRequestModel{
+			Attenuations: []access.CapabilityRequest{
 				{Command: "/"},
 			},
 		}
@@ -189,9 +188,9 @@ func TestAccessRequestHandler(t *testing.T) {
 
 		inv, err := access.Request.Invoke(
 			agent,
-			id.Signer,
+			id.Signer.DID(),
 			&args,
-			invocation.WithAudience(id.Signer),
+			invocation.WithAudience(id.Signer.DID()),
 		)
 		require.NoError(t, err)
 

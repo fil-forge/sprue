@@ -19,8 +19,8 @@ func NewAdminProviderDeregisterHandler(id *identity.Identity, providerStore stor
 		) error {
 			args := req.Task().Arguments()
 
-			if req.Invocation().Issuer().DID() != id.Signer.DID() {
-				log.Warn("Unauthorized access attempt", zap.Stringer("issuer", req.Invocation().Issuer().DID()))
+			if req.Invocation().Issuer() != id.Signer.DID() {
+				log.Warn("Unauthorized access attempt", zap.Stringer("issuer", req.Invocation().Issuer()))
 				return res.SetFailure(errors.New("Unauthorized", "only the service identity can deregister a provider"))
 			}
 

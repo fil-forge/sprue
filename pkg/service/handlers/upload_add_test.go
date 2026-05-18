@@ -57,9 +57,9 @@ func invokeUploadAdd(
 	t.Helper()
 	inv, err := uploadcaps.Add.Invoke(
 		agent,
-		space,
+		space.DID(),
 		args,
-		invocation.WithAudience(uploadService),
+		invocation.WithAudience(uploadService.DID()),
 	)
 	require.NoError(t, err)
 	req := execution.NewRequest(ctx, inv)

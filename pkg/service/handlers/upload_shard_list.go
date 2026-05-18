@@ -21,11 +21,11 @@ func NewUploadShardListHandler(uploadStore upload_store.Store, logger *zap.Logge
 			args := req.Task().Arguments()
 			space := req.Invocation().Subject()
 			root := args.Root
-			log := log.With(zap.Stringer("space", space.DID()), zap.Stringer("root", root))
+			log := log.With(zap.Stringer("space", space), zap.Stringer("root", root))
 
 			var opts []upload_store.ListShardsOption
 			if args.Size != nil {
-				log = log.With(zap.Int64("size", *args.Size))
+				log = log.With(zap.Uint64("size", *args.Size))
 				opts = append(opts, upload_store.WithListShardsLimit(int(*args.Size)))
 			}
 			if args.Cursor != nil {
@@ -34,7 +34,7 @@ func NewUploadShardListHandler(uploadStore upload_store.Store, logger *zap.Logge
 			}
 			log.Debug("listing upload shards")
 
-			page, err := uploadStore.ListShards(req.Context(), space.DID(), root, opts...)
+			page, err := uploadStore.ListShards(req.Context(), space, root, opts...)
 			if err != nil {
 				log.Error("failed to list upload shards", zap.Error(err))
 				return fmt.Errorf("listing upload shards: %w", err)

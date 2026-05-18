@@ -10,6 +10,7 @@ import (
 	"github.com/fil-forge/sprue/pkg/service/handlers"
 	storage_provider_store "github.com/fil-forge/sprue/pkg/store/storage_provider/memory"
 	edm "github.com/fil-forge/ucantone/errors/datamodel"
+	"github.com/fil-forge/ucantone/did"
 	"github.com/fil-forge/ucantone/execution"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/invocation"
@@ -21,7 +22,7 @@ import (
 func issueRegisterInvocation(
 	t *testing.T,
 	issuer ucan.Signer,
-	audience ucan.Principal,
+	audience did.DID,
 	args provider.RegisterArguments,
 ) execution.Request {
 	t.Helper()
@@ -59,7 +60,7 @@ func TestAdminProviderRegisterHandler(t *testing.T) {
 		}
 
 		// Issuer is neither the service nor the provider
-		req := issueRegisterInvocation(t, unauthorizedIssuer, uploadService, args)
+		req := issueRegisterInvocation(t, unauthorizedIssuer, uploadService.DID(), args)
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
 		require.NoError(t, err)
 
@@ -89,7 +90,7 @@ func TestAdminProviderRegisterHandler(t *testing.T) {
 		}
 
 		// First registration by service identity (authorized)
-		req := issueRegisterInvocation(t, uploadService, uploadService, args)
+		req := issueRegisterInvocation(t, uploadService, uploadService.DID(), args)
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
 		require.NoError(t, err)
 
@@ -98,7 +99,7 @@ func TestAdminProviderRegisterHandler(t *testing.T) {
 		require.False(t, res.Receipt().Out().IsErr())
 
 		// Second registration should fail
-		req2 := issueRegisterInvocation(t, uploadService, uploadService, args)
+		req2 := issueRegisterInvocation(t, uploadService, uploadService.DID(), args)
 		res2, err := execution.NewResponse(req2.Invocation().Task().Link(), execution.WithSigner(uploadService))
 		require.NoError(t, err)
 
@@ -128,7 +129,7 @@ func TestAdminProviderRegisterHandler(t *testing.T) {
 			Endpoint: "https://piri.example.com",
 		}
 
-		req := issueRegisterInvocation(t, uploadService, uploadService, args)
+		req := issueRegisterInvocation(t, uploadService, uploadService.DID(), args)
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
 		require.NoError(t, err)
 

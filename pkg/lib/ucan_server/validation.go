@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/fil-forge/libforge/capabilities/ucan/attest"
+	"github.com/fil-forge/ucantone/did"
 	"github.com/fil-forge/ucantone/principal"
 	ed_verifier "github.com/fil-forge/ucantone/principal/ed25519/verifier"
 	secp_verifier "github.com/fil-forge/ucantone/principal/secp256k1/verifier"
@@ -41,7 +42,7 @@ func NewAttestationVerifier(authority principal.Verifier) validator.NonStandardS
 				continue
 			}
 			// only trust attestations we issued
-			if inv.Issuer().DID() != authority.DID() || inv.Subject() == nil || inv.Subject().DID() != authority.DID() {
+			if inv.Issuer() != authority.DID() || inv.Subject() == did.Undef || inv.Subject() != authority.DID() {
 				continue
 			}
 			var args attest.ProofArguments

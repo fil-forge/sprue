@@ -18,6 +18,7 @@ import (
 	"github.com/fil-forge/sprue/pkg/store/agent"
 	blobregistry "github.com/fil-forge/sprue/pkg/store/blob_registry"
 	"github.com/fil-forge/ucantone/did"
+	"github.com/ipfs/go-cid"
 	"github.com/fil-forge/ucantone/errors"
 	"github.com/fil-forge/ucantone/execution/bindexec"
 	"github.com/fil-forge/ucantone/ipld/datamodel"
@@ -42,7 +43,7 @@ func NewBlobAddHandler(id *identity.Identity, provisioningSvc *provisioning.Serv
 		) error {
 			args := req.Task().Arguments()
 			blob := args.Blob
-			space := req.Invocation().Subject().DID()
+			space := req.Invocation().Subject()
 			b58digest := digestutil.Format(blob.Digest)
 
 			log := log.With(
@@ -165,7 +166,7 @@ func NewBlobAddHandler(id *identity.Identity, provisioningSvc *provisioning.Serv
 				log.Error("allocation failed", zap.Error(err))
 				return fmt.Errorf("allocating space: %w", err)
 			}
-			log = log.With(zap.Stringer("provider", provider.ID.DID()))
+			log = log.With(zap.Stringer("provider", provider.ID))
 
 			putInv, putRcpt, err := genPut(blob, allocInv, allocOK, log)
 			if err != nil {
@@ -202,21 +203,21 @@ func doAllocate(
 	agentStore agent.Store,
 	space did.DID,
 	blob blobcaps.Blob,
-	cause ucan.Link,
+	cause cid.Cid,
 	proofStore ucan_server.ProofStore,
 	logger *zap.Logger,
 ) (routing.StorageProviderInfo, ucan.Invocation, ucan.Receipt, blobcaps.AllocateOK, error) {
 	log := logger.With(zap.Stringer("cause", cause))
 	log.Debug("doing allocation")
 
-	var exclusions []ucan.Principal
+	var exclusions []did.DID
 	for {
 		candidate, err := router.SelectStorageProvider(ctx, blob, routing.WithExclusions(exclusions...))
 		if err != nil {
 			log.Error("failed to select storage node", zap.Error(err))
 			return routing.StorageProviderInfo{}, nil, nil, blobcaps.AllocateOK{}, err
 		}
-		log := logger.With(zap.Stringer("candidate", candidate.ID.DID()), zap.String("endpoint", candidate.Endpoint.String()))
+		log := logger.With(zap.Stringer("candidate", candidate.ID), zap.String("endpoint", candidate.Endpoint.String()))
 		log.Debug("selected storage provider candidate")
 
 		client, err := nodeProvider.Client(candidate.ID, candidate.Endpoint)
@@ -272,12 +273,12 @@ func genPut(blob blobcaps.Blob, allocInv ucan.Invocation, allocOK blobcaps.Alloc
 
 	putInv, err := httpcaps.Put.Invoke(
 		blobProvider,
-		blobProvider,
+		blobProvider.DID(),
 		&httpcaps.PutArguments{
 			Body:        blob,
 			Destination: promise.AwaitOK{Task: allocInv.Task().Link()},
 		},
-		invocation.WithAudience(blobProvider),
+		invocation.WithAudience(blobProvider.DID()),
 		// We encode the keys for the blob provider principal that can be used
 		// by the client to use in order to sign a receipt. Client could
 		// actually derive the same principal from the blob digest like we did
@@ -335,9 +336,9 @@ func maybeAccept(
 	blobRegistry blobregistry.Store,
 	nodeProvider piriclient.Provider,
 	providerInfo routing.StorageProviderInfo,
-	space ucan.Principal,
+	space did.DID,
 	blob blobcaps.Blob,
-	cause ucan.Link, // original /space/blob/add task
+	cause cid.Cid, // original /space/blob/add task
 	putInv ucan.Invocation,
 	putRcpt ucan.Receipt,
 	proofStore ucan_server.ProofStore,
@@ -353,7 +354,7 @@ func maybeAccept(
 	}
 
 	accReq := piriclient.AcceptRequest{
-		Space:  space.DID(),
+		Space:  space,
 		Digest: blob.Digest,
 		Size:   blob.Size,
 		Put:    putInv.Link(),
@@ -382,7 +383,7 @@ func maybeAccept(
 			return nil, nil, err
 		}
 
-		err = blobRegistry.Register(ctx, space.DID(), blob, cause)
+		err = blobRegistry.Register(ctx, space, blob, cause)
 		if err != nil {
 			log.Error("failed to register blob", zap.Error(err))
 			return nil, nil, err

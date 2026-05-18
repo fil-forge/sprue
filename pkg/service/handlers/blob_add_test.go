@@ -168,9 +168,9 @@ func TestBlobAddHandler(t *testing.T) {
 
 		inv, err := blobcaps.Add.Invoke(
 			testutil.Alice,
-			space,
+			space.DID(),
 			&args,
-			invocation.WithAudience(uploadService),
+			invocation.WithAudience(uploadService.DID()),
 		)
 		require.NoError(t, err)
 
@@ -202,9 +202,9 @@ func TestBlobAddHandler(t *testing.T) {
 
 		inv, err := blobcaps.Add.Invoke(
 			testutil.Alice,
-			space,
+			space.DID(),
 			&args,
-			invocation.WithAudience(uploadService),
+			invocation.WithAudience(uploadService.DID()),
 		)
 		require.NoError(t, err)
 
@@ -241,9 +241,9 @@ func TestBlobAddHandler(t *testing.T) {
 
 		inv, err := blobcaps.Add.Invoke(
 			testutil.Alice,
-			space,
+			space.DID(),
 			&args,
-			invocation.WithAudience(uploadService),
+			invocation.WithAudience(uploadService.DID()),
 		)
 		require.NoError(t, err)
 
@@ -294,17 +294,17 @@ func TestBlobAddHandler(t *testing.T) {
 
 		inv, err := blobcaps.Add.Invoke(
 			testutil.Alice,
-			space,
+			space.DID(),
 			&args,
-			invocation.WithAudience(uploadService),
+			invocation.WithAudience(uploadService.DID()),
 		)
 		require.NoError(t, err)
 
 		// Authorize the upload service to invoke /blob/allocate and /blob/accept
 		// on the space. This is the proof chain the upload service forwards to the
 		// storage provider.
-		allocProof := testutil.Must(delegation.Delegate(space, uploadService, space, blobcaps.AllocateCommand))(t)
-		acceptProof := testutil.Must(delegation.Delegate(space, uploadService, space, blobcaps.AcceptCommand))(t)
+		allocProof := testutil.Must(delegation.Delegate(space, uploadService.DID(), space.DID(), blobcaps.AllocateCommand))(t)
+		acceptProof := testutil.Must(delegation.Delegate(space, uploadService.DID(), space.DID(), blobcaps.AcceptCommand))(t)
 
 		req := execution.NewRequest(ctx, inv, execution.WithDelegations(allocProof, acceptProof))
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
@@ -344,14 +344,14 @@ func TestBlobAddHandler(t *testing.T) {
 
 		inv, err := blobcaps.Add.Invoke(
 			testutil.Alice,
-			space,
+			space.DID(),
 			&args,
-			invocation.WithAudience(uploadService),
+			invocation.WithAudience(uploadService.DID()),
 		)
 		require.NoError(t, err)
 
-		allocProof := testutil.Must(delegation.Delegate(space, uploadService, space, blobcaps.AllocateCommand))(t)
-		acceptProof := testutil.Must(delegation.Delegate(space, uploadService, space, blobcaps.AcceptCommand))(t)
+		allocProof := testutil.Must(delegation.Delegate(space, uploadService.DID(), space.DID(), blobcaps.AllocateCommand))(t)
+		acceptProof := testutil.Must(delegation.Delegate(space, uploadService.DID(), space.DID(), blobcaps.AcceptCommand))(t)
 
 		req := execution.NewRequest(ctx, inv, execution.WithDelegations(allocProof, acceptProof))
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
@@ -385,9 +385,9 @@ func TestBlobAddHandler(t *testing.T) {
 		// /blob/allocate
 		allocInv := testutil.Must(blobcaps.Allocate.Invoke(
 			uploadService,
-			space,
+			space.DID(),
 			&blobcaps.AllocateArguments{Blob: blob, Cause: testutil.RandomCID(t)},
-			invocation.WithAudience(storageProvider),
+			invocation.WithAudience(storageProvider.DID()),
 		))(t)
 		allocRcpt := testutil.Must(receipt.IssueOK(
 			storageProvider,
@@ -398,12 +398,12 @@ func TestBlobAddHandler(t *testing.T) {
 		// /http/put — issued by the principal derived from the blob digest.
 		putInv := testutil.Must(httpcaps.Put.Invoke(
 			blobProvider,
-			blobProvider,
+			blobProvider.DID(),
 			&httpcaps.PutArguments{
 				Body:        blob,
 				Destination: promise.AwaitOK{Task: allocInv.Task().Link()},
 			},
-			invocation.WithAudience(blobProvider),
+			invocation.WithAudience(blobProvider.DID()),
 		))(t)
 		putRcpt := testutil.Must(receipt.IssueOK(
 			blobProvider,
@@ -414,12 +414,12 @@ func TestBlobAddHandler(t *testing.T) {
 		// /blob/accept
 		accInv := testutil.Must(blobcaps.Accept.Invoke(
 			uploadService,
-			space,
+			space.DID(),
 			&blobcaps.AcceptArguments{
 				Blob: blob,
 				Put:  promise.AwaitOK{Task: putInv.Task().Link()},
 			},
-			invocation.WithAudience(storageProvider),
+			invocation.WithAudience(storageProvider.DID()),
 		))(t)
 		accRcpt := testutil.Must(receipt.IssueOK(
 			storageProvider,
@@ -431,9 +431,9 @@ func TestBlobAddHandler(t *testing.T) {
 		// task CID is what gets stored in the registry as the cause.
 		prevAddInv := testutil.Must(blobcaps.Add.Invoke(
 			testutil.Alice,
-			space,
+			space.DID(),
 			&blobcaps.AddArguments{Blob: blob},
-			invocation.WithAudience(uploadService),
+			invocation.WithAudience(uploadService.DID()),
 		))(t)
 		prevAddRcpt := testutil.Must(receipt.IssueOK(
 			uploadService,
@@ -457,9 +457,9 @@ func TestBlobAddHandler(t *testing.T) {
 		// stored AddOK without contacting any storage provider.
 		inv := testutil.Must(blobcaps.Add.Invoke(
 			testutil.Alice,
-			space,
+			space.DID(),
 			&blobcaps.AddArguments{Blob: blob},
-			invocation.WithAudience(uploadService),
+			invocation.WithAudience(uploadService.DID()),
 		))(t)
 
 		req := execution.NewRequest(ctx, inv)

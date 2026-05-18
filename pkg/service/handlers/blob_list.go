@@ -19,11 +19,11 @@ func NewBlobListHandler(blobRegistry blobregistry.Store, logger *zap.Logger) Han
 		) error {
 			args := req.Task().Arguments()
 			space := req.Invocation().Subject()
-			log := log.With(zap.Stringer("space", space.DID()))
+			log := log.With(zap.Stringer("space", space))
 
 			var opts []blobregistry.ListOption
 			if args.Size != nil {
-				log = log.With(zap.Int64("size", *args.Size))
+				log = log.With(zap.Uint64("size", *args.Size))
 				opts = append(opts, blobregistry.WithListLimit(int(*args.Size)))
 			}
 			if args.Cursor != nil {
@@ -32,7 +32,7 @@ func NewBlobListHandler(blobRegistry blobregistry.Store, logger *zap.Logger) Han
 			}
 			log.Debug("listing blobs")
 
-			page, err := blobRegistry.List(req.Context(), space.DID(), opts...)
+			page, err := blobRegistry.List(req.Context(), space, opts...)
 			if err != nil {
 				log.Error("failed to list blobs", zap.Error(err))
 				return fmt.Errorf("listing blobs: %w", err)

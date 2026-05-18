@@ -74,12 +74,12 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 		blobProvider := deriveBlobProvider(t, digest)
 		putInv, err := httpcaps.Put.Invoke(
 			blobProvider,
-			blobProvider,
+			blobProvider.DID(),
 			&httpcaps.PutArguments{
 				Body:        blobcaps.Blob{Digest: digest, Size: 1024},
 				Destination: promise.AwaitOK{Task: nonExistentAllocTask},
 			},
-			invocation.WithAudience(blobProvider),
+			invocation.WithAudience(blobProvider.DID()),
 		)
 		require.NoError(t, err)
 
@@ -107,9 +107,9 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 		// NOT register that provider in the spStore — router lookup fails.
 		allocInv, err := blobcaps.Allocate.Invoke(
 			uploadService,
-			space,
+			space.DID(),
 			&blobcaps.AllocateArguments{Blob: blob, Cause: testutil.RandomCID(t)},
-			invocation.WithAudience(storageProvider),
+			invocation.WithAudience(storageProvider.DID()),
 		)
 		require.NoError(t, err)
 		allocRcpt, err := receipt.IssueOK(
@@ -127,12 +127,12 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 		blobProvider := deriveBlobProvider(t, digest)
 		putInv, err := httpcaps.Put.Invoke(
 			blobProvider,
-			blobProvider,
+			blobProvider.DID(),
 			&httpcaps.PutArguments{
 				Body:        blob,
 				Destination: promise.AwaitOK{Task: allocInv.Task().Link()},
 			},
-			invocation.WithAudience(blobProvider),
+			invocation.WithAudience(blobProvider.DID()),
 		)
 		require.NoError(t, err)
 		putRcpt, err := receipt.IssueOK(
@@ -177,9 +177,9 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 		// Prior /blob/allocate invocation in the agent store.
 		allocInv, err := blobcaps.Allocate.Invoke(
 			uploadService,
-			space,
+			space.DID(),
 			&blobcaps.AllocateArguments{Blob: blob, Cause: blobAddTaskLink},
-			invocation.WithAudience(storageProvider),
+			invocation.WithAudience(storageProvider.DID()),
 		)
 		require.NoError(t, err)
 		allocRcpt, err := receipt.IssueOK(
@@ -198,12 +198,12 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 		blobProvider := deriveBlobProvider(t, digest)
 		putInv, err := httpcaps.Put.Invoke(
 			blobProvider,
-			blobProvider,
+			blobProvider.DID(),
 			&httpcaps.PutArguments{
 				Body:        blob,
 				Destination: promise.AwaitOK{Task: allocInv.Task().Link()},
 			},
-			invocation.WithAudience(blobProvider),
+			invocation.WithAudience(blobProvider.DID()),
 		)
 		require.NoError(t, err)
 		putRcpt, err := receipt.IssueOK(
@@ -216,7 +216,7 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 		// Authorize the upload service to invoke /blob/accept on the space and
 		// pass the proof through the conclude metadata so the piri client can
 		// forward it to the storage provider.
-		acceptProof, err := delegation.Delegate(space, uploadService, space, blobcaps.AcceptCommand)
+		acceptProof, err := delegation.Delegate(space, uploadService.DID(), space.DID(), blobcaps.AcceptCommand)
 		require.NoError(t, err)
 		meta := container.New(container.WithDelegations(acceptProof))
 

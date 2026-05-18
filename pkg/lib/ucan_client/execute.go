@@ -25,13 +25,13 @@ func Execute[T cbg.CBORUnmarshaler](
 	options ...execution.RequestOption,
 ) (T, ucan.Receipt, error) {
 	fields := []zap.Field{
-		zap.Stringer("issuer", inv.Issuer().DID()),
-		zap.Stringer("subject", inv.Subject().DID()),
+		zap.Stringer("issuer", inv.Issuer()),
+		zap.Stringer("subject", inv.Subject()),
 		zap.Stringer("command", inv.Command()),
 		zap.Object("arguments", zapipld.RawMap(inv.ArgumentsBytes())),
 	}
-	if inv.Audience() != nil {
-		fields = append(fields, zap.Stringer("audience", inv.Audience().DID()))
+	if inv.Audience().Defined() {
+		fields = append(fields, zap.Stringer("audience", inv.Audience()))
 	}
 	if len(inv.MetadataBytes()) > 0 {
 		fields = append(fields, zap.Object("metadata", zapipld.RawMap(inv.MetadataBytes())))

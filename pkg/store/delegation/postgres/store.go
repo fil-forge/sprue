@@ -75,11 +75,11 @@ func (s *Store) PutMany(ctx context.Context, tokens []ucan.Token, cause cid.Cid)
 		}
 
 		var aud did.DID
-		// audience may be nil if the token is an invocation
-		if token.Audience() != nil {
-			aud = token.Audience().DID()
+		// audience may be undefined if the token is an invocation
+		if token.Audience().Defined() {
+			aud = token.Audience()
 		} else {
-			aud = token.Subject().DID()
+			aud = token.Subject()
 		}
 		var causeStr *string
 		if cause != cid.Undef {
@@ -101,7 +101,7 @@ func (s *Store) PutMany(ctx context.Context, tokens []ucan.Token, cause cid.Cid)
 			    cause = EXCLUDED.cause,
 			    expiration = EXCLUDED.expiration,
 			    updated_at = EXCLUDED.updated_at
-		`, link, aud.String(), token.Issuer().DID().String(), causeStr, expiration, now); err != nil {
+		`, link, aud.String(), token.Issuer().String(), causeStr, expiration, now); err != nil {
 			return fmt.Errorf("indexing delegation %s: %w", link, err)
 		}
 	}

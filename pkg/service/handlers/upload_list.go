@@ -19,11 +19,11 @@ func NewUploadListHandler(uploadStore upload_store.Store, logger *zap.Logger) Ha
 		) error {
 			args := req.Task().Arguments()
 			space := req.Invocation().Subject()
-			log := log.With(zap.Stringer("space", space.DID()))
+			log := log.With(zap.Stringer("space", space))
 
 			var opts []upload_store.ListOption
 			if args.Size != nil {
-				log = log.With(zap.Int64("size", *args.Size))
+				log = log.With(zap.Uint64("size", *args.Size))
 				opts = append(opts, upload_store.WithListLimit(int(*args.Size)))
 			}
 			if args.Cursor != nil {
@@ -32,7 +32,7 @@ func NewUploadListHandler(uploadStore upload_store.Store, logger *zap.Logger) Ha
 			}
 			log.Debug("listing uploads")
 
-			page, err := uploadStore.List(req.Context(), space.DID(), opts...)
+			page, err := uploadStore.List(req.Context(), space, opts...)
 			if err != nil {
 				log.Error("failed to list uploads", zap.Error(err))
 				return fmt.Errorf("listing uploads: %w", err)

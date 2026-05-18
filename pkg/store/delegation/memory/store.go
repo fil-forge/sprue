@@ -65,11 +65,11 @@ func (s *Store) PutMany(ctx context.Context, tokens []ucan.Token, cause cid.Cid)
 
 	for _, d := range tokens {
 		var aud did.DID
-		// audience may be nil if the token is an invocation
-		if d.Audience() != nil {
-			aud = d.Audience().DID()
+		// audience may be undefined if the token is an invocation
+		if d.Audience().Defined() {
+			aud = d.Audience()
 		} else {
-			aud = d.Subject().DID()
+			aud = d.Subject()
 		}
 		s.tokens[aud] = append(s.tokens[aud], d)
 		slices.SortFunc(s.tokens[aud], func(a, b ucan.Token) int {

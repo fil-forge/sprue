@@ -10,8 +10,8 @@ import (
 	"github.com/fil-forge/libforge/digestutil"
 	"github.com/fil-forge/sprue/pkg/store"
 	storageprovider "github.com/fil-forge/sprue/pkg/store/storage_provider"
+	"github.com/fil-forge/ucantone/did"
 	"github.com/fil-forge/ucantone/errors"
-	"github.com/fil-forge/ucantone/ucan"
 	"go.uber.org/zap"
 )
 
@@ -22,21 +22,21 @@ const CandidateUnavailableErrorName = "CandidateUnavailable"
 var ErrCandidateUnavailable = errors.New(CandidateUnavailableErrorName, "no storage providers available")
 
 type selectCfg struct {
-	exclusions []ucan.Principal
+	exclusions []did.DID
 }
 
 type SelectOption func(*selectCfg)
 
 // WithExclusions configures a list of storage providers that should be excluded
 // from the routing selection.
-func WithExclusions(providers ...ucan.Principal) SelectOption {
+func WithExclusions(providers ...did.DID) SelectOption {
 	return func(cfg *selectCfg) {
 		cfg.exclusions = append(cfg.exclusions, providers...)
 	}
 }
 
 type StorageProviderInfo struct {
-	ID       ucan.Principal
+	ID       did.DID
 	Endpoint url.URL
 }
 
@@ -54,8 +54,8 @@ func NewService(storageProviderStore storageprovider.Store, logger *zap.Logger) 
 
 // GetProviderInfo returns information about a registered storage provider. It
 // may return [storageprovider.ErrStorageProviderNotFound].
-func (s *Service) GetProviderInfo(ctx context.Context, provider ucan.Principal) (StorageProviderInfo, error) {
-	rec, err := s.storageProviderStore.Get(ctx, provider.DID())
+func (s *Service) GetProviderInfo(ctx context.Context, provider did.DID) (StorageProviderInfo, error) {
+	rec, err := s.storageProviderStore.Get(ctx, provider)
 	if err != nil {
 		return StorageProviderInfo{}, err
 	}
@@ -111,7 +111,7 @@ func (s *Service) SelectStorageProvider(ctx context.Context, blob blob.Blob, opt
 // SelectReplicationProvider selects a candidate for blob allocation from the
 // current list of available storage nodes, excluding the primary node. It may
 // return [ErrCandidateUnavailable] if no candidates are available.
-func (s *Service) SelectReplicationProvider(ctx context.Context, primary ucan.Principal, blob blob.Blob, options ...SelectOption) (StorageProviderInfo, error) {
+func (s *Service) SelectReplicationProvider(ctx context.Context, primary did.DID, blob blob.Blob, options ...SelectOption) (StorageProviderInfo, error) {
 	cfg := &selectCfg{}
 	for _, option := range options {
 		option(cfg)
@@ -151,7 +151,7 @@ func listProviders(ctx context.Context, providerStore storageprovider.Store) ([]
 	})
 }
 
-func filterExcludedProviders(providers []storageprovider.Record, exclusions []ucan.Principal) []storageprovider.Record {
+func filterExcludedProviders(providers []storageprovider.Record, exclusions []did.DID) []storageprovider.Record {
 	var filtered []storageprovider.Record
 	for _, prov := range providers {
 		if prov.Weight <= 0 {

@@ -30,9 +30,9 @@ func invokeUploadList(
 	t.Helper()
 	inv, err := uploadcaps.List.Invoke(
 		agent,
-		space,
+		space.DID(),
 		args,
-		invocation.WithAudience(uploadService),
+		invocation.WithAudience(uploadService.DID()),
 	)
 	require.NoError(t, err)
 	req := execution.NewRequest(ctx, inv)
@@ -107,7 +107,7 @@ func TestUploadListHandler(t *testing.T) {
 			require.NoError(t, store.Upsert(ctx, space.DID(), testutil.RandomCID(t), nil, nil, testutil.RandomCID(t)))
 		}
 
-		size := int64(2)
+		size := uint64(2)
 		req, res := invokeUploadList(t, ctx, alice, uploadService, space, &uploadcaps.ListArguments{Size: &size})
 
 		err := handler.Handler(req, res)
@@ -130,7 +130,7 @@ func TestUploadListHandler(t *testing.T) {
 			require.NoError(t, store.Upsert(ctx, space.DID(), testutil.RandomCID(t), nil, nil, testutil.RandomCID(t)))
 		}
 
-		size := int64(1)
+		size := uint64(1)
 		req1, res1 := invokeUploadList(t, ctx, alice, uploadService, space, &uploadcaps.ListArguments{Size: &size})
 		require.NoError(t, handler.Handler(req1, res1))
 

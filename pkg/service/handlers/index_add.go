@@ -29,12 +29,12 @@ func NewIndexAddHandler(id *identity.Identity, provisioningSvc *provisioning.Ser
 			index := args.Index
 
 			log := log.With(
-				zap.Stringer("space", space.DID()),
+				zap.Stringer("space", space),
 				zap.Stringer("index", index),
 			)
 			log.Debug("adding index")
 
-			provs, err := provisioningSvc.ListServiceProviders(req.Context(), space.DID())
+			provs, err := provisioningSvc.ListServiceProviders(req.Context(), space)
 			if err != nil {
 				log.Error("failed to list service providers", zap.Error(err))
 				return fmt.Errorf("listing service providers: %w", err)
@@ -45,7 +45,7 @@ func NewIndexAddHandler(id *identity.Identity, provisioningSvc *provisioning.Ser
 			}
 
 			// Ensure the index is stored in the agent's space
-			_, err = blobRegistry.Get(req.Context(), space.DID(), index.Hash())
+			_, err = blobRegistry.Get(req.Context(), space, index.Hash())
 			if err != nil {
 				if errors.Is(err, blobregistry.ErrEntryNotFound) {
 					log.Warn("index not found in space")
@@ -60,7 +60,7 @@ func NewIndexAddHandler(id *identity.Identity, provisioningSvc *provisioning.Ser
 			// This is re-delegated to the indexer for indexing.
 			proofStore := ucan_server.NewContainerProofStore(req.Metadata())
 			// Publish to indexer with retrieval authorization
-			if _, err := indexerClient.PublishIndexClaim(req.Context(), space.DID(), index, proofStore); err != nil {
+			if _, err := indexerClient.PublishIndexClaim(req.Context(), space, index, proofStore); err != nil {
 				log.Error("failed to publish index claim", zap.Error(err))
 				return fmt.Errorf("publishing index claim: %w", err)
 			}

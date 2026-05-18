@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/fil-forge/libforge/capabilities/access"
-	adm "github.com/fil-forge/libforge/capabilities/access/datamodel"
 	"github.com/fil-forge/libforge/didmailto"
 	"github.com/fil-forge/sprue/internal/testutil"
 	dlgmemory "github.com/fil-forge/sprue/pkg/store/delegation/memory"
@@ -32,7 +31,7 @@ func TestAccessConfirmHandler(t *testing.T) {
 			Cause:    testutil.RandomCID(t),
 			Issuer:   account,
 			Audience: agent.DID(),
-			Attenuations: []adm.CapabilityRequestModel{
+			Attenuations: []access.CapabilityRequest{
 				{Command: "/"},
 			},
 		}
@@ -40,9 +39,9 @@ func TestAccessConfirmHandler(t *testing.T) {
 		// Subject is not id.Signer — handler should reject.
 		inv, err := access.Confirm.Invoke(
 			id.Signer,
-			notService,
+			notService.DID(),
 			&args,
-			invocation.WithAudience(id.Signer),
+			invocation.WithAudience(id.Signer.DID()),
 		)
 		require.NoError(t, err)
 
@@ -75,16 +74,16 @@ func TestAccessConfirmHandler(t *testing.T) {
 			Cause:    testutil.RandomCID(t),
 			Issuer:   nonMailto.DID(),
 			Audience: agent.DID(),
-			Attenuations: []adm.CapabilityRequestModel{
+			Attenuations: []access.CapabilityRequest{
 				{Command: "/"},
 			},
 		}
 
 		inv, err := access.Confirm.Invoke(
 			id.Signer,
-			id.Signer,
+			id.Signer.DID(),
 			&args,
-			invocation.WithAudience(id.Signer),
+			invocation.WithAudience(id.Signer.DID()),
 		)
 		require.NoError(t, err)
 
@@ -116,16 +115,16 @@ func TestAccessConfirmHandler(t *testing.T) {
 			Cause:    testutil.RandomCID(t),
 			Issuer:   account,
 			Audience: agent.DID(),
-			Attenuations: []adm.CapabilityRequestModel{
+			Attenuations: []access.CapabilityRequest{
 				{Command: "/"},
 			},
 		}
 
 		inv, err := access.Confirm.Invoke(
 			id.Signer,
-			id.Signer,
+			id.Signer.DID(),
 			&args,
-			invocation.WithAudience(id.Signer),
+			invocation.WithAudience(id.Signer.DID()),
 		)
 		require.NoError(t, err)
 
@@ -163,7 +162,7 @@ func TestAccessConfirmHandler(t *testing.T) {
 			Cause:    testutil.RandomCID(t),
 			Issuer:   account,
 			Audience: agent.DID(),
-			Attenuations: []adm.CapabilityRequestModel{
+			Attenuations: []access.CapabilityRequest{
 				{Command: "/space/blob/add"},
 				{Command: "/upload/add"},
 			},
@@ -171,9 +170,9 @@ func TestAccessConfirmHandler(t *testing.T) {
 
 		inv, err := access.Confirm.Invoke(
 			id.Signer,
-			id.Signer,
+			id.Signer.DID(),
 			&args,
-			invocation.WithAudience(id.Signer),
+			invocation.WithAudience(id.Signer.DID()),
 		)
 		require.NoError(t, err)
 

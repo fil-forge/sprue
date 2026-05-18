@@ -30,9 +30,9 @@ func invokeUploadShardList(
 	t.Helper()
 	inv, err := shardcaps.List.Invoke(
 		agent,
-		space,
+		space.DID(),
 		args,
-		invocation.WithAudience(uploadService),
+		invocation.WithAudience(uploadService.DID()),
 	)
 	require.NoError(t, err)
 	req := execution.NewRequest(ctx, inv)
@@ -113,7 +113,7 @@ func TestUploadShardListHandler(t *testing.T) {
 		shard3 := testutil.RandomCID(t)
 		require.NoError(t, store.Upsert(ctx, space.DID(), root, nil, []cid.Cid{shard1, shard2, shard3}, testutil.RandomCID(t)))
 
-		size := int64(2)
+		size := uint64(2)
 		req, res := invokeUploadShardList(t, ctx, alice, uploadService, space, &shardcaps.ListArguments{Root: root, Size: &size})
 
 		err := handler.Handler(req, res)
@@ -138,7 +138,7 @@ func TestUploadShardListHandler(t *testing.T) {
 		shard3 := testutil.RandomCID(t)
 		require.NoError(t, store.Upsert(ctx, space.DID(), root, nil, []cid.Cid{shard1, shard2, shard3}, testutil.RandomCID(t)))
 
-		size := int64(1)
+		size := uint64(1)
 		req1, res1 := invokeUploadShardList(t, ctx, alice, uploadService, space, &shardcaps.ListArguments{Root: root, Size: &size})
 		require.NoError(t, handler.Handler(req1, res1))
 

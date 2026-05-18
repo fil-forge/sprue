@@ -31,7 +31,7 @@ func TestUCANConcludeHandler(t *testing.T) {
 	// Build a "task" invocation and a receipt for it.
 	newTaskAndReceipt := func(t *testing.T, cmd ucan.Command) (ucan.Invocation, ucan.Receipt) {
 		t.Helper()
-		taskInv, err := invocation.Invoke(uploadService, uploadService, cmd, datamodel.Map{})
+		taskInv, err := invocation.Invoke(uploadService, uploadService.DID(), cmd, datamodel.Map{})
 		require.NoError(t, err)
 		rcpt, err := receipt.IssueOK(
 			uploadService,
@@ -54,9 +54,9 @@ func TestUCANConcludeHandler(t *testing.T) {
 
 		concludeInv, err := ucancaps.Conclude.Invoke(
 			uploadService,
-			uploadService,
+			uploadService.DID(),
 			&ucancaps.ConcludeArguments{Receipt: rcpt.Link()},
-			invocation.WithAudience(uploadService),
+			invocation.WithAudience(uploadService.DID()),
 		)
 		require.NoError(t, err)
 
@@ -91,9 +91,9 @@ func TestUCANConcludeHandler(t *testing.T) {
 
 		concludeInv, err := ucancaps.Conclude.Invoke(
 			uploadService,
-			uploadService,
+			uploadService.DID(),
 			&ucancaps.ConcludeArguments{Receipt: rcpt.Link()},
-			invocation.WithAudience(uploadService),
+			invocation.WithAudience(uploadService.DID()),
 		)
 		require.NoError(t, err)
 
@@ -140,9 +140,9 @@ func TestUCANConcludeHandler(t *testing.T) {
 
 		concludeInv, err := ucancaps.Conclude.Invoke(
 			uploadService,
-			uploadService,
+			uploadService.DID(),
 			&ucancaps.ConcludeArguments{Receipt: rcpt.Link()},
-			invocation.WithAudience(uploadService),
+			invocation.WithAudience(uploadService.DID()),
 		)
 		require.NoError(t, err)
 
@@ -179,9 +179,9 @@ func TestUCANConcludeHandler(t *testing.T) {
 
 		concludeInv, err := ucancaps.Conclude.Invoke(
 			uploadService,
-			uploadService,
+			uploadService.DID(),
 			&ucancaps.ConcludeArguments{Receipt: rcpt.Link()},
-			invocation.WithAudience(uploadService),
+			invocation.WithAudience(uploadService.DID()),
 		)
 		require.NoError(t, err)
 
@@ -216,9 +216,9 @@ func TestUCANConcludeHandler(t *testing.T) {
 		// no agent-store lookup required.
 		concludeInv, err := ucancaps.Conclude.Invoke(
 			uploadService,
-			uploadService,
+			uploadService.DID(),
 			&ucancaps.ConcludeArguments{Receipt: rcpt.Link()},
-			invocation.WithAudience(uploadService),
+			invocation.WithAudience(uploadService.DID()),
 		)
 		require.NoError(t, err)
 

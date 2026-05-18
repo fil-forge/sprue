@@ -53,15 +53,15 @@ func NewHTTPPutConcludeHandler(
 			}
 
 			provider := allocInv.Audience()
-			if provider == nil {
+			if !provider.Defined() {
 				// shouldn't happen, subject should be the space and audience the node
 				provider = allocInv.Subject()
 			}
 			space := allocInv.Subject()
 
 			log = log.With(
-				zap.Stringer("space", space.DID()),
-				zap.Stringer("provider", provider.DID()),
+				zap.Stringer("space", space),
+				zap.Stringer("provider", provider),
 			)
 
 			var allocArgs blobcaps.AllocateArguments
@@ -85,7 +85,7 @@ func NewHTTPPutConcludeHandler(
 
 			proofStore := ucan_server.NewContainerProofStore(meta)
 			res, accInv, accRcpt, err := client.Accept(ctx, &piriclient.AcceptRequest{
-				Space:  space.DID(),
+				Space:  space,
 				Digest: allocArgs.Blob.Digest,
 				Size:   allocArgs.Blob.Size,
 				Put:    putInv.Link(),
@@ -114,7 +114,7 @@ func NewHTTPPutConcludeHandler(
 			}
 
 			log.Debug("accept success")
-			err = blobRegistry.Register(ctx, space.DID(), allocArgs.Blob, allocArgs.Cause)
+			err = blobRegistry.Register(ctx, space, allocArgs.Blob, allocArgs.Cause)
 			// it's ok if there's already a registration of this blob in this space
 			if err != nil && !errors.Is(err, blobregistry.ErrEntryExists) {
 				return err

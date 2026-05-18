@@ -21,8 +21,8 @@ func NewAdminProviderListHandler(id *identity.Identity, providerStore storagepro
 			req *bindexec.Request[*provider.ListArguments],
 			res *bindexec.Response[*provider.ListOK],
 		) error {
-			if req.Invocation().Issuer().DID() != id.Signer.DID() {
-				log.Warn("Unauthorized access attempt", zap.Stringer("issuer", req.Invocation().Issuer().DID()))
+			if req.Invocation().Issuer() != id.Signer.DID() {
+				log.Warn("Unauthorized access attempt", zap.Stringer("issuer", req.Invocation().Issuer()))
 				return res.SetFailure(errors.New("Unauthorized", "only the service identity can list providers"))
 			}
 

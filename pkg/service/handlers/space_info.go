@@ -21,15 +21,15 @@ func NewSpaceInfoHandler(provisioningSvc *provisioning.Service, logger *zap.Logg
 			res *bindexec.Response[*spacecaps.InfoOK],
 		) error {
 			space := req.Invocation().Subject()
-			log := log.With(zap.Stringer("space", space.DID()))
+			log := log.With(zap.Stringer("space", space))
 			log.Debug("getting space info")
 
-			if !strings.HasPrefix(space.DID().String(), "did:key:") {
+			if !strings.HasPrefix(space.String(), "did:key:") {
 				log.Warn("non-did:key space info requested")
 				return res.SetFailure(errors.New(spacecaps.UnknownSpaceErrorName, "can only get info for did:key spaces"))
 			}
 
-			providers, err := provisioningSvc.ListServiceProviders(req.Context(), space.DID())
+			providers, err := provisioningSvc.ListServiceProviders(req.Context(), space)
 			if err != nil {
 				log.Error("failed to list service providers", zap.Error(err))
 				return fmt.Errorf("listing service providers: %w", err)
