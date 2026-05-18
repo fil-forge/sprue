@@ -81,6 +81,7 @@ func (c *Client) PublishIndexClaim(ctx context.Context, space did.DID, index cid
 		c.logger,
 		inv,
 		execution.WithDelegations(prfs...),
+		execution.WithDelegations(indexerDelegation),
 		execution.WithInvocations(attestations...),
 	)
 	if err != nil {
