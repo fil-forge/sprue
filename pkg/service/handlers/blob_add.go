@@ -10,15 +10,14 @@ import (
 	blobcaps "github.com/fil-forge/libforge/capabilities/blob"
 	httpcaps "github.com/fil-forge/libforge/capabilities/http"
 	"github.com/fil-forge/libforge/digestutil"
+	ucanlib "github.com/fil-forge/libforge/ucan"
 	"github.com/fil-forge/sprue/pkg/identity"
-	"github.com/fil-forge/sprue/pkg/lib/ucan_server"
 	"github.com/fil-forge/sprue/pkg/piriclient"
 	"github.com/fil-forge/sprue/pkg/provisioning"
 	"github.com/fil-forge/sprue/pkg/routing"
 	"github.com/fil-forge/sprue/pkg/store/agent"
 	blobregistry "github.com/fil-forge/sprue/pkg/store/blob_registry"
 	"github.com/fil-forge/ucantone/did"
-	"github.com/ipfs/go-cid"
 	"github.com/fil-forge/ucantone/errors"
 	"github.com/fil-forge/ucantone/execution/bindexec"
 	"github.com/fil-forge/ucantone/ipld/datamodel"
@@ -29,6 +28,7 @@ import (
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/fil-forge/ucantone/ucan/promise"
 	"github.com/fil-forge/ucantone/ucan/receipt"
+	"github.com/ipfs/go-cid"
 	"github.com/multiformats/go-multihash"
 	"go.uber.org/zap"
 )
@@ -157,7 +157,7 @@ func NewBlobAddHandler(id *identity.Identity, provisioningSvc *provisioning.Serv
 			}
 
 			cause := req.Invocation().Task().Link()
-			proofStore := ucan_server.NewContainerProofStore(req.Metadata())
+			proofStore := ucanlib.NewContainerProofStore(req.Metadata())
 			provider, allocInv, allocRcpt, allocOK, err := doAllocate(req.Context(), router, nodeProvider, agentStore, space, blob, cause, proofStore, log)
 			if err != nil {
 				if errors.Is(err, routing.ErrCandidateUnavailable) {
@@ -204,7 +204,7 @@ func doAllocate(
 	space did.DID,
 	blob blobcaps.Blob,
 	cause cid.Cid,
-	proofStore ucan_server.ProofStore,
+	proofStore ucanlib.ProofStore,
 	logger *zap.Logger,
 ) (routing.StorageProviderInfo, ucan.Invocation, ucan.Receipt, blobcaps.AllocateOK, error) {
 	log := logger.With(zap.Stringer("cause", cause))
@@ -341,7 +341,7 @@ func maybeAccept(
 	cause cid.Cid, // original /space/blob/add task
 	putInv ucan.Invocation,
 	putRcpt ucan.Receipt,
-	proofStore ucan_server.ProofStore,
+	proofStore ucanlib.ProofStore,
 	logger *zap.Logger,
 ) (ucan.Invocation, ucan.Receipt, error) {
 	log := logger

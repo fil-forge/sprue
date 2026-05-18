@@ -7,9 +7,9 @@ import (
 
 	accesscaps "github.com/fil-forge/libforge/capabilities/access"
 	indexcaps "github.com/fil-forge/libforge/capabilities/index"
+	ucanlib "github.com/fil-forge/libforge/ucan"
 	"github.com/fil-forge/sprue/pkg/identity"
 	"github.com/fil-forge/sprue/pkg/indexerclient"
-	"github.com/fil-forge/sprue/pkg/lib/ucan_server"
 	"github.com/fil-forge/sprue/pkg/provisioning"
 	blobregistry "github.com/fil-forge/sprue/pkg/store/blob_registry"
 	"github.com/fil-forge/ucantone/errors"
@@ -58,7 +58,7 @@ func NewIndexAddHandler(id *identity.Identity, provisioningSvc *provisioning.Ser
 			// Request MUST include a delegation to the upload service that gives it
 			// the ability to retrieve the index (a /content/retrieve delegation).
 			// This is re-delegated to the indexer for indexing.
-			proofStore := ucan_server.NewContainerProofStore(req.Metadata())
+			proofStore := ucanlib.NewContainerProofStore(req.Metadata())
 			// Publish to indexer with retrieval authorization
 			if _, err := indexerClient.PublishIndexClaim(req.Context(), space, index, proofStore); err != nil {
 				log.Error("failed to publish index claim", zap.Error(err))

@@ -9,7 +9,7 @@ import (
 	httpcaps "github.com/fil-forge/libforge/capabilities/http"
 	ucancaps "github.com/fil-forge/libforge/capabilities/ucan"
 	"github.com/fil-forge/libforge/digestutil"
-	"github.com/fil-forge/sprue/pkg/lib/ucan_server"
+	ucanlib "github.com/fil-forge/libforge/ucan"
 	"github.com/fil-forge/sprue/pkg/piriclient"
 	"github.com/fil-forge/sprue/pkg/routing"
 	"github.com/fil-forge/sprue/pkg/store/agent"
@@ -83,7 +83,7 @@ func NewHTTPPutConcludeHandler(
 				return fmt.Errorf("creating client: %w", err)
 			}
 
-			proofStore := ucan_server.NewContainerProofStore(meta)
+			proofStore := ucanlib.NewContainerProofStore(meta)
 			res, accInv, accRcpt, err := client.Accept(ctx, &piriclient.AcceptRequest{
 				Space:  space,
 				Digest: allocArgs.Blob.Digest,

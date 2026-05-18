@@ -96,6 +96,8 @@ github.com/fil-forge/libforge v0.0.0-20260518163938-03d44aed8634 h1:XESaVIJmFelO
 github.com/fil-forge/libforge v0.0.0-20260518163938-03d44aed8634/go.mod h1:AzKrj2fvRy00U3s/TrfXjjxhNqdImaaiSEV5HkJXFbU=
 github.com/fil-forge/libforge v0.0.0-20260518170714-75d1051f495e h1:STRMQCozqw7PQiS2sRAgDcoUhfoFmYFVYPaampklTyM=
 github.com/fil-forge/libforge v0.0.0-20260518170714-75d1051f495e/go.mod h1:AzKrj2fvRy00U3s/TrfXjjxhNqdImaaiSEV5HkJXFbU=
+github.com/fil-forge/libforge v0.0.0-20260518195954-b604c6d784e0 h1:Z6eQVuyJIP+hjZDk8FNFpH9fwR6c3/IjAPtx9LMxeaY=
+github.com/fil-forge/libforge v0.0.0-20260518195954-b604c6d784e0/go.mod h1:AzKrj2fvRy00U3s/TrfXjjxhNqdImaaiSEV5HkJXFbU=
 github.com/fil-forge/ucantone v0.0.0-20260514184915-8bebe15b0096 h1:T/JkfzRNu4/9OnqgggVWbn+OXs/y12xDSVEen0NS7EY=
 github.com/fil-forge/ucantone v0.0.0-20260514184915-8bebe15b0096/go.mod h1:vqgVEsy6LEEsY24Zyjxem0vSofj1XTIx29GbV635f+I=
 github.com/frankban/quicktest v1.14.6 h1:7Xjx+VpznH+oBnejlPUj8oUpdxnVs4f8XU8WnHkI4W8=

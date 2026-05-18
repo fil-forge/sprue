@@ -11,7 +11,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.56.1
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.96.4
 	github.com/docker/docker v28.5.2+incompatible
-	github.com/fil-forge/libforge v0.0.0-20260518170714-75d1051f495e
+	github.com/fil-forge/libforge v0.0.0-20260518195954-b604c6d784e0
 	github.com/fil-forge/ucantone v0.0.0-20260514184915-8bebe15b0096
 	github.com/google/uuid v1.6.0
 	github.com/ipfs/go-cid v0.6.1

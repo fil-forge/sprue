@@ -9,8 +9,8 @@ import (
 
 	blobcap "github.com/fil-forge/libforge/capabilities/blob"
 	blobreplicacap "github.com/fil-forge/libforge/capabilities/blob/replica"
+	ucanlib "github.com/fil-forge/libforge/ucan"
 	"github.com/fil-forge/sprue/pkg/lib/ucan_client"
-	"github.com/fil-forge/sprue/pkg/lib/ucan_server"
 	"github.com/fil-forge/ucantone/client"
 	"github.com/fil-forge/ucantone/did"
 	"github.com/fil-forge/ucantone/execution"
@@ -65,7 +65,7 @@ type AllocateRequest struct {
 
 // Allocate sends a /blob/allocate invocation to the piri node.
 // Returns the response data, the invocation that was sent, and the receipt from piri.
-func (c *Client) Allocate(ctx context.Context, req *AllocateRequest, proofStore ucan_server.ProofStore, options ...invocation.Option) (*blobcap.AllocateOK, ucan.Invocation, ucan.Receipt, error) {
+func (c *Client) Allocate(ctx context.Context, req *AllocateRequest, proofStore ucanlib.ProofStore, options ...invocation.Option) (*blobcap.AllocateOK, ucan.Invocation, ucan.Receipt, error) {
 	inv, prfs, attestations, err := c.AllocateInvocation(ctx, req, proofStore, options...)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("creating allocate invocation: %w", err)
@@ -93,7 +93,7 @@ func (c *Client) Allocate(ctx context.Context, req *AllocateRequest, proofStore 
 }
 
 // AllocateInvocation returns the invocation for the allocate request (for use in effects).
-func (c *Client) AllocateInvocation(ctx context.Context, req *AllocateRequest, proofStore ucan_server.ProofStore, options ...invocation.Option) (ucan.Invocation, []ucan.Delegation, []ucan.Invocation, error) {
+func (c *Client) AllocateInvocation(ctx context.Context, req *AllocateRequest, proofStore ucanlib.ProofStore, options ...invocation.Option) (ucan.Invocation, []ucan.Delegation, []ucan.Invocation, error) {
 	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.signer.DID(), blobcap.AllocateCommand, req.Space)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("building proof chain: %w", err)
@@ -141,7 +141,7 @@ type AcceptRequest struct {
 }
 
 // Accept sends a /blob/accept invocation to the piri node.
-func (c *Client) Accept(ctx context.Context, req *AcceptRequest, proofStore ucan_server.ProofStore, options ...invocation.Option) (*blobcap.AcceptOK, ucan.Invocation, ucan.Receipt, error) {
+func (c *Client) Accept(ctx context.Context, req *AcceptRequest, proofStore ucanlib.ProofStore, options ...invocation.Option) (*blobcap.AcceptOK, ucan.Invocation, ucan.Receipt, error) {
 	inv, prfs, attestations, err := c.AcceptInvocation(ctx, req, proofStore, options...)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("creating accept invocation: %w", err)
@@ -169,7 +169,7 @@ func (c *Client) Accept(ctx context.Context, req *AcceptRequest, proofStore ucan
 }
 
 // AcceptInvocation returns the invocation for the accept request (for use in effects).
-func (c *Client) AcceptInvocation(ctx context.Context, req *AcceptRequest, proofStore ucan_server.ProofStore, options ...invocation.Option) (ucan.Invocation, []ucan.Delegation, []ucan.Invocation, error) {
+func (c *Client) AcceptInvocation(ctx context.Context, req *AcceptRequest, proofStore ucanlib.ProofStore, options ...invocation.Option) (ucan.Invocation, []ucan.Delegation, []ucan.Invocation, error) {
 	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.signer.DID(), blobcap.AcceptCommand, req.Space)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("building proof chain: %w", err)
@@ -215,7 +215,7 @@ type ReplicaAllocateRequest struct {
 // ReplicaAllocate sends a /blob/replica/allocate invocation to the piri node.
 // Returns the response data, the invocation that was sent, and the receipt from
 // piri. It returns an error if the receipt contains a failure result.
-func (c *Client) ReplicaAllocate(ctx context.Context, req *ReplicaAllocateRequest, proofStore ucan_server.ProofStore, options ...invocation.Option) (*blobreplicacap.AllocateOK, ucan.Invocation, ucan.Receipt, error) {
+func (c *Client) ReplicaAllocate(ctx context.Context, req *ReplicaAllocateRequest, proofStore ucanlib.ProofStore, options ...invocation.Option) (*blobreplicacap.AllocateOK, ucan.Invocation, ucan.Receipt, error) {
 	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.signer.DID(), blobreplicacap.AllocateCommand, req.Space)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("building proof chain: %w", err)
