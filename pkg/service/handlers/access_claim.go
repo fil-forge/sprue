@@ -3,7 +3,7 @@ package handlers
 import (
 	"fmt"
 
-	"github.com/fil-forge/libforge/capabilities/access"
+	"github.com/fil-forge/libforge/commands/access"
 	"github.com/fil-forge/sprue/pkg/identity"
 	delegation_store "github.com/fil-forge/sprue/pkg/store/delegation"
 	"github.com/fil-forge/ucantone/execution/bindexec"
@@ -14,9 +14,9 @@ import (
 )
 
 func NewAccessClaimHandler(id *identity.Identity, delegationStore delegation_store.Store, logger *zap.Logger) Handler {
-	log := logger.With(zap.String("handler", access.ClaimCommand))
+	log := logger.With(zap.String("handler", string(access.Claim)))
 	return Handler{
-		Capability: access.Claim,
+		Command: ucan.Command(access.Claim),
 		Handler: bindexec.NewHandler(func(
 			req *bindexec.Request[*access.ClaimArguments],
 			res *bindexec.Response[*access.ClaimOK],

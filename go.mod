@@ -11,8 +11,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.56.1
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.96.4
 	github.com/docker/docker v28.5.2+incompatible
-	github.com/fil-forge/libforge v0.0.0-20260518195954-b604c6d784e0
-	github.com/fil-forge/ucantone v0.0.0-20260514184915-8bebe15b0096
+	github.com/fil-forge/libforge v0.0.0-20260519133220-4d5747ca0927
+	github.com/fil-forge/ucantone v0.0.0-20260519122919-0ee8deb17aa4
 	github.com/google/uuid v1.6.0
 	github.com/ipfs/go-cid v0.6.1
 	github.com/jackc/pgx/v5 v5.8.0
@@ -105,6 +105,7 @@ require (
 	github.com/multiformats/go-varint v0.1.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
+	github.com/patrickmn/go-cache v2.1.0+incompatible // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect

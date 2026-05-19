@@ -5,7 +5,7 @@ import (
 	"context"
 	"testing"
 
-	providercaps "github.com/fil-forge/libforge/capabilities/provider"
+	providercaps "github.com/fil-forge/libforge/commands/provider"
 	"github.com/fil-forge/libforge/didmailto"
 	"github.com/fil-forge/sprue/internal/config"
 	"github.com/fil-forge/sprue/internal/testutil"

@@ -5,7 +5,7 @@ import (
 	"context"
 	"testing"
 
-	ucancaps "github.com/fil-forge/libforge/capabilities/ucan"
+	ucancaps "github.com/fil-forge/libforge/commands/ucan"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/identity"
 	"github.com/fil-forge/sprue/pkg/service/handlers"

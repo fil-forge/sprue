@@ -3,15 +3,16 @@ package handlers_test
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"net/http/httptest"
 	"net/url"
 	"testing"
 
-	accesscaps "github.com/fil-forge/libforge/capabilities/access"
-	assertcaps "github.com/fil-forge/libforge/capabilities/assert"
-	blobcaps "github.com/fil-forge/libforge/capabilities/blob"
-	contentcaps "github.com/fil-forge/libforge/capabilities/content"
-	indexcaps "github.com/fil-forge/libforge/capabilities/index"
+	accesscaps "github.com/fil-forge/libforge/commands/access"
+	assertcaps "github.com/fil-forge/libforge/commands/assert"
+	blobcaps "github.com/fil-forge/libforge/commands/blob"
+	contentcaps "github.com/fil-forge/libforge/commands/content"
+	indexcaps "github.com/fil-forge/libforge/commands/index"
 	"github.com/fil-forge/libforge/didmailto"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/identity"
@@ -26,10 +27,12 @@ import (
 	"github.com/fil-forge/ucantone/execution/bindexec"
 	"github.com/fil-forge/ucantone/principal"
 	"github.com/fil-forge/ucantone/principal/signer"
+	"github.com/fil-forge/ucantone/principal/verifier"
 	"github.com/fil-forge/ucantone/server"
-	"github.com/fil-forge/ucantone/ucan/delegation"
+	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/fil-forge/ucantone/validator"
+	"github.com/fil-forge/ucantone/validator/errors"
 	"github.com/ipfs/go-cid"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
@@ -46,21 +49,21 @@ func newMockIndexerServer(
 ) *httptest.Server {
 	t.Helper()
 
-	resolveDIDKey := func(ctx context.Context, d did.DID) ([]did.DID, error) {
+	resolveDIDKey := func(ctx context.Context, d did.DID) (ucan.Verifier, error) {
 		if d == uploadService.DID() {
 			if w, ok := uploadService.(signer.Unwrapper); ok {
-				return []did.DID{w.Unwrap().DID()}, nil
+				return verifier.FromDIDKey(w.Unwrap().DID())
 			}
 		}
-		return validator.FailDIDKeyResolution(ctx, d)
+		return nil, errors.NewDIDKeyResolutionError(d, fmt.Errorf("unexpected DID to resolve"))
 	}
 
 	srv := server.NewHTTP(
 		indexerSigner,
-		server.WithValidationOptions(validator.WithDIDResolver(resolveDIDKey)),
+		server.WithValidationOptions(validator.WithDIDVerifierResolver(resolveDIDKey)),
 	)
 
-	srv.Handle(assertcaps.Index, bindexec.NewHandler(func(
+	srv.Handle(ucan.Command(assertcaps.Index), bindexec.NewHandler(func(
 		req *bindexec.Request[*assertcaps.IndexArguments],
 		res *bindexec.Response[*assertcaps.IndexOK],
 	) error {
@@ -185,7 +188,7 @@ func TestIndexAddHandler(t *testing.T) {
 		// /content/retrieve delegation from space → upload service so the
 		// handler can build a proof chain that authorizes the indexer to
 		// retrieve the index blob.
-		retrievalAuth, err := delegation.Delegate(space, uploadService.DID(), space.DID(), contentcaps.RetrieveCommand)
+		retrievalAuth, err := contentcaps.Retrieve.Delegate(space, uploadService.DID(), space.DID())
 		require.NoError(t, err)
 
 		req, res := invokeIndexAdd(t, ctx, alice, uploadService, space, indexCID,

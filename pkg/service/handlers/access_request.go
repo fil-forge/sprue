@@ -8,10 +8,9 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/fil-forge/libforge/capabilities/access"
+	"github.com/fil-forge/libforge/commands/access"
 	"github.com/fil-forge/libforge/didmailto"
 	"github.com/fil-forge/sprue/internal/config"
-	"github.com/fil-forge/sprue/pkg/capabilities/admin/provider"
 	"github.com/fil-forge/sprue/pkg/identity"
 	"github.com/fil-forge/sprue/pkg/mailer"
 	"github.com/fil-forge/ucantone/errors"
@@ -34,9 +33,9 @@ var (
 )
 
 func NewAccessRequestHandler(serverCfg config.ServerConfig, id *identity.Identity, mailer mailer.Mailer, logger *zap.Logger) Handler {
-	log := logger.With(zap.String("handler", access.RequestCommand))
+	log := logger.With(zap.String("handler", string(access.Request)))
 	return Handler{
-		Capability: provider.List,
+		Command: ucan.Command(access.Request),
 		Handler: bindexec.NewHandler(func(
 			req *bindexec.Request[*access.RequestArguments],
 			res *bindexec.Response[*access.RequestOK],

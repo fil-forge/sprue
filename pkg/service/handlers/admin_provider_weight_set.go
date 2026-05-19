@@ -3,17 +3,18 @@ package handlers
 import (
 	"go.uber.org/zap"
 
-	"github.com/fil-forge/sprue/pkg/capabilities/admin/provider/weight"
+	"github.com/fil-forge/sprue/pkg/commands/admin/provider/weight"
 	"github.com/fil-forge/sprue/pkg/identity"
 	storageprovider "github.com/fil-forge/sprue/pkg/store/storage_provider"
 	"github.com/fil-forge/ucantone/errors"
 	"github.com/fil-forge/ucantone/execution/bindexec"
+	"github.com/fil-forge/ucantone/ucan"
 )
 
 func NewAdminProviderWeightSetHandler(id *identity.Identity, providerStore storageprovider.Store, logger *zap.Logger) Handler {
-	log := logger.With(zap.String("handler", weight.SetCommand))
+	log := logger.With(zap.String("handler", string(weight.Set)))
 	return Handler{
-		Capability: weight.Set,
+		Command: ucan.Command(weight.Set),
 		Handler: bindexec.NewHandler(func(
 			req *bindexec.Request[*weight.SetArguments],
 			res *bindexec.Response[*weight.SetOK],

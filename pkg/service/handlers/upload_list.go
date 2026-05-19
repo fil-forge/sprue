@@ -3,16 +3,17 @@ package handlers
 import (
 	"fmt"
 
-	uploadcaps "github.com/fil-forge/libforge/capabilities/upload"
+	uploadcaps "github.com/fil-forge/libforge/commands/upload"
 	upload_store "github.com/fil-forge/sprue/pkg/store/upload"
 	"github.com/fil-forge/ucantone/execution/bindexec"
+	"github.com/fil-forge/ucantone/ucan"
 	"go.uber.org/zap"
 )
 
 func NewUploadListHandler(uploadStore upload_store.Store, logger *zap.Logger) Handler {
-	log := logger.With(zap.String("handler", uploadcaps.ListCommand))
+	log := logger.With(zap.String("handler", string(uploadcaps.List)))
 	return Handler{
-		Capability: uploadcaps.List,
+		Command: ucan.Command(uploadcaps.List),
 		Handler: bindexec.NewHandler(func(
 			req *bindexec.Request[*uploadcaps.ListArguments],
 			res *bindexec.Response[*uploadcaps.ListOK],

@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/fil-forge/libforge/capabilities/access"
+	"github.com/fil-forge/libforge/commands/access"
 	"github.com/fil-forge/libforge/didmailto"
 	"github.com/fil-forge/sprue/internal/config"
 	"github.com/fil-forge/sprue/internal/testutil"

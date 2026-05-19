@@ -4,8 +4,8 @@ import (
 	"net/url"
 	"testing"
 
-	blobcaps "github.com/fil-forge/libforge/capabilities/blob"
-	httpcaps "github.com/fil-forge/libforge/capabilities/http"
+	blobcaps "github.com/fil-forge/libforge/commands/blob"
+	httpcaps "github.com/fil-forge/libforge/commands/http"
 	"github.com/fil-forge/libforge/didmailto"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/piriclient"
@@ -19,7 +19,6 @@ import (
 	spacediff_store "github.com/fil-forge/sprue/pkg/store/space_diff/memory"
 	storage_provider_store "github.com/fil-forge/sprue/pkg/store/storage_provider/memory"
 	"github.com/fil-forge/ucantone/ucan/container"
-	"github.com/fil-forge/ucantone/ucan/delegation"
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/fil-forge/ucantone/ucan/promise"
 	"github.com/fil-forge/ucantone/ucan/receipt"
@@ -216,7 +215,7 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 		// Authorize the upload service to invoke /blob/accept on the space and
 		// pass the proof through the conclude metadata so the piri client can
 		// forward it to the storage provider.
-		acceptProof, err := delegation.Delegate(space, uploadService.DID(), space.DID(), blobcaps.AcceptCommand)
+		acceptProof, err := blobcaps.Accept.Delegate(space, uploadService.DID(), space.DID())
 		require.NoError(t, err)
 		meta := container.New(container.WithDelegations(acceptProof))
 

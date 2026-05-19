@@ -3,19 +3,19 @@ package metrics
 import (
 	"context"
 
-	"github.com/fil-forge/libforge/capabilities/blob"
-	"github.com/fil-forge/libforge/capabilities/upload"
+	"github.com/fil-forge/libforge/commands/blob"
+	"github.com/fil-forge/libforge/commands/upload"
 	"github.com/fil-forge/ucantone/did"
 )
 
-const BlobAddTotalMetric = blob.AddCommand + "-total"
-const BlobAddSizeTotalMetric = blob.AddCommand + "-size-total"
+var BlobAddTotalMetric = string(blob.Add) + "-total"
+var BlobAddSizeTotalMetric = string(blob.Add) + "-size-total"
 
-const BlobRemoveTotalMetric = blob.RemoveCommand + "-total"
-const BlobRemoveSizeTotalMetric = blob.RemoveCommand + "-size-total"
+var BlobRemoveTotalMetric = string(blob.Remove) + "-total"
+var BlobRemoveSizeTotalMetric = string(blob.Remove) + "-size-total"
 
-const UploadAddTotalMetric = upload.AddCommand + "-total"
-const UploadRemoveTotalMetric = upload.RemoveCommand + "-total"
+var UploadAddTotalMetric = string(upload.Add) + "-total"
+var UploadRemoveTotalMetric = string(upload.Remove) + "-total"
 
 type Store interface {
 	// Get all metrics from storage.

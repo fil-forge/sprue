@@ -2,10 +2,10 @@ package handlers
 
 import (
 	"github.com/fil-forge/ucantone/execution"
-	"github.com/fil-forge/ucantone/validator"
+	"github.com/fil-forge/ucantone/ucan"
 )
 
 type Handler struct {
-	Capability validator.Capability
-	Handler    execution.HandlerFunc
+	Command ucan.Command
+	Handler execution.HandlerFunc
 }

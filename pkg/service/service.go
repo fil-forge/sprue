@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"time"
 
+	"github.com/fil-forge/libforge/didresolver"
 	"github.com/fil-forge/sprue/pkg/identity"
 	"github.com/fil-forge/sprue/pkg/lib/ucan_server"
 	"github.com/fil-forge/sprue/pkg/service/handlers"
@@ -33,35 +35,52 @@ type Service struct {
 }
 
 // New creates a new Service instance.
-func New(id *identity.Identity, agentStore agent.Store, delegationStore delegation_store.Store, handlers []handlers.Handler, logger *zap.Logger, options ...server.HTTPOption) *Service {
+func New(id *identity.Identity, agentStore agent.Store, delegationStore delegation_store.Store, handlers []handlers.Handler, logger *zap.Logger, options ...server.HTTPOption) (*Service, error) {
+	server, err := createUCANServer(id.Signer, agentStore, handlers, logger, options...)
+	if err != nil {
+		return nil, err
+	}
 	return &Service{
 		identity:        id,
 		agentStore:      agentStore,
 		delegationStore: delegationStore,
 		logger:          logger,
-		ucanServer:      createUCANServer(id.Signer, agentStore, handlers, logger, options...),
-	}
+		ucanServer:      server,
+	}, nil
 }
 
 // createUCANServer creates the UCAN RPC server with registered handlers.
-func createUCANServer(id principal.Signer, agentStore agent.Store, handlers []handlers.Handler, logger *zap.Logger, options ...server.HTTPOption) *server.HTTPServer {
+func createUCANServer(id principal.Signer, agentStore agent.Store, handlers []handlers.Handler, logger *zap.Logger, options ...server.HTTPOption) (*server.HTTPServer, error) {
+	httpResolver, err := didresolver.NewHTTPResolver()
+	if err != nil {
+		return nil, err
+	}
+	cacheResolver, err := didresolver.NewCachedResolver(httpResolver.Resolve, time.Hour*3)
+	if err != nil {
+		return nil, err
+	}
+
 	options = append(
 		slices.Clone(options),
 		server.WithReceiptTimestamps(true),
 		server.WithEventListener(ucan_server.AgentMessageLogger{Logger: logger, AgentStore: agentStore}),
 		server.WithEventListener(ucan_server.ErrorHandler{Logger: logger}),
 		server.WithValidationOptions(
-			validator.WithPrincipalParser(ucan_server.PrincipalParser),
+			validator.WithDIDVerifierResolvers(map[string]validator.DIDVerifierResolverFunc{
+				"key": ucan_server.ResolveDIDKey,
+				"web": cacheResolver.Resolve,
+			}),
 			validator.WithNonStandardSignatureVerifier(
 				ucan_server.NewAttestationVerifier(id.Verifier()),
 			),
 		),
 	)
+
 	srv := server.NewHTTP(id, options...)
 	for _, h := range handlers {
-		srv.Handle(h.Capability, h.Handler)
+		srv.Handle(h.Command, h.Handler)
 	}
-	return srv
+	return srv, nil
 }
 
 // HandleUCANRequest handles incoming UCAN RPC requests.

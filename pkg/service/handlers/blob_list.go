@@ -3,16 +3,17 @@ package handlers
 import (
 	"fmt"
 
-	blobcaps "github.com/fil-forge/libforge/capabilities/blob"
+	blobcaps "github.com/fil-forge/libforge/commands/blob"
 	blobregistry "github.com/fil-forge/sprue/pkg/store/blob_registry"
 	"github.com/fil-forge/ucantone/execution/bindexec"
+	"github.com/fil-forge/ucantone/ucan"
 	"go.uber.org/zap"
 )
 
 func NewBlobListHandler(blobRegistry blobregistry.Store, logger *zap.Logger) Handler {
-	log := logger.With(zap.String("handler", blobcaps.ListCommand))
+	log := logger.With(zap.String("handler", string(blobcaps.List)))
 	return Handler{
-		Capability: blobcaps.List,
+		Command: ucan.Command(blobcaps.List),
 		Handler: bindexec.NewHandler(func(
 			req *bindexec.Request[*blobcaps.ListArguments],
 			res *bindexec.Response[*blobcaps.ListOK],

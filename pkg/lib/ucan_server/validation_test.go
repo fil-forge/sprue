@@ -3,12 +3,13 @@ package ucan_server
 import (
 	"testing"
 
-	"github.com/fil-forge/libforge/capabilities/ucan/attest"
+	"github.com/fil-forge/libforge/commands/ucan/attest"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/ucantone/did"
 	"github.com/fil-forge/ucantone/ipld/datamodel"
 	"github.com/fil-forge/ucantone/principal/absentee"
 	"github.com/fil-forge/ucantone/principal/ed25519"
+	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/container"
 	"github.com/fil-forge/ucantone/ucan/delegation"
 	"github.com/fil-forge/ucantone/ucan/invocation"
@@ -86,7 +87,7 @@ func TestNewAttestationVerifier(t *testing.T) {
 		inv, err := invocation.Invoke(
 			authority,
 			authority.DID(),
-			attest.ProofCommand,
+			ucan.Command(attest.Proof),
 			datamodel.Map{"unrelated": "foo"},
 		)
 		require.NoError(t, err)

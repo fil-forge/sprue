@@ -5,7 +5,7 @@ import (
 	"context"
 	"testing"
 
-	blobcaps "github.com/fil-forge/libforge/capabilities/blob"
+	blobcaps "github.com/fil-forge/libforge/commands/blob"
 	"github.com/fil-forge/libforge/didmailto"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/service/handlers"

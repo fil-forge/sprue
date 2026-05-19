@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/fil-forge/libforge/capabilities/blob"
+	"github.com/fil-forge/libforge/commands/blob"
 	"github.com/fil-forge/sprue/pkg/store"
 	"github.com/fil-forge/ucantone/did"
 	"github.com/fil-forge/ucantone/errors"

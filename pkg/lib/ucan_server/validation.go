@@ -5,26 +5,24 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/fil-forge/libforge/capabilities/ucan/attest"
+	"github.com/fil-forge/libforge/commands/ucan/attest"
 	"github.com/fil-forge/ucantone/did"
 	"github.com/fil-forge/ucantone/principal"
-	ed_verifier "github.com/fil-forge/ucantone/principal/ed25519/verifier"
-	secp_verifier "github.com/fil-forge/ucantone/principal/secp256k1/verifier"
+	secp256k1_verifier "github.com/fil-forge/ucantone/principal/secp256k1/verifier"
+	"github.com/fil-forge/ucantone/principal/verifier"
 	"github.com/fil-forge/ucantone/ucan"
-	"github.com/fil-forge/ucantone/ucan/invocation"
+	ucan_token "github.com/fil-forge/ucantone/ucan/token"
 	"github.com/fil-forge/ucantone/validator"
 )
 
-// PrincipalParser is a [validator.PrincipalParserFunc] that enables support for
-// both ed25519 and secp256k1 principals in UCANs.
-func PrincipalParser(str string) (principal.Verifier, error) {
-	if v, err := ed_verifier.Parse(str); err == nil {
-		return v, nil
-	}
-	if v, err := secp_verifier.Parse(str); err == nil {
-		return v, nil
-	}
-	return nil, fmt.Errorf("unknown principal type: %s", str)
+func init() {
+	verifier.Register(secp256k1_verifier.Code, func(b []byte) (principal.Verifier, error) {
+		return secp256k1_verifier.Decode(b)
+	})
+}
+
+func ResolveDIDKey(ctx context.Context, did did.DID) (ucan.Verifier, error) {
+	return verifier.FromDIDKey(did)
 }
 
 // NewAttestationVerifier creates a [validator.NonStandardSignatureVerifierFunc]
@@ -38,7 +36,7 @@ func NewAttestationVerifier(authority principal.Verifier) validator.NonStandardS
 			return fmt.Errorf("token is not a delegation")
 		}
 		for _, inv := range meta.Invocations() {
-			if inv.Command() != attest.ProofCommand {
+			if inv.Command() != ucan.Command(attest.Proof) {
 				continue
 			}
 			// only trust attestations we issued
@@ -54,7 +52,7 @@ func NewAttestationVerifier(authority principal.Verifier) validator.NonStandardS
 				continue
 			}
 			// finally, make sure the signature is valid
-			ok, err := invocation.VerifySignature(inv, authority)
+			ok, err := ucan_token.VerifySignature(inv, authority)
 			if !ok || err != nil {
 				continue
 			}

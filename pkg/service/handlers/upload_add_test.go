@@ -5,8 +5,8 @@ import (
 	"context"
 	"testing"
 
-	accesscaps "github.com/fil-forge/libforge/capabilities/access"
-	uploadcaps "github.com/fil-forge/libforge/capabilities/upload"
+	accesscaps "github.com/fil-forge/libforge/commands/access"
+	uploadcaps "github.com/fil-forge/libforge/commands/upload"
 	"github.com/fil-forge/libforge/didmailto"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/provisioning"

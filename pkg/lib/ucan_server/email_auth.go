@@ -5,7 +5,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/fil-forge/libforge/capabilities/access"
+	"github.com/fil-forge/libforge/commands/access"
 	"github.com/fil-forge/libforge/didmailto"
 	"github.com/fil-forge/ucantone/execution"
 	"github.com/fil-forge/ucantone/ucan"
@@ -33,8 +33,8 @@ func ExecBase64urlAccessConfirm(ctx context.Context, executor execution.Executor
 
 	confirmation := inCt.Invocations()[0]
 	// check this is a confirmation invocation
-	if confirmation.Command() != access.ConfirmCommand {
-		return AccessConfirmResult{}, fmt.Errorf("unexpected command in invocation, expected %s but got %s", access.ConfirmCommand, confirmation.Command())
+	if confirmation.Command() != ucan.Command(access.Confirm) {
+		return AccessConfirmResult{}, fmt.Errorf("unexpected command in invocation, expected %s but got %s", access.Confirm, confirmation.Command())
 	}
 
 	req := execution.NewRequest(

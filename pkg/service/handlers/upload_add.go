@@ -3,20 +3,21 @@ package handlers
 import (
 	"fmt"
 
-	accesscaps "github.com/fil-forge/libforge/capabilities/access"
-	uploadcaps "github.com/fil-forge/libforge/capabilities/upload"
+	accesscaps "github.com/fil-forge/libforge/commands/access"
+	uploadcaps "github.com/fil-forge/libforge/commands/upload"
 	"github.com/fil-forge/sprue/pkg/provisioning"
 	upload_store "github.com/fil-forge/sprue/pkg/store/upload"
 	"github.com/fil-forge/ucantone/errors"
 	"github.com/fil-forge/ucantone/execution/bindexec"
+	"github.com/fil-forge/ucantone/ucan"
 	"go.uber.org/zap"
 )
 
 // This handler registers an upload (root CID + shards mapping).
 func NewUploadAddHandler(provisioningSvc *provisioning.Service, uploadStore upload_store.Store, logger *zap.Logger) Handler {
-	log := logger.With(zap.String("handler", uploadcaps.AddCommand))
+	log := logger.With(zap.String("handler", string(uploadcaps.Add)))
 	return Handler{
-		Capability: uploadcaps.Add,
+		Command: ucan.Command(uploadcaps.Add),
 		Handler: bindexec.NewHandler(func(
 			req *bindexec.Request[*uploadcaps.AddArguments],
 			res *bindexec.Response[*uploadcaps.AddOK],

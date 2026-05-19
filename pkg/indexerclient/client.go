@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"net/url"
 
-	assertcaps "github.com/fil-forge/libforge/capabilities/assert"
-	contentcaps "github.com/fil-forge/libforge/capabilities/content"
+	assertcaps "github.com/fil-forge/libforge/commands/assert"
+	contentcaps "github.com/fil-forge/libforge/commands/content"
 	ucanlib "github.com/fil-forge/libforge/ucan"
 	"github.com/fil-forge/sprue/pkg/lib/ucan_client"
 	"github.com/fil-forge/ucantone/client"
@@ -48,7 +48,7 @@ func New(endpoint *url.URL, indexerDID did.DID, signer ucan.Signer, logger *zap.
 // The proofStore parameter is used to build the delegation chain authorizing
 // the upload service to retrieve the index blob via `/content/retrieve` command.
 func (c *Client) PublishIndexClaim(ctx context.Context, space did.DID, index cid.Cid, proofStore ucanlib.ProofStore, options ...invocation.Option) (ucan.Receipt, error) {
-	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.signer.DID(), contentcaps.RetrieveCommand, space)
+	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.signer.DID(), ucan.Command(contentcaps.Retrieve), space)
 	if err != nil {
 		return nil, fmt.Errorf("building proof chain: %w", err)
 	}

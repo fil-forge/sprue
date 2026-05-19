@@ -3,17 +3,18 @@ package handlers
 import (
 	"fmt"
 
-	shardcaps "github.com/fil-forge/libforge/capabilities/upload/shard"
+	shardcaps "github.com/fil-forge/libforge/commands/upload/shard"
 	upload_store "github.com/fil-forge/sprue/pkg/store/upload"
 	"github.com/fil-forge/ucantone/execution/bindexec"
+	"github.com/fil-forge/ucantone/ucan"
 	"go.uber.org/zap"
 )
 
 // This handler lists the shards of an upload.
 func NewUploadShardListHandler(uploadStore upload_store.Store, logger *zap.Logger) Handler {
-	log := logger.With(zap.String("handler", shardcaps.ListCommand))
+	log := logger.With(zap.String("handler", string(shardcaps.List)))
 	return Handler{
-		Capability: shardcaps.List,
+		Command: ucan.Command(shardcaps.List),
 		Handler: bindexec.NewHandler(func(
 			req *bindexec.Request[*shardcaps.ListArguments],
 			res *bindexec.Response[*shardcaps.ListOK],

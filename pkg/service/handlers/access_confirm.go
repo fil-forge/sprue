@@ -3,8 +3,8 @@ package handlers
 import (
 	"fmt"
 
-	"github.com/fil-forge/libforge/capabilities/access"
-	"github.com/fil-forge/libforge/capabilities/ucan/attest"
+	"github.com/fil-forge/libforge/commands/access"
+	"github.com/fil-forge/libforge/commands/ucan/attest"
 	"github.com/fil-forge/libforge/didmailto"
 	"github.com/fil-forge/sprue/pkg/identity"
 	delegation_store "github.com/fil-forge/sprue/pkg/store/delegation"
@@ -22,9 +22,9 @@ import (
 )
 
 func NewAccessConfirmHandler(id *identity.Identity, delegationStore delegation_store.Store, logger *zap.Logger) Handler {
-	log := logger.With(zap.String("handler", access.ConfirmCommand))
+	log := logger.With(zap.String("handler", string(access.Confirm)))
 	return Handler{
-		Capability: access.Confirm,
+		Command: ucan.Command(access.Confirm),
 		Handler: bindexec.NewHandler(func(
 			req *bindexec.Request[*access.ConfirmArguments],
 			res *bindexec.Response[*access.ConfirmOK],

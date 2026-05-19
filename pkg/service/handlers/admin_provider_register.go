@@ -3,7 +3,7 @@ package handlers
 import (
 	"net/url"
 
-	"github.com/fil-forge/sprue/pkg/capabilities/admin/provider"
+	"github.com/fil-forge/sprue/pkg/commands/admin/provider"
 	"github.com/fil-forge/sprue/pkg/identity"
 	storageprovider "github.com/fil-forge/sprue/pkg/store/storage_provider"
 	"github.com/fil-forge/ucantone/errors"

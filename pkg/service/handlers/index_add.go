@@ -5,8 +5,8 @@ import (
 
 	"go.uber.org/zap"
 
-	accesscaps "github.com/fil-forge/libforge/capabilities/access"
-	indexcaps "github.com/fil-forge/libforge/capabilities/index"
+	accesscaps "github.com/fil-forge/libforge/commands/access"
+	indexcaps "github.com/fil-forge/libforge/commands/index"
 	ucanlib "github.com/fil-forge/libforge/ucan"
 	"github.com/fil-forge/sprue/pkg/identity"
 	"github.com/fil-forge/sprue/pkg/indexerclient"
@@ -14,12 +14,13 @@ import (
 	blobregistry "github.com/fil-forge/sprue/pkg/store/blob_registry"
 	"github.com/fil-forge/ucantone/errors"
 	"github.com/fil-forge/ucantone/execution/bindexec"
+	"github.com/fil-forge/ucantone/ucan"
 )
 
 func NewIndexAddHandler(id *identity.Identity, provisioningSvc *provisioning.Service, blobRegistry blobregistry.Store, indexerClient *indexerclient.Client, logger *zap.Logger) Handler {
-	log := logger.With(zap.String("handler", indexcaps.AddCommand))
+	log := logger.With(zap.String("handler", string(indexcaps.Add)))
 	return Handler{
-		Capability: indexcaps.Add,
+		Command: ucan.Command(indexcaps.Add),
 		Handler: bindexec.NewHandler(func(
 			req *bindexec.Request[*indexcaps.AddArguments],
 			res *bindexec.Response[*indexcaps.AddOK],

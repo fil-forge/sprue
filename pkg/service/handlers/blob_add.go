@@ -6,9 +6,9 @@ import (
 	"crypto/ed25519"
 	"fmt"
 
-	accesscaps "github.com/fil-forge/libforge/capabilities/access"
-	blobcaps "github.com/fil-forge/libforge/capabilities/blob"
-	httpcaps "github.com/fil-forge/libforge/capabilities/http"
+	accesscaps "github.com/fil-forge/libforge/commands/access"
+	blobcaps "github.com/fil-forge/libforge/commands/blob"
+	httpcaps "github.com/fil-forge/libforge/commands/http"
 	"github.com/fil-forge/libforge/digestutil"
 	ucanlib "github.com/fil-forge/libforge/ucan"
 	"github.com/fil-forge/sprue/pkg/identity"
@@ -34,9 +34,9 @@ import (
 )
 
 func NewBlobAddHandler(id *identity.Identity, provisioningSvc *provisioning.Service, router *routing.Service, nodeProvider piriclient.Provider, agentStore agent.Store, blobRegistry blobregistry.Store, logger *zap.Logger) Handler {
-	log := logger.With(zap.String("handler", blobcaps.AddCommand))
+	log := logger.With(zap.String("handler", string(blobcaps.Add)))
 	return Handler{
-		Capability: blobcaps.Add,
+		Command: ucan.Command(blobcaps.Add),
 		Handler: bindexec.NewHandler(func(
 			req *bindexec.Request[*blobcaps.AddArguments],
 			res *bindexec.Response[*blobcaps.AddOK],
@@ -296,7 +296,7 @@ func genPut(blob blobcaps.Blob, allocInv ucan.Invocation, allocOK blobcaps.Alloc
 		),
 	)
 	if err != nil {
-		return nil, nil, fmt.Errorf("invoking %q: %w", httpcaps.PutCommand, err)
+		return nil, nil, fmt.Errorf("invoking %q: %w", httpcaps.Put, err)
 	}
 
 	var putRcpt ucan.Receipt
@@ -311,7 +311,7 @@ func genPut(blob blobcaps.Blob, allocInv ucan.Invocation, allocOK blobcaps.Alloc
 			&httpcaps.PutOK{},
 		)
 		if err != nil {
-			return nil, nil, fmt.Errorf("issuing %q receipt: %w", httpcaps.PutCommand, err)
+			return nil, nil, fmt.Errorf("issuing %q receipt: %w", httpcaps.Put, err)
 		}
 	}
 

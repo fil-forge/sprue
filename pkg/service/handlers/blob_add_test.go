@@ -4,15 +4,16 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
+	"fmt"
 	"net/http/httptest"
 	"net/url"
 	"testing"
 	"time"
 
-	"github.com/fil-forge/libforge/capabilities"
-	accesscaps "github.com/fil-forge/libforge/capabilities/access"
-	blobcaps "github.com/fil-forge/libforge/capabilities/blob"
-	httpcaps "github.com/fil-forge/libforge/capabilities/http"
+	"github.com/fil-forge/libforge/commands"
+	accesscaps "github.com/fil-forge/libforge/commands/access"
+	blobcaps "github.com/fil-forge/libforge/commands/blob"
+	httpcaps "github.com/fil-forge/libforge/commands/http"
 	"github.com/fil-forge/libforge/didmailto"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/identity"
@@ -35,13 +36,15 @@ import (
 	"github.com/fil-forge/ucantone/principal"
 	ed25519signer "github.com/fil-forge/ucantone/principal/ed25519"
 	"github.com/fil-forge/ucantone/principal/signer"
+	"github.com/fil-forge/ucantone/principal/verifier"
 	"github.com/fil-forge/ucantone/server"
+	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/container"
-	"github.com/fil-forge/ucantone/ucan/delegation"
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/fil-forge/ucantone/ucan/promise"
 	"github.com/fil-forge/ucantone/ucan/receipt"
 	"github.com/fil-forge/ucantone/validator"
+	"github.com/fil-forge/ucantone/validator/errors"
 	"github.com/multiformats/go-multihash"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -119,28 +122,28 @@ func newMockPiriServer(
 ) *httptest.Server {
 	t.Helper()
 
-	resolveDIDKey := func(ctx context.Context, d did.DID) ([]did.DID, error) {
+	resolveDIDKey := func(ctx context.Context, d did.DID) (ucan.Verifier, error) {
 		if d == uploadService.DID() {
 			if w, ok := uploadService.(signer.Unwrapper); ok {
-				return []did.DID{w.Unwrap().DID()}, nil
+				return verifier.FromDIDKey(w.Unwrap().DID())
 			}
 		}
-		return validator.FailDIDKeyResolution(ctx, d)
+		return nil, errors.NewDIDKeyResolutionError(d, fmt.Errorf("unexpected DID to resolve"))
 	}
 
 	srv := server.NewHTTP(
 		storageProvider,
-		server.WithValidationOptions(validator.WithDIDResolver(resolveDIDKey)),
+		server.WithValidationOptions(validator.WithDIDVerifierResolver(resolveDIDKey)),
 	)
 
-	srv.Handle(blobcaps.Allocate, bindexec.NewHandler(func(
+	srv.Handle(ucan.Command(blobcaps.Allocate), bindexec.NewHandler(func(
 		req *bindexec.Request[*blobcaps.AllocateArguments],
 		res *bindexec.Response[*blobcaps.AllocateOK],
 	) error {
 		return res.SetSuccess(allocateOK)
 	}))
 
-	srv.Handle(blobcaps.Accept, bindexec.NewHandler(func(
+	srv.Handle(ucan.Command(blobcaps.Accept), bindexec.NewHandler(func(
 		req *bindexec.Request[*blobcaps.AcceptArguments],
 		res *bindexec.Response[*blobcaps.AcceptOK],
 	) error {
@@ -273,7 +276,7 @@ func TestBlobAddHandler(t *testing.T) {
 		allocateOK := &blobcaps.AllocateOK{
 			Size: 1024,
 			Address: &blobcaps.BlobAddress{
-				URL:     capabilities.CborURL(*putURL),
+				URL:     commands.CborURL(*putURL),
 				Headers: map[string]string{},
 				Expires: time.Now().Add(time.Hour).Unix(),
 			},
@@ -303,8 +306,8 @@ func TestBlobAddHandler(t *testing.T) {
 		// Authorize the upload service to invoke /blob/allocate and /blob/accept
 		// on the space. This is the proof chain the upload service forwards to the
 		// storage provider.
-		allocProof := testutil.Must(delegation.Delegate(space, uploadService.DID(), space.DID(), blobcaps.AllocateCommand))(t)
-		acceptProof := testutil.Must(delegation.Delegate(space, uploadService.DID(), space.DID(), blobcaps.AcceptCommand))(t)
+		allocProof := testutil.Must(blobcaps.Allocate.Delegate(space, uploadService.DID(), space.DID()))(t)
+		acceptProof := testutil.Must(blobcaps.Accept.Delegate(space, uploadService.DID(), space.DID()))(t)
 
 		req := execution.NewRequest(ctx, inv, execution.WithDelegations(allocProof, acceptProof))
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
@@ -350,8 +353,8 @@ func TestBlobAddHandler(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		allocProof := testutil.Must(delegation.Delegate(space, uploadService.DID(), space.DID(), blobcaps.AllocateCommand))(t)
-		acceptProof := testutil.Must(delegation.Delegate(space, uploadService.DID(), space.DID(), blobcaps.AcceptCommand))(t)
+		allocProof := testutil.Must(blobcaps.Allocate.Delegate(space, uploadService.DID(), space.DID()))(t)
+		acceptProof := testutil.Must(blobcaps.Accept.Delegate(space, uploadService.DID(), space.DID()))(t)
 
 		req := execution.NewRequest(ctx, inv, execution.WithDelegations(allocProof, acceptProof))
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))

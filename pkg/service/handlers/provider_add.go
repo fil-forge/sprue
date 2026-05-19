@@ -3,7 +3,7 @@ package handlers
 import (
 	"fmt"
 
-	providercaps "github.com/fil-forge/libforge/capabilities/provider"
+	providercaps "github.com/fil-forge/libforge/commands/provider"
 	"github.com/fil-forge/libforge/didmailto"
 	"github.com/fil-forge/sprue/internal/config"
 	"github.com/fil-forge/sprue/pkg/billing"
@@ -11,13 +11,14 @@ import (
 	"github.com/fil-forge/sprue/pkg/store/consumer"
 	"github.com/fil-forge/ucantone/errors"
 	"github.com/fil-forge/ucantone/execution/bindexec"
+	"github.com/fil-forge/ucantone/ucan"
 	"go.uber.org/zap"
 )
 
 func NewProviderAddHandler(deploymentCfg config.DeploymentConfig, provisioningSvc *provisioning.Service, billingSvc *billing.Service, logger *zap.Logger) Handler {
-	log := logger.With(zap.String("handler", providercaps.AddCommand))
+	log := logger.With(zap.String("handler", string(providercaps.Add)))
 	return Handler{
-		Capability: providercaps.Add,
+		Command: ucan.Command(providercaps.Add),
 		Handler: bindexec.NewHandler(func(
 			req *bindexec.Request[*providercaps.AddArguments],
 			res *bindexec.Response[*providercaps.AddOK],

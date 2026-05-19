@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/fil-forge/libforge/capabilities/blob"
+	"github.com/fil-forge/libforge/commands/blob"
 	"github.com/fil-forge/sprue/pkg/store"
 	blobregistry "github.com/fil-forge/sprue/pkg/store/blob_registry"
 	"github.com/fil-forge/sprue/pkg/store/consumer"

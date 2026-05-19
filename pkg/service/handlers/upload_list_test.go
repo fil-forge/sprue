@@ -5,7 +5,7 @@ import (
 	"context"
 	"testing"
 
-	uploadcaps "github.com/fil-forge/libforge/capabilities/upload"
+	uploadcaps "github.com/fil-forge/libforge/commands/upload"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/service/handlers"
 	upload_store "github.com/fil-forge/sprue/pkg/store/upload/memory"

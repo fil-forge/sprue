@@ -1,18 +1,19 @@
 package handlers
 
 import (
-	"github.com/fil-forge/sprue/pkg/capabilities/admin/provider"
+	"github.com/fil-forge/sprue/pkg/commands/admin/provider"
 	"github.com/fil-forge/sprue/pkg/identity"
 	storageprovider "github.com/fil-forge/sprue/pkg/store/storage_provider"
 	"github.com/fil-forge/ucantone/errors"
 	"github.com/fil-forge/ucantone/execution/bindexec"
+	"github.com/fil-forge/ucantone/ucan"
 	"go.uber.org/zap"
 )
 
 func NewAdminProviderDeregisterHandler(id *identity.Identity, providerStore storageprovider.Store, logger *zap.Logger) Handler {
-	log := logger.With(zap.String("handler", provider.DeregisterCommand))
+	log := logger.With(zap.String("handler", string(provider.Deregister)))
 	return Handler{
-		Capability: provider.Deregister,
+		Command: ucan.Command(provider.Deregister),
 		Handler: bindexec.NewHandler(func(
 			req *bindexec.Request[*provider.DeregisterArguments],
 			res *bindexec.Response[*provider.DeregisterOK],

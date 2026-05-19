@@ -2,7 +2,7 @@ package main
 
 import (
 	jsg "github.com/alanshaw/dag-json-gen"
-	pdm "github.com/fil-forge/sprue/pkg/capabilities/admin/provider/datamodel"
+	pdm "github.com/fil-forge/sprue/pkg/commands/admin/provider/datamodel"
 	cbg "github.com/whyrusleeping/cbor-gen"
 )
 

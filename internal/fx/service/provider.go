@@ -29,6 +29,6 @@ type ServiceParams struct {
 }
 
 // NewService creates the UCAN service with all handlers registered.
-func NewService(p ServiceParams) *service.Service {
+func NewService(p ServiceParams) (*service.Service, error) {
 	return service.New(p.Identity, p.AgentStore, p.DelegationStore, p.Handlers, p.Logger, p.Options...)
 }

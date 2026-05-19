@@ -5,7 +5,7 @@ import (
 	"context"
 	"testing"
 
-	shardcaps "github.com/fil-forge/libforge/capabilities/upload/shard"
+	shardcaps "github.com/fil-forge/libforge/commands/upload/shard"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/service/handlers"
 	upload_store "github.com/fil-forge/sprue/pkg/store/upload/memory"

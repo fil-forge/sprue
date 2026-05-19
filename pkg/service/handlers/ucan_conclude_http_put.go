@@ -5,9 +5,9 @@ import (
 	"context"
 	"fmt"
 
-	blobcaps "github.com/fil-forge/libforge/capabilities/blob"
-	httpcaps "github.com/fil-forge/libforge/capabilities/http"
-	ucancaps "github.com/fil-forge/libforge/capabilities/ucan"
+	blobcaps "github.com/fil-forge/libforge/commands/blob"
+	httpcaps "github.com/fil-forge/libforge/commands/http"
+	ucancaps "github.com/fil-forge/libforge/commands/ucan"
 	"github.com/fil-forge/libforge/digestutil"
 	ucanlib "github.com/fil-forge/libforge/ucan"
 	"github.com/fil-forge/sprue/pkg/piriclient"
@@ -28,11 +28,11 @@ func NewHTTPPutConcludeHandler(
 	logger *zap.Logger,
 ) ConclusionHandler {
 	log := logger.With(
-		zap.String("handler", ucancaps.ConcludeCommand),
-		zap.String("conclude", httpcaps.PutCommand),
+		zap.String("handler", string(ucancaps.Conclude)),
+		zap.String("conclude", string(httpcaps.Put)),
 	)
 	return ConclusionHandler{
-		Command: httpcaps.PutCommand,
+		Command: ucan.Command(httpcaps.Put),
 		Handler: func(ctx context.Context, putInv ucan.Invocation, putRcpt ucan.Receipt, meta ucan.Container) error {
 			log := log.With(zap.Stringer("ran", putRcpt.Ran()))
 			log.Debug("handling conclude")

@@ -5,7 +5,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/fil-forge/sprue/pkg/capabilities/admin/provider"
+	"github.com/fil-forge/sprue/pkg/commands/admin/provider"
 	"github.com/fil-forge/sprue/pkg/identity"
 	"github.com/fil-forge/sprue/pkg/store"
 	storageprovider "github.com/fil-forge/sprue/pkg/store/storage_provider"

@@ -5,7 +5,7 @@ import (
 	"context"
 	"testing"
 
-	spacecaps "github.com/fil-forge/libforge/capabilities/space"
+	spacecaps "github.com/fil-forge/libforge/commands/space"
 	"github.com/fil-forge/libforge/didmailto"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/provisioning"
