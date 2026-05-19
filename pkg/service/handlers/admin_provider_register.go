@@ -8,6 +8,7 @@ import (
 	storageprovider "github.com/fil-forge/sprue/pkg/store/storage_provider"
 	"github.com/fil-forge/ucantone/errors"
 	"github.com/fil-forge/ucantone/execution/bindexec"
+	"github.com/fil-forge/ucantone/ucan"
 	"go.uber.org/zap"
 )
 
@@ -17,9 +18,9 @@ var (
 )
 
 func NewAdminProviderRegisterHandler(id *identity.Identity, providerStore storageprovider.Store, logger *zap.Logger) Handler {
-	log := logger.With(zap.String("handler", provider.RegisterCommand))
+	log := logger.With(zap.String("handler", string(provider.Register)))
 	return Handler{
-		Capability: provider.Register,
+		Command: ucan.Command(provider.Register),
 		Handler: bindexec.NewHandler(func(
 			req *bindexec.Request[*provider.RegisterArguments],
 			res *bindexec.Response[*provider.RegisterOK],

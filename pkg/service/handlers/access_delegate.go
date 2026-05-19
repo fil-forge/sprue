@@ -14,7 +14,7 @@ import (
 )
 
 func NewAccessDelegateHandler(delegationStore delegation_store.Store, provisioningSvc *provisioning.Service, logger *zap.Logger) Handler {
-	log := logger.With(zap.String("handler", access.Delegate))
+	log := logger.With(zap.String("handler", string(access.Delegate)))
 	return Handler{
 		Command: ucan.Command(access.Delegate),
 		Handler: bindexec.NewHandler(func(

@@ -11,12 +11,13 @@ import (
 	storageprovider "github.com/fil-forge/sprue/pkg/store/storage_provider"
 	"github.com/fil-forge/ucantone/errors"
 	"github.com/fil-forge/ucantone/execution/bindexec"
+	"github.com/fil-forge/ucantone/ucan"
 )
 
 func NewAdminProviderListHandler(id *identity.Identity, providerStore storageprovider.Store, logger *zap.Logger) Handler {
-	log := logger.With(zap.String("handler", provider.ListCommand))
+	log := logger.With(zap.String("handler", string(provider.List)))
 	return Handler{
-		Capability: provider.List,
+		Command: ucan.Command(provider.List),
 		Handler: bindexec.NewHandler(func(
 			req *bindexec.Request[*provider.ListArguments],
 			res *bindexec.Response[*provider.ListOK],
