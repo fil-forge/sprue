@@ -1,14 +1,9 @@
+//go:build !codegen
+
 package provider
 
-import (
-	"github.com/fil-forge/libforge/commands"
-	pdm "github.com/fil-forge/sprue/pkg/commands/admin/provider/datamodel"
-)
+import "github.com/fil-forge/libforge/commands"
 
-type (
-	ListArguments = pdm.ListArgumentsModel
-	ListOK        = pdm.ListOKModel
-	Provider      = pdm.ProviderModel
-)
+type ListArguments = commands.Unit
 
 var List = commands.MustParse[*ListArguments]("/admin/provider/list")

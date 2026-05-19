@@ -1,13 +1,9 @@
+//go:build !codegen
+
 package provider
 
-import (
-	"github.com/fil-forge/libforge/commands"
-	pdm "github.com/fil-forge/sprue/pkg/commands/admin/provider/datamodel"
-)
+import "github.com/fil-forge/libforge/commands"
 
-type (
-	DeregisterArguments = pdm.DeregisterArgumentsModel
-	DeregisterOK        = commands.Unit
-)
+type DeregisterOK = commands.Unit
 
 var Deregister = commands.MustParse[*DeregisterArguments]("/admin/provider/deregister")
