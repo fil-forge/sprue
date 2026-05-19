@@ -63,7 +63,7 @@ func newMockIndexerServer(
 		server.WithValidationOptions(validator.WithDIDVerifierResolver(resolveDIDKey)),
 	)
 
-	srv.Handle(ucan.Command(assertcaps.Index), bindexec.NewHandler(func(
+	srv.Handle(assertcaps.Index.Command, bindexec.NewHandler(func(
 		req *bindexec.Request[*assertcaps.IndexArguments],
 		res *bindexec.Response[*assertcaps.IndexOK],
 	) error {

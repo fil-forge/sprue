@@ -6,15 +6,14 @@ import (
 	shardcaps "github.com/fil-forge/libforge/commands/upload/shard"
 	upload_store "github.com/fil-forge/sprue/pkg/store/upload"
 	"github.com/fil-forge/ucantone/execution/bindexec"
-	"github.com/fil-forge/ucantone/ucan"
 	"go.uber.org/zap"
 )
 
 // This handler lists the shards of an upload.
 func NewUploadShardListHandler(uploadStore upload_store.Store, logger *zap.Logger) Handler {
-	log := logger.With(zap.String("handler", string(shardcaps.List)))
+	log := logger.With(zap.Stringer("handler", shardcaps.List))
 	return Handler{
-		Command: ucan.Command(shardcaps.List),
+		Command: shardcaps.List.Command,
 		Handler: bindexec.NewHandler(func(
 			req *bindexec.Request[*shardcaps.ListArguments],
 			res *bindexec.Response[*shardcaps.ListOK],

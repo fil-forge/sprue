@@ -22,9 +22,9 @@ import (
 )
 
 func NewAccessConfirmHandler(id *identity.Identity, delegationStore delegation_store.Store, logger *zap.Logger) Handler {
-	log := logger.With(zap.String("handler", string(access.Confirm)))
+	log := logger.With(zap.Stringer("handler", access.Confirm))
 	return Handler{
-		Command: ucan.Command(access.Confirm),
+		Command: access.Confirm.Command,
 		Handler: bindexec.NewHandler(func(
 			req *bindexec.Request[*access.ConfirmArguments],
 			res *bindexec.Response[*access.ConfirmOK],

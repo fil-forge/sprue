@@ -8,14 +8,14 @@ import (
 	"github.com/fil-forge/ucantone/did"
 )
 
-var BlobAddTotalMetric = string(blob.Add) + "-total"
-var BlobAddSizeTotalMetric = string(blob.Add) + "-size-total"
+var BlobAddTotalMetric = blob.Add.String() + "-total"
+var BlobAddSizeTotalMetric = blob.Add.String() + "-size-total"
 
-var BlobRemoveTotalMetric = string(blob.Remove) + "-total"
-var BlobRemoveSizeTotalMetric = string(blob.Remove) + "-size-total"
+var BlobRemoveTotalMetric = blob.Remove.String() + "-total"
+var BlobRemoveSizeTotalMetric = blob.Remove.String() + "-size-total"
 
-var UploadAddTotalMetric = string(upload.Add) + "-total"
-var UploadRemoveTotalMetric = string(upload.Remove) + "-total"
+var UploadAddTotalMetric = upload.Add.String() + "-total"
+var UploadRemoveTotalMetric = upload.Remove.String() + "-total"
 
 type Store interface {
 	// Get all metrics from storage.

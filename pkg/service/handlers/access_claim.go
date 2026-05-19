@@ -14,9 +14,9 @@ import (
 )
 
 func NewAccessClaimHandler(id *identity.Identity, delegationStore delegation_store.Store, logger *zap.Logger) Handler {
-	log := logger.With(zap.String("handler", string(access.Claim)))
+	log := logger.With(zap.Stringer("handler", access.Claim))
 	return Handler{
-		Command: ucan.Command(access.Claim),
+		Command: access.Claim.Command,
 		Handler: bindexec.NewHandler(func(
 			req *bindexec.Request[*access.ClaimArguments],
 			res *bindexec.Response[*access.ClaimOK],

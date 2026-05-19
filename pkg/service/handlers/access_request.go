@@ -33,9 +33,9 @@ var (
 )
 
 func NewAccessRequestHandler(serverCfg config.ServerConfig, id *identity.Identity, mailer mailer.Mailer, logger *zap.Logger) Handler {
-	log := logger.With(zap.String("handler", string(access.Request)))
+	log := logger.With(zap.Stringer("handler", access.Request))
 	return Handler{
-		Command: ucan.Command(access.Request),
+		Command: access.Request.Command,
 		Handler: bindexec.NewHandler(func(
 			req *bindexec.Request[*access.RequestArguments],
 			res *bindexec.Response[*access.RequestOK],

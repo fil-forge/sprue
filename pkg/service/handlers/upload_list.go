@@ -6,14 +6,13 @@ import (
 	uploadcaps "github.com/fil-forge/libforge/commands/upload"
 	upload_store "github.com/fil-forge/sprue/pkg/store/upload"
 	"github.com/fil-forge/ucantone/execution/bindexec"
-	"github.com/fil-forge/ucantone/ucan"
 	"go.uber.org/zap"
 )
 
 func NewUploadListHandler(uploadStore upload_store.Store, logger *zap.Logger) Handler {
-	log := logger.With(zap.String("handler", string(uploadcaps.List)))
+	log := logger.With(zap.Stringer("handler", uploadcaps.List))
 	return Handler{
-		Command: ucan.Command(uploadcaps.List),
+		Command: uploadcaps.List.Command,
 		Handler: bindexec.NewHandler(func(
 			req *bindexec.Request[*uploadcaps.ListArguments],
 			res *bindexec.Response[*uploadcaps.ListOK],

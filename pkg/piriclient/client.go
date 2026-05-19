@@ -94,7 +94,7 @@ func (c *Client) Allocate(ctx context.Context, req *AllocateRequest, proofStore 
 
 // AllocateInvocation returns the invocation for the allocate request (for use in effects).
 func (c *Client) AllocateInvocation(ctx context.Context, req *AllocateRequest, proofStore ucanlib.ProofStore, options ...invocation.Option) (ucan.Invocation, []ucan.Delegation, []ucan.Invocation, error) {
-	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.signer.DID(), ucan.Command(blobcap.Allocate), req.Space)
+	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.signer.DID(), blobcap.Allocate.Command, req.Space)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("building proof chain: %w", err)
 	}
@@ -170,7 +170,7 @@ func (c *Client) Accept(ctx context.Context, req *AcceptRequest, proofStore ucan
 
 // AcceptInvocation returns the invocation for the accept request (for use in effects).
 func (c *Client) AcceptInvocation(ctx context.Context, req *AcceptRequest, proofStore ucanlib.ProofStore, options ...invocation.Option) (ucan.Invocation, []ucan.Delegation, []ucan.Invocation, error) {
-	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.signer.DID(), ucan.Command(blobcap.Accept), req.Space)
+	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.signer.DID(), blobcap.Accept.Command, req.Space)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("building proof chain: %w", err)
 	}
@@ -216,7 +216,7 @@ type ReplicaAllocateRequest struct {
 // Returns the response data, the invocation that was sent, and the receipt from
 // piri. It returns an error if the receipt contains a failure result.
 func (c *Client) ReplicaAllocate(ctx context.Context, req *ReplicaAllocateRequest, proofStore ucanlib.ProofStore, options ...invocation.Option) (*blobreplicacap.AllocateOK, ucan.Invocation, ucan.Receipt, error) {
-	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.signer.DID(), ucan.Command(blobreplicacap.Allocate), req.Space)
+	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.signer.DID(), blobreplicacap.Allocate.Command, req.Space)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("building proof chain: %w", err)
 	}

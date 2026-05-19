@@ -9,7 +9,6 @@ import (
 	"github.com/fil-forge/ucantone/ipld/datamodel"
 	"github.com/fil-forge/ucantone/principal/absentee"
 	"github.com/fil-forge/ucantone/principal/ed25519"
-	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/container"
 	"github.com/fil-forge/ucantone/ucan/delegation"
 	"github.com/fil-forge/ucantone/ucan/invocation"
@@ -87,7 +86,7 @@ func TestNewAttestationVerifier(t *testing.T) {
 		inv, err := invocation.Invoke(
 			authority,
 			authority.DID(),
-			ucan.Command(attest.Proof),
+			attest.Proof.Command,
 			datamodel.Map{"unrelated": "foo"},
 		)
 		require.NoError(t, err)

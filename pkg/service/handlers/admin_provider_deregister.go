@@ -6,14 +6,13 @@ import (
 	storageprovider "github.com/fil-forge/sprue/pkg/store/storage_provider"
 	"github.com/fil-forge/ucantone/errors"
 	"github.com/fil-forge/ucantone/execution/bindexec"
-	"github.com/fil-forge/ucantone/ucan"
 	"go.uber.org/zap"
 )
 
 func NewAdminProviderDeregisterHandler(id *identity.Identity, providerStore storageprovider.Store, logger *zap.Logger) Handler {
-	log := logger.With(zap.String("handler", string(provider.Deregister)))
+	log := logger.With(zap.Stringer("handler", provider.Deregister))
 	return Handler{
-		Command: ucan.Command(provider.Deregister),
+		Command: provider.Deregister.Command,
 		Handler: bindexec.NewHandler(func(
 			req *bindexec.Request[*provider.DeregisterArguments],
 			res *bindexec.Response[*provider.DeregisterOK],

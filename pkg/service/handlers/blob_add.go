@@ -34,9 +34,9 @@ import (
 )
 
 func NewBlobAddHandler(id *identity.Identity, provisioningSvc *provisioning.Service, router *routing.Service, nodeProvider piriclient.Provider, agentStore agent.Store, blobRegistry blobregistry.Store, logger *zap.Logger) Handler {
-	log := logger.With(zap.String("handler", string(blobcaps.Add)))
+	log := logger.With(zap.Stringer("handler", blobcaps.Add))
 	return Handler{
-		Command: ucan.Command(blobcaps.Add),
+		Command: blobcaps.Add.Command,
 		Handler: bindexec.NewHandler(func(
 			req *bindexec.Request[*blobcaps.AddArguments],
 			res *bindexec.Response[*blobcaps.AddOK],

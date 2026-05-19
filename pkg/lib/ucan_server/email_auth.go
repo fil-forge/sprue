@@ -33,7 +33,7 @@ func ExecBase64urlAccessConfirm(ctx context.Context, executor execution.Executor
 
 	confirmation := inCt.Invocations()[0]
 	// check this is a confirmation invocation
-	if confirmation.Command() != ucan.Command(access.Confirm) {
+	if confirmation.Command() != access.Confirm.Command {
 		return AccessConfirmResult{}, fmt.Errorf("unexpected command in invocation, expected %s but got %s", access.Confirm, confirmation.Command())
 	}
 

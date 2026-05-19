@@ -136,14 +136,14 @@ func newMockPiriServer(
 		server.WithValidationOptions(validator.WithDIDVerifierResolver(resolveDIDKey)),
 	)
 
-	srv.Handle(ucan.Command(blobcaps.Allocate), bindexec.NewHandler(func(
+	srv.Handle(blobcaps.Allocate.Command, bindexec.NewHandler(func(
 		req *bindexec.Request[*blobcaps.AllocateArguments],
 		res *bindexec.Response[*blobcaps.AllocateOK],
 	) error {
 		return res.SetSuccess(allocateOK)
 	}))
 
-	srv.Handle(ucan.Command(blobcaps.Accept), bindexec.NewHandler(func(
+	srv.Handle(blobcaps.Accept.Command, bindexec.NewHandler(func(
 		req *bindexec.Request[*blobcaps.AcceptArguments],
 		res *bindexec.Response[*blobcaps.AcceptOK],
 	) error {

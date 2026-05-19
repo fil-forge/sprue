@@ -8,13 +8,12 @@ import (
 	storageprovider "github.com/fil-forge/sprue/pkg/store/storage_provider"
 	"github.com/fil-forge/ucantone/errors"
 	"github.com/fil-forge/ucantone/execution/bindexec"
-	"github.com/fil-forge/ucantone/ucan"
 )
 
 func NewAdminProviderWeightSetHandler(id *identity.Identity, providerStore storageprovider.Store, logger *zap.Logger) Handler {
-	log := logger.With(zap.String("handler", string(weight.Set)))
+	log := logger.With(zap.Stringer("handler", weight.Set))
 	return Handler{
-		Command: ucan.Command(weight.Set),
+		Command: weight.Set.Command,
 		Handler: bindexec.NewHandler(func(
 			req *bindexec.Request[*weight.SetArguments],
 			res *bindexec.Response[*weight.SetOK],

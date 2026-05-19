@@ -8,15 +8,14 @@ import (
 	"github.com/fil-forge/sprue/pkg/provisioning"
 	"github.com/fil-forge/ucantone/errors"
 	"github.com/fil-forge/ucantone/execution/bindexec"
-	"github.com/fil-forge/ucantone/ucan"
 	"go.uber.org/zap"
 )
 
 // This handler returns info about a space, including its providers.
 func NewSpaceInfoHandler(provisioningSvc *provisioning.Service, logger *zap.Logger) Handler {
-	log := logger.With(zap.String("handler", string(spacecaps.Info)))
+	log := logger.With(zap.Stringer("handler", spacecaps.Info))
 	return Handler{
-		Command: ucan.Command(spacecaps.Info),
+		Command: spacecaps.Info.Command,
 		Handler: bindexec.NewHandler(func(
 			req *bindexec.Request[*spacecaps.InfoArguments],
 			res *bindexec.Response[*spacecaps.InfoOK],

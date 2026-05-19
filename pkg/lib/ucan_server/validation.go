@@ -36,7 +36,7 @@ func NewAttestationVerifier(authority principal.Verifier) validator.NonStandardS
 			return fmt.Errorf("token is not a delegation")
 		}
 		for _, inv := range meta.Invocations() {
-			if inv.Command() != ucan.Command(attest.Proof) {
+			if inv.Command() != attest.Proof.Command {
 				continue
 			}
 			// only trust attestations we issued

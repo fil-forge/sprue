@@ -28,11 +28,11 @@ func NewHTTPPutConcludeHandler(
 	logger *zap.Logger,
 ) ConclusionHandler {
 	log := logger.With(
-		zap.String("handler", string(ucancaps.Conclude)),
-		zap.String("conclude", string(httpcaps.Put)),
+		zap.Stringer("handler", ucancaps.Conclude),
+		zap.Stringer("conclude", httpcaps.Put),
 	)
 	return ConclusionHandler{
-		Command: ucan.Command(httpcaps.Put),
+		Command: httpcaps.Put.Command,
 		Handler: func(ctx context.Context, putInv ucan.Invocation, putRcpt ucan.Receipt, meta ucan.Container) error {
 			log := log.With(zap.Stringer("ran", putRcpt.Ran()))
 			log.Debug("handling conclude")

@@ -92,10 +92,10 @@ github.com/ebitengine/purego v0.10.0 h1:QIw4xfpWT6GWTzaW5XEKy3HXoqrJGx1ijYHzTF0/
 github.com/ebitengine/purego v0.10.0/go.mod h1:iIjxzd6CiRiOG0UyXP+V1+jWqUXVjPKLAI0mRfJZTmQ=
 github.com/felixge/httpsnoop v1.0.4 h1:NFTV2Zj1bL4mc9sqWACXbQFVBBg2W3GPvqp8/ESS2Wg=
 github.com/felixge/httpsnoop v1.0.4/go.mod h1:m8KPJKqk1gH5J9DgRY2ASl2lWCfGKXixSwevea8zH2U=
-github.com/fil-forge/libforge v0.0.0-20260519133220-4d5747ca0927 h1:AqqpZ7jsb26N+1Fmq2URToRjOBha26NmYptqCIO1qJY=
-github.com/fil-forge/libforge v0.0.0-20260519133220-4d5747ca0927/go.mod h1:FtlBeLxBao1mIU2ILE5loXr+KSrCFAoXoQHOPJBZGsE=
-github.com/fil-forge/ucantone v0.0.0-20260519122919-0ee8deb17aa4 h1:Bxmm9l6RE+68luYvekbnmTe7+1epRPZHnSagcMtdvyY=
-github.com/fil-forge/ucantone v0.0.0-20260519122919-0ee8deb17aa4/go.mod h1:vqgVEsy6LEEsY24Zyjxem0vSofj1XTIx29GbV635f+I=
+github.com/fil-forge/libforge v0.0.0-20260519193938-fc442aef7e5c h1:dzAiOAYDTJDnrPFE7KxVqCn6mVK1grXiaiMuPf5z/Mo=
+github.com/fil-forge/libforge v0.0.0-20260519193938-fc442aef7e5c/go.mod h1:/sKL0TfiBzknJTuL1vSZ5IHALmWndwxOexU3jtlNVSE=
+github.com/fil-forge/ucantone v0.0.0-20260519193222-ad31490eaa10 h1:ApgWAIpXjCYjZw/yDxLn8IA9WrH/ENPRWCWPT/MoCvU=
+github.com/fil-forge/ucantone v0.0.0-20260519193222-ad31490eaa10/go.mod h1:vqgVEsy6LEEsY24Zyjxem0vSofj1XTIx29GbV635f+I=
 github.com/frankban/quicktest v1.14.6 h1:7Xjx+VpznH+oBnejlPUj8oUpdxnVs4f8XU8WnHkI4W8=
 github.com/frankban/quicktest v1.14.6/go.mod h1:4ptaffx2x8+WTWXmUCuVU6aPUX1/Mz7zb5vbUoiM6w0=
 github.com/fsnotify/fsnotify v1.9.0 h1:2Ml+OJNzbYCTzsxtv8vKSFD9PbJjmhYF14k/jKC7S9k=

@@ -14,13 +14,12 @@ import (
 	blobregistry "github.com/fil-forge/sprue/pkg/store/blob_registry"
 	"github.com/fil-forge/ucantone/errors"
 	"github.com/fil-forge/ucantone/execution/bindexec"
-	"github.com/fil-forge/ucantone/ucan"
 )
 
 func NewIndexAddHandler(id *identity.Identity, provisioningSvc *provisioning.Service, blobRegistry blobregistry.Store, indexerClient *indexerclient.Client, logger *zap.Logger) Handler {
-	log := logger.With(zap.String("handler", string(indexcaps.Add)))
+	log := logger.With(zap.Stringer("handler", indexcaps.Add))
 	return Handler{
-		Command: ucan.Command(indexcaps.Add),
+		Command: indexcaps.Add.Command,
 		Handler: bindexec.NewHandler(func(
 			req *bindexec.Request[*indexcaps.AddArguments],
 			res *bindexec.Response[*indexcaps.AddOK],

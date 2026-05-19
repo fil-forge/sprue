@@ -9,15 +9,14 @@ import (
 	upload_store "github.com/fil-forge/sprue/pkg/store/upload"
 	"github.com/fil-forge/ucantone/errors"
 	"github.com/fil-forge/ucantone/execution/bindexec"
-	"github.com/fil-forge/ucantone/ucan"
 	"go.uber.org/zap"
 )
 
 // This handler registers an upload (root CID + shards mapping).
 func NewUploadAddHandler(provisioningSvc *provisioning.Service, uploadStore upload_store.Store, logger *zap.Logger) Handler {
-	log := logger.With(zap.String("handler", string(uploadcaps.Add)))
+	log := logger.With(zap.Stringer("handler", uploadcaps.Add))
 	return Handler{
-		Command: ucan.Command(uploadcaps.Add),
+		Command: uploadcaps.Add.Command,
 		Handler: bindexec.NewHandler(func(
 			req *bindexec.Request[*uploadcaps.AddArguments],
 			res *bindexec.Response[*uploadcaps.AddOK],

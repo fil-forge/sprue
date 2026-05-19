@@ -11,14 +11,13 @@ import (
 	"github.com/fil-forge/sprue/pkg/store/consumer"
 	"github.com/fil-forge/ucantone/errors"
 	"github.com/fil-forge/ucantone/execution/bindexec"
-	"github.com/fil-forge/ucantone/ucan"
 	"go.uber.org/zap"
 )
 
 func NewProviderAddHandler(deploymentCfg config.DeploymentConfig, provisioningSvc *provisioning.Service, billingSvc *billing.Service, logger *zap.Logger) Handler {
-	log := logger.With(zap.String("handler", string(providercaps.Add)))
+	log := logger.With(zap.Stringer("handler", providercaps.Add))
 	return Handler{
-		Command: ucan.Command(providercaps.Add),
+		Command: providercaps.Add.Command,
 		Handler: bindexec.NewHandler(func(
 			req *bindexec.Request[*providercaps.AddArguments],
 			res *bindexec.Response[*providercaps.AddOK],

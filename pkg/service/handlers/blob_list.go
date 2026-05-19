@@ -6,14 +6,13 @@ import (
 	blobcaps "github.com/fil-forge/libforge/commands/blob"
 	blobregistry "github.com/fil-forge/sprue/pkg/store/blob_registry"
 	"github.com/fil-forge/ucantone/execution/bindexec"
-	"github.com/fil-forge/ucantone/ucan"
 	"go.uber.org/zap"
 )
 
 func NewBlobListHandler(blobRegistry blobregistry.Store, logger *zap.Logger) Handler {
-	log := logger.With(zap.String("handler", string(blobcaps.List)))
+	log := logger.With(zap.Stringer("handler", blobcaps.List))
 	return Handler{
-		Command: ucan.Command(blobcaps.List),
+		Command: blobcaps.List.Command,
 		Handler: bindexec.NewHandler(func(
 			req *bindexec.Request[*blobcaps.ListArguments],
 			res *bindexec.Response[*blobcaps.ListOK],
