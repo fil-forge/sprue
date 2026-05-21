@@ -1,14 +1,11 @@
 package identity
 
 import (
-	crypto_ed25519 "crypto/ed25519"
-	"crypto/x509"
-	"encoding/pem"
 	"fmt"
-	"io"
 	"os"
 	"strings"
 
+	"github.com/fil-forge/libforge/identity"
 	"github.com/fil-forge/ucantone/did"
 	"github.com/fil-forge/ucantone/principal"
 	"github.com/fil-forge/ucantone/principal/ed25519"
@@ -92,9 +89,13 @@ func (i *Identity) DIDDocument() map[string]interface{} {
 
 // NewFromPEMFile creates a new identity from an Ed25519 PEM key file.
 func NewFromPEMFile(keyFilePath string) (*Identity, error) {
-	keySigner, err := signerFromEd25519PEMFile(keyFilePath)
+	pem, err := os.ReadFile(keyFilePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load key from PEM file: %w", err)
+		return nil, fmt.Errorf("failed to read key file: %w", err)
+	}
+	keySigner, err := identity.DecodeEd25519SignerFromPEM(pem)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode key from PEM file: %w", err)
 	}
 	return &Identity{Signer: keySigner}, nil
 }
@@ -105,9 +106,13 @@ func NewFromPEMFile(keyFilePath string) (*Identity, error) {
 // signer is wrapped so the service presents itself as the did:web identity
 // and accepts UCANs addressed to that did:web.
 func NewFromPEMFileWithDID(keyFilePath string, serviceDID string) (*Identity, error) {
-	keySigner, err := signerFromEd25519PEMFile(keyFilePath)
+	pem, err := os.ReadFile(keyFilePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load key from PEM file: %w", err)
+		return nil, fmt.Errorf("failed to read key file: %w", err)
+	}
+	keySigner, err := identity.DecodeEd25519SignerFromPEM(pem)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode key from PEM file: %w", err)
 	}
 
 	// If serviceDID is provided, wrap the signer with the did:web identity
@@ -126,48 +131,4 @@ func NewFromPEMFileWithDID(keyFilePath string, serviceDID string) (*Identity, er
 	}
 
 	return &Identity{Signer: keySigner}, nil
-}
-
-// signerFromEd25519PEMFile loads an Ed25519 private key from a PKCS#8 PEM file.
-func signerFromEd25519PEMFile(path string) (principal.Signer, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open key file: %w", err)
-	}
-	defer f.Close()
-
-	pemData, err := io.ReadAll(f)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read key file: %w", err)
-	}
-
-	var privateKey *crypto_ed25519.PrivateKey
-	rest := pemData
-	for {
-		block, remaining := pem.Decode(rest)
-		if block == nil {
-			break
-		}
-		rest = remaining
-
-		if block.Type == "PRIVATE KEY" {
-			parsedKey, err := x509.ParsePKCS8PrivateKey(block.Bytes)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse PKCS#8 private key: %w", err)
-			}
-
-			key, ok := parsedKey.(crypto_ed25519.PrivateKey)
-			if !ok {
-				return nil, fmt.Errorf("key is not an Ed25519 private key")
-			}
-			privateKey = &key
-			break
-		}
-	}
-
-	if privateKey == nil {
-		return nil, fmt.Errorf("no PRIVATE KEY block found in PEM file")
-	}
-
-	return ed25519.FromRaw(privateKey.Seed())
 }
