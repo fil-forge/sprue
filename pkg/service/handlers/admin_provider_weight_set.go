@@ -1,59 +1,46 @@
 package handlers
 
 import (
-	"context"
-
 	"go.uber.org/zap"
 
-	"github.com/fil-forge/go-ucanto/core/invocation"
-	"github.com/fil-forge/go-ucanto/core/receipt/fx"
-	"github.com/fil-forge/go-ucanto/core/result"
-	"github.com/fil-forge/go-ucanto/core/result/failure"
-	"github.com/fil-forge/go-ucanto/server"
-	"github.com/fil-forge/go-ucanto/ucan"
-	"github.com/fil-forge/sprue/pkg/capabilities/admin/provider"
+	"github.com/fil-forge/sprue/pkg/commands/admin/provider/weight"
 	"github.com/fil-forge/sprue/pkg/identity"
-	"github.com/fil-forge/sprue/pkg/lib/errors"
 	storageprovider "github.com/fil-forge/sprue/pkg/store/storage_provider"
+	"github.com/fil-forge/ucantone/errors"
+	"github.com/fil-forge/ucantone/execution/bindexec"
 )
 
-// WithAdminProviderWeightSetMethod registers the admin/provider/weight/set handler.
-func WithAdminProviderWeightSetMethod(id *identity.Identity, providerStore storageprovider.Store, logger *zap.Logger) server.Option {
-	return server.WithServiceMethod(
-		provider.WeightSetAbility,
-		server.Provide(
-			provider.WeightSet,
-			AdminProviderWeightSetHandler(id, providerStore, logger),
-		),
-	)
-}
+func NewAdminProviderWeightSetHandler(id *identity.Identity, providerStore storageprovider.Store, logger *zap.Logger) Handler {
+	log := logger.With(zap.Stringer("handler", weight.Set))
+	return Handler{
+		Command: weight.Set.Command,
+		Handler: bindexec.NewHandler(func(
+			req *bindexec.Request[*weight.SetArguments],
+			res *bindexec.Response[*weight.SetOK],
+		) error {
+			args := req.Task().Arguments()
+			if req.Invocation().Issuer() != id.Signer.DID() {
+				log.Warn("Unauthorized access attempt", zap.Stringer("issuer", req.Invocation().Issuer()))
+				return res.SetFailure(errors.New("Unauthorized", "only the service identity can set provider weights"))
+			}
 
-func AdminProviderWeightSetHandler(id *identity.Identity, providerStore storageprovider.Store, logger *zap.Logger) server.HandlerFunc[provider.WeightSetCaveats, provider.WeightSetOk, failure.IPLDBuilderFailure] {
-	log := logger.With(zap.String("handler", provider.WeightSetAbility))
-	return func(ctx context.Context,
-		cap ucan.Capability[provider.WeightSetCaveats],
-		inv invocation.Invocation,
-		iCtx server.InvocationContext,
-	) (result.Result[provider.WeightSetOk, failure.IPLDBuilderFailure], fx.Effects, error) {
-		args := cap.Nb()
-		if inv.Issuer().DID() != id.Signer.DID() {
-			log.Warn("Unauthorized access attempt", zap.Stringer("issuer", inv.Issuer().DID()))
-			return result.Error[provider.WeightSetOk, failure.IPLDBuilderFailure](
-				errors.New("Unauthorized", "only the service identity can set provider weights"),
-			), nil, nil
-		}
+			p, err := providerStore.Get(req.Context(), args.Provider)
+			if err != nil {
+				log.Error("Failed to get existing provider", zap.Error(err))
+				return res.SetFailure(errors.New("Failed to get existing provider", err.Error()))
+			}
 
-		p, err := providerStore.Get(ctx, args.Provider)
-		if err != nil {
-			log.Error("Failed to get existing provider", zap.Error(err))
-			return nil, nil, err
-		}
-
-		err = providerStore.Put(ctx, p.Endpoint, p.Proof, args.Weight, &args.ReplicationWeight)
-		if err != nil {
-			log.Error("Failed to update provider weights", zap.Error(err))
-			return nil, nil, err
-		}
-		return result.Ok[provider.WeightSetOk, failure.IPLDBuilderFailure](provider.WeightSetOk{}), nil, nil
+			replicationWeight := int(args.ReplicationWeight)
+			err = providerStore.Put(req.Context(), p.Provider, p.Endpoint, int(args.Weight), &replicationWeight)
+			if err != nil {
+				if errors.Is(err, storageprovider.ErrStorageProviderNotFound) {
+					log.Warn("Provider not found", zap.Stringer("provider", args.Provider))
+					return res.SetFailure(err)
+				}
+				log.Error("Failed to update provider weights", zap.Error(err))
+				return err
+			}
+			return res.SetSuccess(&weight.SetOK{})
+		}),
 	}
 }

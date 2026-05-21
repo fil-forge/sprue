@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/fil-forge/go-ucanto/did"
-	"github.com/fil-forge/sprue/pkg/lib/errors"
 	"github.com/fil-forge/sprue/pkg/store/customer"
+	"github.com/fil-forge/ucantone/did"
+	"github.com/fil-forge/ucantone/errors"
 )
 
 const MissingPaymentPlanErrorName = "MissingPaymentPlan"
@@ -30,9 +30,9 @@ func (s *Service) PaymentPlan(ctx context.Context, account did.DID) (did.DID, er
 	r, err := s.customerStore.Get(ctx, account)
 	if err != nil {
 		if errors.Is(err, customer.ErrCustomerNotFound) {
-			return did.Undef, ErrMissingPaymentPlan
+			return did.DID{}, ErrMissingPaymentPlan
 		}
-		return did.Undef, fmt.Errorf("getting customer: %w", err)
+		return did.DID{}, fmt.Errorf("getting customer: %w", err)
 	}
 	return r.Product, nil
 }

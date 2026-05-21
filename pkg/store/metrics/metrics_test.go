@@ -7,7 +7,7 @@ import (
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/store/metrics"
 	metricsaws "github.com/fil-forge/sprue/pkg/store/metrics/aws"
-	"github.com/fil-forge/sprue/pkg/store/metrics/memory"
+	metricsmemory "github.com/fil-forge/sprue/pkg/store/metrics/memory"
 	metricspostgres "github.com/fil-forge/sprue/pkg/store/metrics/postgres"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
@@ -26,7 +26,7 @@ var storeKinds = []StoreKind{Memory, AWS, Postgres}
 func makeStore(t *testing.T, k StoreKind) metrics.Store {
 	switch k {
 	case Memory:
-		return memory.New()
+		return metricsmemory.New()
 	case AWS:
 		return createAWSStore(t)
 	case Postgres:
@@ -38,7 +38,7 @@ func makeStore(t *testing.T, k StoreKind) metrics.Store {
 func makeSpaceStore(t *testing.T, k StoreKind) metrics.SpaceStore {
 	switch k {
 	case Memory:
-		return memory.NewSpaceStore()
+		return metricsmemory.NewSpaceStore()
 	case AWS:
 		return createAWSSpaceStore(t)
 	case Postgres:

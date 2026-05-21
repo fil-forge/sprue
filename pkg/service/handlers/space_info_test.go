@@ -1,20 +1,48 @@
 package handlers_test
 
 import (
+	"bytes"
+	"context"
 	"testing"
 
-	"github.com/fil-forge/go-libstoracha/capabilities/space"
-	"github.com/fil-forge/go-ucanto/core/result"
-	"github.com/fil-forge/go-ucanto/core/result/failure/datamodel"
+	spacecmds "github.com/fil-forge/libforge/commands/space"
+	"github.com/fil-forge/libforge/didmailto"
 	"github.com/fil-forge/sprue/internal/testutil"
-	"github.com/fil-forge/sprue/pkg/lib/didmailto"
 	"github.com/fil-forge/sprue/pkg/provisioning"
 	"github.com/fil-forge/sprue/pkg/service/handlers"
-	consumermemory "github.com/fil-forge/sprue/pkg/store/consumer/memory"
-	subscriptionmemory "github.com/fil-forge/sprue/pkg/store/subscription/memory"
+	consumer_store "github.com/fil-forge/sprue/pkg/store/consumer/memory"
+	subscription_store "github.com/fil-forge/sprue/pkg/store/subscription/memory"
+	"github.com/fil-forge/ucantone/did"
+	edm "github.com/fil-forge/ucantone/errors/datamodel"
+	"github.com/fil-forge/ucantone/execution"
+	"github.com/fil-forge/ucantone/principal"
+	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 )
+
+// invokeSpaceInfo builds a /space/info invocation against the given space and
+// returns the request + signed response.
+func invokeSpaceInfo(
+	t *testing.T,
+	ctx context.Context,
+	agent principal.Signer,
+	uploadService principal.Signer,
+	space did.DID,
+) (execution.Request, *execution.ExecResponse) {
+	t.Helper()
+	inv, err := spacecmds.Info.Invoke(
+		agent,
+		space,
+		&spacecmds.InfoArguments{},
+		invocation.WithAudience(uploadService.DID()),
+	)
+	require.NoError(t, err)
+	req := execution.NewRequest(ctx, inv)
+	res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
+	require.NoError(t, err)
+	return req, res
+}
 
 func TestSpaceInfoHandler(t *testing.T) {
 	logger := zaptest.NewLogger(t)
@@ -23,109 +51,83 @@ func TestSpaceInfoHandler(t *testing.T) {
 	uploadService := testutil.WebService
 
 	t.Run("returns providers for a provisioned space", func(t *testing.T) {
+		consumerStore := consumer_store.New()
+		subscriptionStore := subscription_store.New()
 		provisioningSvc := provisioning.NewService(
-			[]provisioning.ServiceDID{uploadService.DID()},
-			consumermemory.New(),
-			subscriptionmemory.New(),
+			[]did.DID{uploadService.DID()},
+			consumerStore,
+			subscriptionStore,
 		)
 
-		handler := handlers.SpaceInfoHandler(provisioningSvc, logger)
+		handler := handlers.NewSpaceInfoHandler(provisioningSvc, logger)
 
-		spaceSigner := testutil.RandomSigner(t)
-		account := testutil.Must(didmailto.Parse("did:mailto:example.com:alice"))(t)
+		space := testutil.RandomSigner(t)
+		account := testutil.Must(didmailto.New("alice@example.com"))(t)
 
-		_, err := provisioningSvc.Provision(ctx, account, spaceSigner.DID(), uploadService.DID(), testutil.RandomCID(t))
+		_, err := provisioningSvc.Provision(ctx, account, space.DID(), uploadService.DID(), testutil.RandomCID(t))
 		require.NoError(t, err)
 
-		caveats := space.InfoCaveats{}
-		inv, err := space.Info.Invoke(testutil.Alice, uploadService, spaceSigner.DID().String(), caveats)
+		req, res := invokeSpaceInfo(t, ctx, testutil.Alice, uploadService, space.DID())
+
+		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		cap := space.Info.New(spaceSigner.DID().String(), caveats)
+		o, x := res.Receipt().Out().Unpack()
+		require.Nil(t, x)
+		require.NotNil(t, o)
 
-		res, _, err := handler(ctx, cap, inv, nil)
-		require.NoError(t, err)
-
-		ok, fail := result.Unwrap(res)
-		require.Nil(t, fail)
-		require.Equal(t, spaceSigner.DID().String(), ok.Did)
+		var ok spacecmds.InfoOK
+		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
 		require.Len(t, ok.Providers, 1)
-		require.Equal(t, uploadService.DID().String(), ok.Providers[0])
+		require.Equal(t, uploadService.DID(), ok.Providers[0])
 	})
 
-	t.Run("returns SpaceUnknown for unprovisioned space", func(t *testing.T) {
+	t.Run("returns empty providers for unprovisioned did:key space", func(t *testing.T) {
 		provisioningSvc := provisioning.NewService(
-			[]provisioning.ServiceDID{uploadService.DID()},
-			consumermemory.New(),
-			subscriptionmemory.New(),
+			[]did.DID{uploadService.DID()},
+			consumer_store.New(),
+			subscription_store.New(),
 		)
 
-		handler := handlers.SpaceInfoHandler(provisioningSvc, logger)
+		handler := handlers.NewSpaceInfoHandler(provisioningSvc, logger)
 
-		spaceSigner := testutil.RandomSigner(t)
+		space := testutil.RandomSigner(t)
 
-		caveats := space.InfoCaveats{}
-		inv, err := space.Info.Invoke(testutil.Alice, uploadService, spaceSigner.DID().String(), caveats)
+		req, res := invokeSpaceInfo(t, ctx, testutil.Alice, uploadService, space.DID())
+
+		err := handler.Handler(req, res)
 		require.NoError(t, err)
 
-		cap := space.Info.New(spaceSigner.DID().String(), caveats)
+		o, x := res.Receipt().Out().Unpack()
+		require.Nil(t, x)
 
-		res, _, err := handler(ctx, cap, inv, nil)
-		require.NoError(t, err)
-
-		_, fail := result.Unwrap(res)
-		require.NotNil(t, fail)
-
-		model := datamodel.Bind(testutil.Must(fail.ToIPLD())(t))
-		require.NotNil(t, model.Name)
-		require.Equal(t, handlers.SpaceUnknownErrorName, *model.Name)
+		var ok spacecmds.InfoOK
+		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
+		require.Empty(t, ok.Providers)
 	})
 
-	t.Run("returns SpaceUnknown for non did:key space", func(t *testing.T) {
+	t.Run("returns UnknownSpace for non did:key space", func(t *testing.T) {
 		provisioningSvc := provisioning.NewService(
-			[]provisioning.ServiceDID{},
-			consumermemory.New(),
-			subscriptionmemory.New(),
+			[]did.DID{},
+			consumer_store.New(),
+			subscription_store.New(),
 		)
 
-		handler := handlers.SpaceInfoHandler(provisioningSvc, logger)
+		handler := handlers.NewSpaceInfoHandler(provisioningSvc, logger)
 
-		caveats := space.InfoCaveats{}
-		inv, err := space.Info.Invoke(testutil.Alice, uploadService, "did:web:example.com", caveats)
+		// did:web subject — handler rejects since only did:key spaces are
+		// supported.
+		webDID := testutil.Must(did.Parse("did:web:example.com"))(t)
+		req, res := invokeSpaceInfo(t, ctx, testutil.Alice, uploadService, webDID)
+
+		err := handler.Handler(req, res)
 		require.NoError(t, err)
 
-		cap := space.Info.New("did:web:example.com", caveats)
+		_, x := res.Receipt().Out().Unpack()
+		require.NotNil(t, x)
 
-		res, _, err := handler(ctx, cap, inv, nil)
-		require.NoError(t, err)
-
-		_, fail := result.Unwrap(res)
-		require.NotNil(t, fail)
-
-		model := datamodel.Bind(testutil.Must(fail.ToIPLD())(t))
-		require.NotNil(t, model.Name)
-		require.Equal(t, handlers.SpaceUnknownErrorName, *model.Name)
-	})
-
-	t.Run("invalid space DID", func(t *testing.T) {
-		provisioningSvc := provisioning.NewService(
-			[]provisioning.ServiceDID{},
-			consumermemory.New(),
-			subscriptionmemory.New(),
-		)
-
-		handler := handlers.SpaceInfoHandler(provisioningSvc, logger)
-
-		caveats := space.InfoCaveats{}
-		inv, err := space.Info.Invoke(testutil.Alice, uploadService, "not-a-did", caveats)
-		require.NoError(t, err)
-
-		cap := space.Info.New("not-a-did", caveats)
-
-		res, _, err := handler(ctx, cap, inv, nil)
-		require.NoError(t, err)
-
-		_, fail := result.Unwrap(res)
-		require.NotNil(t, fail)
+		var model edm.ErrorModel
+		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
+		require.Equal(t, spacecmds.UnknownSpaceErrorName, model.Name())
 	})
 }

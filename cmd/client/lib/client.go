@@ -2,6 +2,7 @@ package lib
 
 import (
 	"fmt"
+	"net/url"
 
 	"github.com/fil-forge/sprue/internal/config"
 	"github.com/fil-forge/sprue/internal/fx"
@@ -25,10 +26,10 @@ func InitClient(cmd *cobra.Command) (*client.Client, *config.Config, *zap.Logger
 	id, err := fx.NewIdentity(cfg, logger)
 	cobra.CheckErr(err)
 
-	c, err := client.New(
-		id.Signer.DID(),
-		client.WithServiceURL(fmt.Sprintf("http://%s:%d", cfg.Server.Host, cfg.Server.Port)),
-	)
+	endpoint, err := url.Parse(fmt.Sprintf("http://%s:%d", cfg.Server.Host, cfg.Server.Port))
+	cobra.CheckErr(err)
+
+	c, err := client.New(id.Signer.DID(), endpoint, id.Signer, logger)
 	cobra.CheckErr(err)
 	return c, cfg, logger, id
 }

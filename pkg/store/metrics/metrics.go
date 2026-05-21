@@ -3,19 +3,19 @@ package metrics
 import (
 	"context"
 
-	"github.com/fil-forge/go-libstoracha/capabilities/space/blob"
-	"github.com/fil-forge/go-libstoracha/capabilities/upload"
-	"github.com/fil-forge/go-ucanto/did"
+	"github.com/fil-forge/libforge/commands/blob"
+	"github.com/fil-forge/libforge/commands/upload"
+	"github.com/fil-forge/ucantone/did"
 )
 
-const BlobAddTotalMetric = blob.AddAbility + "-total"
-const BlobAddSizeTotalMetric = blob.AddAbility + "-size-total"
+var BlobAddTotalMetric = blob.Add.String() + "-total"
+var BlobAddSizeTotalMetric = blob.Add.String() + "-size-total"
 
-const BlobRemoveTotalMetric = blob.RemoveAbility + "-total"
-const BlobRemoveSizeTotalMetric = blob.RemoveAbility + "-size-total"
+var BlobRemoveTotalMetric = blob.Remove.String() + "-total"
+var BlobRemoveSizeTotalMetric = blob.Remove.String() + "-size-total"
 
-const UploadAddTotalMetric = upload.AddAbility + "-total"
-const UploadRemoveTotalMetric = upload.RemoveAbility + "-total"
+var UploadAddTotalMetric = upload.Add.String() + "-total"
+var UploadRemoveTotalMetric = upload.Remove.String() + "-total"
 
 type Store interface {
 	// Get all metrics from storage.

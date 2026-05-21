@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/fil-forge/go-libstoracha/digestutil"
-	"github.com/fil-forge/go-ucanto/did"
+	"github.com/fil-forge/libforge/digestutil"
 	"github.com/fil-forge/sprue/pkg/store/replica"
+	"github.com/fil-forge/ucantone/did"
 	"github.com/ipfs/go-cid"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"

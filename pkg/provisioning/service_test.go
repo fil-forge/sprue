@@ -4,14 +4,14 @@ import (
 	"context"
 	"testing"
 
-	"github.com/fil-forge/go-ucanto/did"
+	"github.com/fil-forge/libforge/didmailto"
 	"github.com/fil-forge/sprue/internal/testutil"
-	"github.com/fil-forge/sprue/pkg/lib/didmailto"
 	"github.com/fil-forge/sprue/pkg/provisioning"
 	"github.com/fil-forge/sprue/pkg/store/consumer"
 	consumermemory "github.com/fil-forge/sprue/pkg/store/consumer/memory"
 	"github.com/fil-forge/sprue/pkg/store/subscription"
 	subscriptionmemory "github.com/fil-forge/sprue/pkg/store/subscription/memory"
+	"github.com/fil-forge/ucantone/did"
 	"github.com/stretchr/testify/require"
 )
 

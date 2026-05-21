@@ -3,8 +3,8 @@ package weight
 import (
 	"strconv"
 
-	"github.com/fil-forge/go-ucanto/did"
 	"github.com/fil-forge/sprue/cmd/client/lib"
+	"github.com/fil-forge/ucantone/did"
 	"github.com/spf13/cobra"
 )
 
@@ -16,7 +16,7 @@ var setCmd = &cobra.Command{
 }
 
 func doSet(cmd *cobra.Command, args []string) error {
-	c, _, _, id := lib.InitClient(cmd)
+	c, _, _, _ := lib.InitClient(cmd)
 
 	providerID, err := did.Parse(args[0])
 	cobra.CheckErr(err)
@@ -27,7 +27,7 @@ func doSet(cmd *cobra.Command, args []string) error {
 	replicationWeight, err := strconv.ParseInt(args[2], 10, 0)
 	cobra.CheckErr(err)
 
-	_, err = c.AdminProviderWeightSet(cmd.Context(), id.Signer, providerID, int(weight), int(replicationWeight))
+	_, err = c.AdminProviderWeightSet(cmd.Context(), providerID, int(weight), int(replicationWeight))
 	cobra.CheckErr(err)
 
 	cmd.Println("Provider weight set successfully")

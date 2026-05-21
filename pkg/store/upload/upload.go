@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/fil-forge/go-ucanto/did"
-	"github.com/fil-forge/sprue/pkg/lib/errors"
 	"github.com/fil-forge/sprue/pkg/store"
+	"github.com/fil-forge/ucantone/did"
+	"github.com/fil-forge/ucantone/errors"
 	"github.com/ipfs/go-cid"
 )
 
@@ -49,6 +49,7 @@ func WithListShardsCursor(cursor string) ListShardsOption {
 type UploadRecord struct {
 	Space      did.DID
 	Root       cid.Cid
+	Index      *cid.Cid
 	Cause      cid.Cid
 	InsertedAt time.Time
 	UpdatedAt  time.Time
@@ -70,5 +71,5 @@ type Store interface {
 	Remove(ctx context.Context, space did.DID, root cid.Cid) error
 	// Inserts an item in the table if it does not already exist or updates an
 	// existing item if it does exist.
-	Upsert(ctx context.Context, space did.DID, root cid.Cid, shards []cid.Cid, cause cid.Cid) error
+	Upsert(ctx context.Context, space did.DID, root cid.Cid, index *cid.Cid, shards []cid.Cid, cause cid.Cid) error
 }

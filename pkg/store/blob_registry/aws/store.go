@@ -9,9 +9,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	captypes "github.com/fil-forge/go-libstoracha/capabilities/types"
-	"github.com/fil-forge/go-libstoracha/digestutil"
-	"github.com/fil-forge/go-ucanto/did"
+	"github.com/fil-forge/libforge/commands/blob"
+	"github.com/fil-forge/libforge/digestutil"
 	"github.com/fil-forge/sprue/pkg/internal/timeutil"
 	"github.com/fil-forge/sprue/pkg/store"
 	blobregistry "github.com/fil-forge/sprue/pkg/store/blob_registry"
@@ -19,6 +18,7 @@ import (
 	"github.com/fil-forge/sprue/pkg/store/metrics"
 	metricsaws "github.com/fil-forge/sprue/pkg/store/metrics/aws"
 	spacediffaws "github.com/fil-forge/sprue/pkg/store/space_diff/aws"
+	"github.com/fil-forge/ucantone/did"
 	"github.com/ipfs/go-cid"
 	multihash "github.com/multiformats/go-multihash"
 )
@@ -127,7 +127,7 @@ func (s *Store) Get(ctx context.Context, space did.DID, digest multihash.Multiha
 	return itemToRecord(out.Item)
 }
 
-func (s *Store) Register(ctx context.Context, space did.DID, blob captypes.Blob, cause cid.Cid) error {
+func (s *Store) Register(ctx context.Context, space did.DID, blob blob.Blob, cause cid.Cid) error {
 	consumers, err := s.collectConsumers(ctx, space)
 	if err != nil {
 		return fmt.Errorf("collecting consumers: %w", err)
@@ -350,7 +350,7 @@ func itemToRecord(item map[string]types.AttributeValue) (blobregistry.Record, er
 
 	return blobregistry.Record{
 		Space: space,
-		Blob: captypes.Blob{
+		Blob: blob.Blob{
 			Digest: digest,
 			Size:   size,
 		},

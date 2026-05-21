@@ -7,7 +7,7 @@ import (
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/store/revocation"
 	revocationaws "github.com/fil-forge/sprue/pkg/store/revocation/aws"
-	"github.com/fil-forge/sprue/pkg/store/revocation/memory"
+	revocationmemory "github.com/fil-forge/sprue/pkg/store/revocation/memory"
 	revocationpostgres "github.com/fil-forge/sprue/pkg/store/revocation/postgres"
 	"github.com/google/uuid"
 	"github.com/ipfs/go-cid"
@@ -27,7 +27,7 @@ var storeKinds = []StoreKind{Memory, AWS, Postgres}
 func makeStore(t *testing.T, k StoreKind) revocation.Store {
 	switch k {
 	case Memory:
-		return memory.New()
+		return revocationmemory.New()
 	case AWS:
 		return createAWSStore(t)
 	case Postgres:

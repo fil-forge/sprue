@@ -16,9 +16,9 @@ var listCmd = &cobra.Command{
 }
 
 func doList(cmd *cobra.Command, args []string) error {
-	c, _, _, id := lib.InitClient(cmd)
+	c, _, _, _ := lib.InitClient(cmd)
 
-	res, err := c.AdminProviderList(cmd.Context(), id.Signer)
+	res, _, err := c.AdminProviderList(cmd.Context())
 	cobra.CheckErr(err)
 
 	if len(res.Providers) == 0 {
@@ -29,7 +29,7 @@ func doList(cmd *cobra.Command, args []string) error {
 	table := lib.NewTable(cmd.OutOrStdout())
 	table.SetHeader([]string{"ID", "Weight", "Replication Weight", "URL"})
 	for _, p := range res.Providers {
-		table.Append([]string{p.ID.String(), fmt.Sprintf("%d", p.Weight), fmt.Sprintf("%d", p.ReplicationWeight), p.Endpoint})
+		table.Append([]string{p.Provider.String(), fmt.Sprintf("%d", p.Weight), fmt.Sprintf("%d", p.ReplicationWeight), p.Endpoint})
 	}
 	table.Render()
 

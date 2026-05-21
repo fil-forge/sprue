@@ -12,18 +12,18 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/fil-forge/go-ucanto/core/car"
-	"github.com/fil-forge/go-ucanto/core/dag/blockstore"
-	"github.com/fil-forge/go-ucanto/core/invocation"
-	"github.com/fil-forge/go-ucanto/core/message"
-	"github.com/fil-forge/go-ucanto/core/receipt"
-	"github.com/fil-forge/sprue/pkg/internal/ipldutil"
+	"github.com/fil-forge/sprue/pkg/store"
 	"github.com/fil-forge/sprue/pkg/store/agent"
-	cid "github.com/ipfs/go-cid"
-	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
+	"github.com/fil-forge/ucantone/ipld/codec/dagcbor"
+	"github.com/fil-forge/ucantone/ucan"
+	"github.com/fil-forge/ucantone/ucan/container"
+	"github.com/ipfs/go-cid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/multiformats/go-multihash"
 )
+
+const defaultListLimit = 1000
 
 type Store struct {
 	pool       *pgxpool.Pool
@@ -54,27 +54,112 @@ func (s *Store) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-func (s *Store) GetInvocation(ctx context.Context, task cid.Cid) (invocation.Invocation, error) {
-	root, bs, err := s.getByTask(ctx, task, "in")
+func (s *Store) GetInvocation(ctx context.Context, task cid.Cid) (ucan.Invocation, error) {
+	_, ct, err := s.getByTask(ctx, task, "in")
 	if err != nil {
 		return nil, fmt.Errorf("getting invocation for task %s: %w", task, err)
 	}
-	return invocation.NewInvocationView(cidlink.Link{Cid: root}, bs)
+	for _, inv := range ct.Invocations() {
+		if inv.Task().Link() == task {
+			return inv, nil
+		}
+	}
+	return nil, agent.ErrInvocationNotFound
 }
 
-func (s *Store) GetReceipt(ctx context.Context, task cid.Cid) (receipt.AnyReceipt, error) {
-	root, bs, err := s.getByTask(ctx, task, "out")
+func (s *Store) GetReceipt(ctx context.Context, task cid.Cid) (ucan.Receipt, error) {
+	_, ct, err := s.getByTask(ctx, task, "out")
 	if err != nil {
 		return nil, fmt.Errorf("getting receipt for task %s: %w", task, err)
 	}
-	return receipt.NewAnyReceipt(cidlink.Link{Cid: root}, bs)
+	rcpt, ok := ct.Receipt(task)
+	if !ok {
+		return nil, agent.ErrReceiptNotFound
+	}
+	return rcpt, nil
 }
 
-func (s *Store) getByTask(ctx context.Context, task cid.Cid, kind string) (cid.Cid, blockstore.BlockReader, error) {
-	var identifier string
+func (s *Store) List(ctx context.Context, task cid.Cid, options ...agent.ListOption) (store.Page[ucan.Container], error) {
+	cfg := agent.ListConfig{}
+	for _, opt := range options {
+		opt(&cfg)
+	}
+	limit := defaultListLimit
+	if cfg.Limit != nil && *cfg.Limit > 0 {
+		limit = *cfg.Limit
+	}
+
+	args := []any{task.String(), limit + 1}
+	query := `SELECT message FROM agent_index WHERE task = $1`
+	if cfg.Cursor != nil {
+		args = append(args, *cfg.Cursor)
+		query += ` AND message > $3`
+	}
+	query += ` ORDER BY message ASC LIMIT $2`
+
+	rows, err := s.pool.Query(ctx, query, args...)
+	if err != nil {
+		return store.Page[ucan.Container]{}, fmt.Errorf("querying agent_index: %w", err)
+	}
+	defer rows.Close()
+
+	msgRoots := make([]string, 0, limit)
+	for rows.Next() {
+		var msgRoot string
+		if err := rows.Scan(&msgRoot); err != nil {
+			return store.Page[ucan.Container]{}, fmt.Errorf("scanning message: %w", err)
+		}
+		msgRoots = append(msgRoots, msgRoot)
+	}
+	if err := rows.Err(); err != nil {
+		return store.Page[ucan.Container]{}, fmt.Errorf("iterating messages: %w", err)
+	}
+
+	var cursor *string
+	if len(msgRoots) > limit {
+		last := msgRoots[limit-1]
+		cursor = &last
+		msgRoots = msgRoots[:limit]
+	}
+
+	results := make([]ucan.Container, 0, len(msgRoots))
+	for _, m := range msgRoots {
+		msgRoot, err := cid.Parse(m)
+		if err != nil {
+			return store.Page[ucan.Container]{}, fmt.Errorf("parsing message CID: %w", err)
+		}
+		ct, err := s.fetchMessage(ctx, msgRoot)
+		if err != nil {
+			return store.Page[ucan.Container]{}, err
+		}
+		results = append(results, ct)
+	}
+
+	return store.Page[ucan.Container]{Results: results, Cursor: cursor}, nil
+}
+
+func (s *Store) fetchMessage(ctx context.Context, msgRoot cid.Cid) (*container.Container, error) {
+	out, err := s.s3.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: &s.bucketName,
+		Key:    aws.String(toMessagePath(msgRoot)),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("getting message from S3: %w", err)
+	}
+	defer out.Body.Close()
+
+	var ct container.Container
+	if err := ct.UnmarshalCBOR(out.Body); err != nil {
+		return nil, fmt.Errorf("decoding container: %w", err)
+	}
+	return &ct, nil
+}
+
+func (s *Store) getByTask(ctx context.Context, task cid.Cid, kind string) (cid.Cid, *container.Container, error) {
+	var tokenRootStr, msgRootStr string
 	err := s.pool.QueryRow(ctx, `
-		SELECT identifier FROM agent_index WHERE task = $1 AND kind = $2
-	`, task.String(), kind).Scan(&identifier)
+		SELECT token, message FROM agent_index WHERE task = $1 AND kind = $2
+	`, task.String(), kind).Scan(&tokenRootStr, &msgRootStr)
 	if errors.Is(err, pgx.ErrNoRows) {
 		if kind == "in" {
 			return cid.Undef, nil, agent.ErrInvocationNotFound
@@ -84,15 +169,11 @@ func (s *Store) getByTask(ctx context.Context, task cid.Cid, kind string) (cid.C
 	if err != nil {
 		return cid.Undef, nil, fmt.Errorf("querying agent_index: %w", err)
 	}
-	parts := strings.SplitN(identifier, "@", 2)
-	if len(parts) != 2 {
-		return cid.Undef, nil, fmt.Errorf("invalid identifier format: %s", identifier)
-	}
-	root, err := cid.Parse(parts[0])
+	tokenRoot, err := cid.Parse(tokenRootStr)
 	if err != nil {
 		return cid.Undef, nil, fmt.Errorf("parsing root CID: %w", err)
 	}
-	msgRoot, err := cid.Parse(parts[1])
+	msgRoot, err := cid.Parse(msgRootStr)
 	if err != nil {
 		return cid.Undef, nil, fmt.Errorf("parsing message root CID: %w", err)
 	}
@@ -106,15 +187,12 @@ func (s *Store) getByTask(ctx context.Context, task cid.Cid, kind string) (cid.C
 	}
 	defer out.Body.Close()
 
-	_, blocks, err := car.Decode(out.Body)
-	if err != nil {
-		return cid.Undef, nil, fmt.Errorf("decoding CAR: %w", err)
+	var msg container.Container
+	if err := msg.UnmarshalCBOR(out.Body); err != nil {
+		return cid.Undef, nil, fmt.Errorf("decoding container: %w", err)
 	}
-	bs, err := blockstore.NewBlockStore(blockstore.WithBlocksIterator(blocks))
-	if err != nil {
-		return cid.Undef, nil, fmt.Errorf("creating blockstore: %w", err)
-	}
-	return root, bs, nil
+
+	return tokenRoot, &msg, nil
 }
 
 // Write uploads the agent message payload to S3 and records every index entry
@@ -122,16 +200,34 @@ func (s *Store) getByTask(ctx context.Context, task cid.Cid, kind string) (cid.C
 // partial failure leaves (at worst) an orphan S3 object rather than a dangling
 // index pointer to a missing payload. All work runs on the caller's context,
 // so cancellation propagates through both the S3 and Postgres calls.
-func (s *Store) Write(ctx context.Context, msg message.AgentMessage, index []agent.IndexEntry, source []byte) error {
-	msgRoot, err := ipldutil.ToCID(msg.Root().Link())
+func (s *Store) Write(ctx context.Context, message ucan.Container, index []agent.IndexEntry) error {
+	if len(index) == 0 {
+		return nil
+	}
+
+	c, ok := message.(*container.Container)
+	if !ok {
+		c = container.New(
+			container.WithInvocations(message.Invocations()...),
+			container.WithReceipts(message.Receipts()...),
+			container.WithDelegations(message.Delegations()...),
+		)
+	}
+
+	var buf bytes.Buffer
+	if err := c.MarshalCBOR(&buf); err != nil {
+		return fmt.Errorf("marshaling agent message to CBOR: %w", err)
+	}
+
+	msgRoot, err := cid.V1Builder{Codec: dagcbor.Code, MhType: multihash.SHA2_256}.Sum(buf.Bytes())
 	if err != nil {
-		return fmt.Errorf("converting message root link to CID: %w", err)
+		return fmt.Errorf("hashing agent message: %w", err)
 	}
 
 	if _, err := s.s3.PutObject(ctx, &s3.PutObjectInput{
 		Bucket: &s.bucketName,
 		Key:    aws.String(toMessagePath(msgRoot)),
-		Body:   bytes.NewReader(source),
+		Body:   bytes.NewReader(buf.Bytes()),
 	}); err != nil {
 		return fmt.Errorf("writing agent message to S3: %w", err)
 	}
@@ -141,40 +237,37 @@ func (s *Store) Write(ctx context.Context, msg message.AgentMessage, index []age
 	// batched INSERT below doesn't trip "ON CONFLICT DO UPDATE command cannot
 	// affect row a second time". Duplicates within a single message carry the
 	// same identifier by construction, so last-wins is safe.
-	type indexKey struct{ task, kind string }
-	rows := make(map[indexKey]string)
+	type indexKey struct {
+		task cid.Cid
+		kind string
+	}
+	rows := make(map[indexKey]agent.IndexEntry)
 	for _, entry := range index {
 		if entry.Invocation != nil {
-			invRoot, err := ipldutil.ToCID(entry.Invocation.Invocation.Link())
-			if err != nil {
-				return fmt.Errorf("converting invocation root link to CID: %w", err)
-			}
-			rows[indexKey{entry.Invocation.Task.String(), "in"}] = fmt.Sprintf("%s@%s", invRoot, msgRoot)
+			rows[indexKey{entry.Invocation.Task, "in"}] = entry
 		}
 		if entry.Receipt != nil {
-			rcptRoot, err := ipldutil.ToCID(entry.Receipt.Receipt.Root().Link())
-			if err != nil {
-				return fmt.Errorf("converting receipt root link to CID: %w", err)
-			}
-			rows[indexKey{entry.Receipt.Task.String(), "out"}] = fmt.Sprintf("%s@%s", rcptRoot, msgRoot)
+			rows[indexKey{entry.Receipt.Task, "out"}] = entry
 		}
-	}
-
-	if len(rows) == 0 {
-		return nil
 	}
 
 	placeholders := make([]string, 0, len(rows))
-	args := make([]any, 0, 3*len(rows))
+	args := make([]any, 0, 4*len(rows))
 	i := 0
-	for k, identifier := range rows {
-		placeholders = append(placeholders, fmt.Sprintf("($%d, $%d, $%d)", 3*i+1, 3*i+2, 3*i+3))
-		args = append(args, k.task, k.kind, identifier)
+	for k, entry := range rows {
+		placeholders = append(placeholders, fmt.Sprintf("($%d, $%d, $%d, $%d)", 4*i+1, 4*i+2, 4*i+3, 4*i+4))
+		var token cid.Cid
+		if k.kind == "in" {
+			token = entry.Invocation.Invocation.Link()
+		} else {
+			token = entry.Receipt.Receipt.Link()
+		}
+		args = append(args, k.task, k.kind, token, msgRoot)
 		i++
 	}
-	query := "INSERT INTO agent_index (task, kind, identifier) VALUES " +
+	query := "INSERT INTO agent_index (task, kind, token, message) VALUES " +
 		strings.Join(placeholders, ", ") +
-		" ON CONFLICT (task, kind) DO UPDATE SET identifier = EXCLUDED.identifier"
+		" ON CONFLICT (task, kind) DO UPDATE SET token = EXCLUDED.token, message = EXCLUDED.message"
 	if _, err := s.pool.Exec(ctx, query, args...); err != nil {
 		return fmt.Errorf("writing agent index: %w", err)
 	}

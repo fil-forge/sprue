@@ -12,15 +12,12 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/fil-forge/go-ucanto/did"
 	"github.com/fil-forge/sprue/pkg/internal/timeutil"
 	"github.com/fil-forge/sprue/pkg/store"
 	"github.com/fil-forge/sprue/pkg/store/upload"
+	"github.com/fil-forge/ucantone/did"
+	"github.com/fil-forge/ucantone/ipld/datamodel"
 	"github.com/ipfs/go-cid"
-	"github.com/ipld/go-ipld-prime/codec/dagcbor"
-	"github.com/ipld/go-ipld-prime/fluent"
-	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
-	basicnode "github.com/ipld/go-ipld-prime/node/basic"
 	"github.com/multiformats/go-multihash"
 )
 
@@ -336,7 +333,7 @@ func (d *Store) Remove(ctx context.Context, space did.DID, root cid.Cid) error {
 	return nil
 }
 
-func (d *Store) Upsert(ctx context.Context, space did.DID, root cid.Cid, shards []cid.Cid, cause cid.Cid) error {
+func (d *Store) Upsert(ctx context.Context, space did.DID, root cid.Cid, index *cid.Cid, shards []cid.Cid, cause cid.Cid) error {
 	// Fetch the current item to get existing shards before merging.
 	current, err := d.dynamo.GetItem(ctx, &dynamodb.GetItemInput{
 		TableName: aws.String(d.tableName),
@@ -370,12 +367,16 @@ func (d *Store) Upsert(ctx context.Context, space did.DID, root cid.Cid, shards 
 		"#insertedAt": "insertedAt",
 		"#updatedAt":  "updatedAt",
 		"#cause":      "cause",
+		"#index":      "index",
 		"#shardsRef":  "shardsRef",
 		"#shards":     "shards",
 	}
 	exprAttrValues := map[string]types.AttributeValue{
 		":now":   &types.AttributeValueMemberS{Value: now},
 		":cause": &types.AttributeValueMemberS{Value: cause.String()},
+	}
+	if index != nil {
+		exprAttrValues[":index"] = &types.AttributeValueMemberS{Value: index.String()}
 	}
 
 	var updateExpr string
@@ -394,16 +395,28 @@ func (d *Store) Upsert(ctx context.Context, space did.DID, root cid.Cid, shards 
 			return fmt.Errorf("storing shards in S3: %w", err)
 		}
 		exprAttrValues[":shardsRef"] = &types.AttributeValueMemberS{Value: newShardsRef}
-		updateExpr = "SET #insertedAt = if_not_exists(#insertedAt, :now), #updatedAt = :now, #cause = :cause, #shardsRef = :shardsRef REMOVE #shards"
+		if index != nil {
+			updateExpr = "SET #insertedAt = if_not_exists(#insertedAt, :now), #updatedAt = :now, #cause = :cause, #shardsRef = :shardsRef, #index = :index REMOVE #shards"
+		} else {
+			updateExpr = "SET #insertedAt = if_not_exists(#insertedAt, :now), #updatedAt = :now, #cause = :cause, #shardsRef = :shardsRef REMOVE #shards, #index"
+		}
 	} else if len(merged) > 0 {
 		shardStrs := make([]string, len(merged))
 		for i, s := range merged {
 			shardStrs[i] = s.String()
 		}
 		exprAttrValues[":shards"] = &types.AttributeValueMemberSS{Value: shardStrs}
-		updateExpr = "SET #insertedAt = if_not_exists(#insertedAt, :now), #updatedAt = :now, #cause = :cause, #shards = :shards REMOVE #shardsRef"
+		if index != nil {
+			updateExpr = "SET #insertedAt = if_not_exists(#insertedAt, :now), #updatedAt = :now, #cause = :cause, #shards = :shards, #index = :index REMOVE #shardsRef"
+		} else {
+			updateExpr = "SET #insertedAt = if_not_exists(#insertedAt, :now), #updatedAt = :now, #cause = :cause, #shards = :shards REMOVE #shardsRef, #index"
+		}
 	} else {
-		updateExpr = "SET #insertedAt = if_not_exists(#insertedAt, :now), #updatedAt = :now, #cause = :cause REMOVE #shards, #shardsRef"
+		if index != nil {
+			updateExpr = "SET #insertedAt = if_not_exists(#insertedAt, :now), #updatedAt = :now, #cause = :cause, #index = :index REMOVE #shards, #shardsRef"
+		} else {
+			updateExpr = "SET #insertedAt = if_not_exists(#insertedAt, :now), #updatedAt = :now, #cause = :cause REMOVE #shards, #shardsRef, #index"
+		}
 	}
 
 	_, err = d.dynamo.UpdateItem(ctx, &dynamodb.UpdateItemInput{
@@ -497,6 +510,19 @@ func itemToRecord(item map[string]types.AttributeValue) (upload.UploadRecord, er
 		return upload.UploadRecord{}, fmt.Errorf("parsing root CID: %w", err)
 	}
 
+	var index *cid.Cid
+	if _, ok := item["index"]; ok {
+		indexAttr, ok := item["index"].(*types.AttributeValueMemberS)
+		if !ok {
+			return upload.UploadRecord{}, fmt.Errorf("missing or invalid index attribute")
+		}
+		c, err := cid.Parse(indexAttr.Value)
+		if err != nil {
+			return upload.UploadRecord{}, fmt.Errorf("parsing index CID: %w", err)
+		}
+		index = &c
+	}
+
 	causeAttr, ok := item["cause"].(*types.AttributeValueMemberS)
 	if !ok {
 		return upload.UploadRecord{}, fmt.Errorf("missing or invalid cause attribute")
@@ -522,6 +548,7 @@ func itemToRecord(item map[string]types.AttributeValue) (upload.UploadRecord, er
 	return upload.UploadRecord{
 		Space:      space,
 		Root:       root,
+		Index:      index,
 		Cause:      cause,
 		InsertedAt: insertedAt,
 		UpdatedAt:  updatedAt,
@@ -549,18 +576,12 @@ func itemToShards(item map[string]types.AttributeValue) ([]cid.Cid, error) {
 }
 
 func encodeShards(shards []cid.Cid) (cid.Cid, []byte, error) {
-	n, err := fluent.BuildList(basicnode.Prototype.List, int64(len(shards)), func(la fluent.ListAssembler) {
-		for _, s := range shards {
-			la.AssembleValue().AssignLink(cidlink.Link{Cid: s})
-		}
-	})
-	if err != nil {
-		return cid.Undef, nil, fmt.Errorf("encoding shards: %w", err)
-	}
 	var buf bytes.Buffer
-	if err := dagcbor.Encode(n, &buf); err != nil {
-		return cid.Undef, nil, fmt.Errorf("encoding shards to DAG-CBOR: %w", err)
+	model := datamodel.NewAny(shards)
+	if err := model.MarshalCBOR(&buf); err != nil {
+		return cid.Undef, nil, fmt.Errorf("marshaling shards to DAG-CBOR: %w", err)
 	}
+
 	c, err := cid.Prefix{
 		Version:  1,
 		Codec:    cid.DagCBOR,
@@ -574,34 +595,13 @@ func encodeShards(shards []cid.Cid) (cid.Cid, []byte, error) {
 }
 
 func decodeShards(data []byte) ([]cid.Cid, error) {
-	r := bytes.NewReader(data)
-	nb := basicnode.Prototype.List.NewBuilder()
-	err := dagcbor.Decode(nb, r)
-	if err != nil {
-		return nil, fmt.Errorf("decoding shards from DAG-CBOR: %w", err)
+	model := datamodel.NewAny([]cid.Cid{})
+	if err := model.UnmarshalCBOR(bytes.NewReader(data)); err != nil {
+		return nil, fmt.Errorf("unmarshaling shards from DAG-CBOR: %w", err)
 	}
-	n := nb.Build()
-	shards := []cid.Cid{}
-	iter := n.ListIterator()
-	for !iter.Done() {
-		_, shardNode, err := iter.Next()
-		if err != nil {
-			return nil, fmt.Errorf("iterating over shards list: %w", err)
-		}
-		sl, err := shardNode.AsLink()
-		if err != nil {
-			return nil, fmt.Errorf("getting shard link: %w", err)
-		}
-		var shard cid.Cid
-		if cl, ok := sl.(cidlink.Link); ok {
-			shard = cl.Cid
-		} else {
-			shard, err = cid.Parse(sl.String())
-			if err != nil {
-				return nil, fmt.Errorf("parsing shard CID: %w", err)
-			}
-		}
-		shards = append(shards, shard)
+	shards, ok := model.Value.([]cid.Cid)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type for shards list: %T", model.Value)
 	}
 	return shards, nil
 }

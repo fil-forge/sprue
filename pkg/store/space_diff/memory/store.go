@@ -7,10 +7,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/fil-forge/go-ucanto/did"
 	"github.com/fil-forge/sprue/pkg/internal/timeutil"
 	"github.com/fil-forge/sprue/pkg/store"
 	spacediff "github.com/fil-forge/sprue/pkg/store/space_diff"
+	"github.com/fil-forge/ucantone/did"
 	cid "github.com/ipfs/go-cid"
 )
 

@@ -5,13 +5,13 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/fil-forge/go-ucanto/did"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/store"
 	"github.com/fil-forge/sprue/pkg/store/upload"
-	"github.com/fil-forge/sprue/pkg/store/upload/aws"
-	"github.com/fil-forge/sprue/pkg/store/upload/memory"
+	uploadaws "github.com/fil-forge/sprue/pkg/store/upload/aws"
+	uploadmemory "github.com/fil-forge/sprue/pkg/store/upload/memory"
 	uploadpostgres "github.com/fil-forge/sprue/pkg/store/upload/postgres"
+	"github.com/fil-forge/ucantone/did"
 	"github.com/google/uuid"
 	"github.com/ipfs/go-cid"
 	"github.com/stretchr/testify/require"
@@ -30,7 +30,7 @@ var storeKinds = []StoreKind{Memory, AWS, Postgres}
 func makeStore(t *testing.T, k StoreKind) upload.Store {
 	switch k {
 	case Memory:
-		return memory.New()
+		return uploadmemory.New()
 	case AWS:
 		return createAWSStore(t)
 	case Postgres:
@@ -52,7 +52,7 @@ func createPostgresStore(t *testing.T) upload.Store {
 	return uploadpostgres.New(pool)
 }
 
-func createAWSStore(t *testing.T) *aws.Store {
+func createAWSStore(t *testing.T) *uploadaws.Store {
 	// This test expects docker to be running in linux CI environments and fails if it's not
 	if testutil.IsRunningInCI(t) && runtime.GOOS == "linux" {
 		if !testutil.IsDockerAvailable(t) {
@@ -71,7 +71,7 @@ func createAWSStore(t *testing.T) *aws.Store {
 	dynamo := testutil.NewDynamoClient(t, dynamoEndpoint)
 
 	id := uuid.NewString()
-	store := aws.New(dynamo, "upload-"+id, s3, "upload-shards-"+id)
+	store := uploadaws.New(dynamo, "upload-"+id, s3, "upload-shards-"+id)
 
 	err := store.Initialize(t.Context())
 	require.NoError(t, err)
@@ -99,10 +99,11 @@ func TestUploadStore(t *testing.T) {
 			t.Run("adds an upload", func(t *testing.T) {
 				space := testutil.RandomDID(t)
 				root := testutil.RandomCID(t)
+				index := testutil.RandomCID(t)
 				shards := []cid.Cid{testutil.RandomCID(t), testutil.RandomCID(t)}
 				cause := testutil.RandomCID(t)
 
-				err := store.Upsert(t.Context(), space, root, shards, cause)
+				err := store.Upsert(t.Context(), space, root, &index, shards, cause)
 				require.NoError(t, err)
 
 				exists, err := store.Exists(t.Context(), space, root)
@@ -119,10 +120,11 @@ func TestUploadStore(t *testing.T) {
 			t.Run("lists uploads", func(t *testing.T) {
 				space := testutil.RandomDID(t)
 				roots := []cid.Cid{testutil.RandomCID(t), testutil.RandomCID(t), testutil.RandomCID(t)}
+				indexes := []cid.Cid{testutil.RandomCID(t), testutil.RandomCID(t), testutil.RandomCID(t)}
 				cause := testutil.RandomCID(t)
 
-				for _, root := range roots {
-					err := store.Upsert(t.Context(), space, root, nil, cause)
+				for i, root := range roots {
+					err := store.Upsert(t.Context(), space, root, &indexes[i], nil, cause)
 					require.NoError(t, err)
 				}
 
@@ -147,6 +149,7 @@ func TestUploadStore(t *testing.T) {
 			t.Run("updates an upload", func(t *testing.T) {
 				space := testutil.RandomDID(t)
 				root := testutil.RandomCID(t)
+				index := testutil.RandomCID(t)
 				cause := testutil.RandomCID(t)
 
 				initialShards := make([]cid.Cid, 3)
@@ -154,12 +157,12 @@ func TestUploadStore(t *testing.T) {
 					initialShards[i] = testutil.RandomCID(t)
 				}
 
-				err := store.Upsert(t.Context(), space, root, initialShards, cause)
+				err := store.Upsert(t.Context(), space, root, nil, initialShards, cause)
 				require.NoError(t, err)
 
 				// build a second batch of shards that includes one duplicate from the
 				// first batch and enough new shards to push the total over ShardThreshold
-				newShardCount := aws.ShardThreshold - len(initialShards) + 2 // +2 to exceed threshold, accounting for the duplicate
+				newShardCount := uploadaws.ShardThreshold - len(initialShards) + 2 // +2 to exceed threshold, accounting for the duplicate
 				additionalShards := make([]cid.Cid, newShardCount)
 				additionalShards[0] = initialShards[0] // duplicate
 				for i := 1; i < newShardCount; i++ {
@@ -167,7 +170,7 @@ func TestUploadStore(t *testing.T) {
 				}
 
 				newCause := testutil.RandomCID(t)
-				err = store.Upsert(t.Context(), space, root, additionalShards, newCause)
+				err = store.Upsert(t.Context(), space, root, &index, additionalShards, newCause)
 				require.NoError(t, err)
 
 				// cause should be updated
@@ -177,7 +180,7 @@ func TestUploadStore(t *testing.T) {
 
 				// total unique shards = initialShards + additionalShards - 1 duplicate
 				wantShards := len(initialShards) + newShardCount - 1
-				require.Greater(t, wantShards, aws.ShardThreshold)
+				require.Greater(t, wantShards, uploadaws.ShardThreshold)
 
 				allShards := listAllShards(t, store, space, root)
 				require.Len(t, allShards, wantShards)
@@ -185,6 +188,7 @@ func TestUploadStore(t *testing.T) {
 
 			t.Run("inspects an upload", func(t *testing.T) {
 				root := testutil.RandomCID(t)
+				index := testutil.RandomCID(t)
 				cause := testutil.RandomCID(t)
 
 				// inspecting a root not in any space returns empty spaces
@@ -195,8 +199,8 @@ func TestUploadStore(t *testing.T) {
 				// upsert the root into two different spaces
 				space1 := testutil.RandomDID(t)
 				space2 := testutil.RandomDID(t)
-				require.NoError(t, store.Upsert(t.Context(), space1, root, nil, cause))
-				require.NoError(t, store.Upsert(t.Context(), space2, root, nil, cause))
+				require.NoError(t, store.Upsert(t.Context(), space1, root, &index, nil, cause))
+				require.NoError(t, store.Upsert(t.Context(), space2, root, &index, nil, cause))
 
 				record, err = store.Inspect(t.Context(), root)
 				require.NoError(t, err)
@@ -210,12 +214,13 @@ func TestUploadStore(t *testing.T) {
 					shardCount int
 				}{
 					{"few shards", 3},
-					{"many shards", aws.ShardThreshold + 1},
+					{"many shards", uploadaws.ShardThreshold + 1},
 				}
 				for _, tc := range cases {
 					t.Run(tc.name, func(t *testing.T) {
 						space := testutil.RandomDID(t)
 						root := testutil.RandomCID(t)
+						index := testutil.RandomCID(t)
 						cause := testutil.RandomCID(t)
 
 						// removing a non-existent upload returns an error
@@ -227,7 +232,7 @@ func TestUploadStore(t *testing.T) {
 							shards[i] = testutil.RandomCID(t)
 						}
 
-						err = store.Upsert(t.Context(), space, root, shards, cause)
+						err = store.Upsert(t.Context(), space, root, &index, shards, cause)
 						require.NoError(t, err)
 
 						err = store.Remove(t.Context(), space, root)
@@ -254,12 +259,13 @@ func TestUploadStore(t *testing.T) {
 					shardCount int
 				}{
 					{"few shards", 3},
-					{"many shards", aws.ShardThreshold + 1},
+					{"many shards", uploadaws.ShardThreshold + 1},
 				}
 				for _, tc := range cases {
 					t.Run(tc.name, func(t *testing.T) {
 						space := testutil.RandomDID(t)
 						root := testutil.RandomCID(t)
+						index := testutil.RandomCID(t)
 						cause := testutil.RandomCID(t)
 
 						shards := make([]cid.Cid, tc.shardCount)
@@ -267,7 +273,7 @@ func TestUploadStore(t *testing.T) {
 							shards[i] = testutil.RandomCID(t)
 						}
 
-						err := store.Upsert(t.Context(), space, root, shards, cause)
+						err := store.Upsert(t.Context(), space, root, &index, shards, cause)
 						require.NoError(t, err)
 
 						// list with a limit of 2 - should return first 2 and a cursor

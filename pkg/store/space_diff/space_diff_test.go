@@ -10,7 +10,7 @@ import (
 	"github.com/fil-forge/sprue/pkg/store"
 	spacediff "github.com/fil-forge/sprue/pkg/store/space_diff"
 	spacediffaws "github.com/fil-forge/sprue/pkg/store/space_diff/aws"
-	"github.com/fil-forge/sprue/pkg/store/space_diff/memory"
+	spacediffmemory "github.com/fil-forge/sprue/pkg/store/space_diff/memory"
 	spacediffpostgres "github.com/fil-forge/sprue/pkg/store/space_diff/postgres"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
@@ -29,7 +29,7 @@ var storeKinds = []StoreKind{Memory, AWS, Postgres}
 func makeStore(t *testing.T, k StoreKind) spacediff.Store {
 	switch k {
 	case Memory:
-		return memory.New()
+		return spacediffmemory.New()
 	case AWS:
 		return createAWSStore(t)
 	case Postgres:

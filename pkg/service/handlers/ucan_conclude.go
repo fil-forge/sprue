@@ -5,117 +5,97 @@ import (
 	"fmt"
 	"maps"
 	"slices"
-	"time"
 
-	captypes "github.com/fil-forge/go-libstoracha/capabilities/types"
-	ucancap "github.com/fil-forge/go-libstoracha/capabilities/ucan"
-	"github.com/fil-forge/go-ucanto/core/invocation"
-	"github.com/fil-forge/go-ucanto/core/receipt"
-	"github.com/fil-forge/go-ucanto/core/receipt/fx"
-	"github.com/fil-forge/go-ucanto/core/result"
-	"github.com/fil-forge/go-ucanto/core/result/failure"
-	"github.com/fil-forge/go-ucanto/server"
-	"github.com/fil-forge/go-ucanto/ucan"
+	ucancmds "github.com/fil-forge/libforge/commands/ucan"
 	"github.com/fil-forge/sprue/pkg/identity"
-	"github.com/fil-forge/sprue/pkg/internal/ipldutil"
-	"github.com/fil-forge/sprue/pkg/lib/errors"
 	"github.com/fil-forge/sprue/pkg/store/agent"
+	"github.com/fil-forge/ucantone/errors"
+	"github.com/fil-forge/ucantone/execution/bindexec"
+	"github.com/fil-forge/ucantone/ucan"
 	"go.uber.org/zap"
 )
 
-const InvalidInvocationErrorName = "InvalidInvocation"
-
-type ConclusionHandlerFunc func(context.Context, invocation.Invocation, receipt.AnyReceipt, server.InvocationContext) error
+type ConclusionHandlerFunc func(context.Context, ucan.Invocation, ucan.Receipt, ucan.Container) error
 
 // ConclusionHandler is the definition of a handler for an invocation conclusion
 // - a receiver for a receipt attesting to an invocation result.
 type ConclusionHandler struct {
-	// Ability is the invoked ability this handler is expecting to receive
+	// Command is the invoked command this handler is expecting to receive
 	// conclusions for.
-	Ability ucan.Ability
+	Command ucan.Command
 	// Handler is the function that receives the conclusion for the invocation.
 	Handler ConclusionHandlerFunc
 }
 
-// WithUCANConcludeMethod registers the ucan/conclude handler.
+// NewUCANConcludeHandler creates a handler for /ucan/conclude invocations.
 // This handler processes receipt conclusions from clients.
-// When it receives an http/put receipt, it calls blob/accept on piri
+// When it receives an /http/put receipt, it calls /blob/accept on piri
 // and stores the accept receipt for later retrieval.
-func WithUCANConcludeMethod(id *identity.Identity, agentStore agent.Store, handlers map[ucan.Ability]ConclusionHandlerFunc, logger *zap.Logger) server.Option {
-	return server.WithServiceMethod(
-		ucancap.ConcludeAbility,
-		server.Provide(
-			ucancap.Conclude,
-			UCANConcludeHandler(id, agentStore, handlers, logger),
-		),
-	)
-}
+func NewUCANConcludeHandler(id *identity.Identity, agentStore agent.Store, handlers map[ucan.Command]ConclusionHandlerFunc, logger *zap.Logger) Handler {
+	log := logger.With(zap.Stringer("handler", ucancmds.Conclude))
+	log.Info("registered conclude handlers", zap.Stringers("commands", slices.Collect(maps.Keys(handlers))))
+	return Handler{
+		Command: ucancmds.Conclude.Command,
+		Handler: bindexec.NewHandler(func(
+			req *bindexec.Request[*ucancmds.ConcludeArguments],
+			res *bindexec.Response[*ucancmds.ConcludeOK],
+		) error {
+			args := req.Task().Arguments()
+			rcptRoot := args.Receipt
 
-func UCANConcludeHandler(id *identity.Identity, agentStore agent.Store, handlers map[ucan.Ability]ConclusionHandlerFunc, logger *zap.Logger) server.HandlerFunc[ucancap.ConcludeCaveats, ucancap.ConcludeOk, failure.IPLDBuilderFailure] {
-	log := logger.With(zap.String("handler", ucancap.ConcludeAbility))
-	log.Info("registered conclude handlers", zap.Strings("abilities", slices.Collect(maps.Keys(handlers))))
-	return func(ctx context.Context,
-		cap ucan.Capability[ucancap.ConcludeCaveats],
-		inv invocation.Invocation,
-		iCtx server.InvocationContext,
-	) (result.Result[ucancap.ConcludeOk, failure.IPLDBuilderFailure], fx.Effects, error) {
-		rcptRoot := cap.Nb().Receipt
+			log := log.With(zap.Stringer("receipt", rcptRoot))
 
-		log := log.With(zap.Stringer("receipt", rcptRoot))
+			log.Debug("concluding received receipt", zap.Stringer("receipt", rcptRoot))
 
-		log.Debug("concluding received receipt", zap.String("receipt", rcptRoot.String()))
-
-		// Read the concluded receipt from the invocation's attached blocks
-		anyReader := receipt.NewAnyReceiptReader(captypes.Converters...)
-		rcpt, err := anyReader.Read(rcptRoot, inv.Blocks())
-		if err != nil {
-			log.Error("failed to read concluded receipt", zap.Error(err))
-			return nil, nil, fmt.Errorf("reading receipt: %w", err)
-		}
-
-		task, err := ipldutil.ToCID(rcpt.Ran().Link())
-		if err != nil {
-			return nil, nil, err
-		}
-
-		// Get the invocation that the receipt is for
-		ranInv, ok := rcpt.Ran().Invocation()
-		if !ok {
-			inv, err := agentStore.GetInvocation(ctx, task)
-			if err != nil {
-				// If can not find task for this receipt there is nothing to do here, if
-				// it was a receipt for something we care about we would have an
-				// invocation recorded.
-				if errors.Is(err, agent.ErrInvocationNotFound) {
-					return result.Ok[ucancap.ConcludeOk, failure.IPLDBuilderFailure](ucancap.ConcludeOk{Time: time.Now()}), nil, nil
+			var rcpt ucan.Receipt
+			if req.Metadata() != nil {
+				for _, r := range req.Metadata().Receipts() {
+					if r.Link() == rcptRoot {
+						rcpt = r
+					}
 				}
-				log.Error("failed to get invocation from agent store", zap.Error(err))
-				return nil, nil, fmt.Errorf("getting invocation: %w", err)
 			}
-			ranInv = inv
-		}
-		if len(ranInv.Capabilities()) == 0 {
-			log.Warn("invocation has no capabilities")
-			return nil, nil, errors.New(InvalidInvocationErrorName, "invocation has no capabilities")
-		}
-
-		ability := ranInv.Capabilities()[0].Can()
-		log = log.With(
-			zap.Stringer("ran", ranInv.Link()),
-			zap.String("ability", ability),
-		)
-		log.Debug("found invocation for conclusion")
-
-		if handler, ok := handlers[ability]; ok {
-			err := handler(ctx, ranInv, rcpt, iCtx)
-			if err != nil {
-				log.Error("failed to conclude receipt", zap.Error(err))
-				return nil, nil, fmt.Errorf("concluding %q: %w", ability, err)
+			if rcpt == nil {
+				log.Warn("receipt not found in invocation metadata")
+				return res.SetFailure(ucancmds.ErrConclusionReceiptNotFound)
 			}
-		}
+			log = log.With(zap.Stringer("task", rcpt.Ran()))
 
-		return result.Ok[ucancap.ConcludeOk, failure.IPLDBuilderFailure](
-			ucancap.ConcludeOk{Time: time.Now()},
-		), nil, nil
+			var ranInv ucan.Invocation
+			// check if the invocation was included in the invocation metadata
+			for _, inv := range req.Metadata().Invocations() {
+				if inv.Task().Link() == rcpt.Ran() {
+					ranInv = inv
+				}
+			}
+			// if not included in invocation, check our store
+			if ranInv == nil {
+				inv, err := agentStore.GetInvocation(req.Context(), rcpt.Ran())
+				if err != nil {
+					// If can not find invocation for this receipt there is nothing to do
+					// here, if it was a receipt for something we care about we would have
+					// an invocation recorded.
+					if errors.Is(err, agent.ErrInvocationNotFound) {
+						return res.SetSuccess(&ucancmds.ConcludeOK{})
+					}
+					log.Error("failed to get invocation from agent store", zap.Error(err))
+					return fmt.Errorf("getting invocation: %w", err)
+				}
+				ranInv = inv
+			}
+
+			log = log.With(zap.Stringer("command", ranInv.Command()))
+			log.Debug("found invocation for conclusion")
+
+			if handler, ok := handlers[ranInv.Command()]; ok {
+				err := handler(req.Context(), ranInv, rcpt, req.Metadata())
+				if err != nil {
+					log.Error("failed to conclude invocation", zap.Error(err))
+					return fmt.Errorf("concluding %q: %w", ranInv.Command(), err)
+				}
+			}
+
+			return res.SetSuccess(&ucancmds.ConcludeOK{})
+		}),
 	}
 }

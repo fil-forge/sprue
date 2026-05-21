@@ -3,13 +3,14 @@ package testutil
 import (
 	"testing"
 
-	"github.com/fil-forge/go-libstoracha/testutil"
+	"github.com/fil-forge/libforge/testutil"
 	"github.com/ipfs/go-cid"
 )
 
 var (
 	Alice           = testutil.Alice
 	Bob             = testutil.Bob
+	Carol           = testutil.Carol
 	Mallory         = testutil.Mallory
 	Service         = testutil.Service
 	WebService      = testutil.WebService

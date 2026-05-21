@@ -6,13 +6,12 @@ import (
 	"net/url"
 	"slices"
 
-	"github.com/fil-forge/go-libstoracha/capabilities/types"
-	"github.com/fil-forge/go-libstoracha/digestutil"
-	"github.com/fil-forge/go-ucanto/core/delegation"
-	"github.com/fil-forge/go-ucanto/ucan"
-	"github.com/fil-forge/sprue/pkg/lib/errors"
+	"github.com/fil-forge/libforge/commands/blob"
+	"github.com/fil-forge/libforge/digestutil"
 	"github.com/fil-forge/sprue/pkg/store"
 	storageprovider "github.com/fil-forge/sprue/pkg/store/storage_provider"
+	"github.com/fil-forge/ucantone/did"
+	"github.com/fil-forge/ucantone/errors"
 	"go.uber.org/zap"
 )
 
@@ -23,28 +22,22 @@ const CandidateUnavailableErrorName = "CandidateUnavailable"
 var ErrCandidateUnavailable = errors.New(CandidateUnavailableErrorName, "no storage providers available")
 
 type selectCfg struct {
-	exclusions []ucan.Principal
+	exclusions []did.DID
 }
 
 type SelectOption func(*selectCfg)
 
 // WithExclusions configures a list of storage providers that should be excluded
 // from the routing selection.
-func WithExclusions(providers ...ucan.Principal) SelectOption {
+func WithExclusions(providers ...did.DID) SelectOption {
 	return func(cfg *selectCfg) {
 		cfg.exclusions = append(cfg.exclusions, providers...)
 	}
 }
 
 type StorageProviderInfo struct {
-	ID       ucan.Principal
+	ID       did.DID
 	Endpoint url.URL
-	// FIXME: the client should authorize the upload service to blob/allocate and
-	// blob/accept in the blob/add invocation. The upload service should use that
-	// delegation to authorize allocate and accept calls to the storage provider.
-	// This removes the need for storage providers to grant love lived delegations
-	// to the upload service. We will fix this in UCAN 1.0.
-	Proof delegation.Delegation
 }
 
 type Service struct {
@@ -61,22 +54,21 @@ func NewService(storageProviderStore storageprovider.Store, logger *zap.Logger) 
 
 // GetProviderInfo returns information about a registered storage provider. It
 // may return [storageprovider.ErrStorageProviderNotFound].
-func (s *Service) GetProviderInfo(ctx context.Context, provider ucan.Principal) (StorageProviderInfo, error) {
-	rec, err := s.storageProviderStore.Get(ctx, provider.DID())
+func (s *Service) GetProviderInfo(ctx context.Context, provider did.DID) (StorageProviderInfo, error) {
+	rec, err := s.storageProviderStore.Get(ctx, provider)
 	if err != nil {
 		return StorageProviderInfo{}, err
 	}
 	return StorageProviderInfo{
 		ID:       rec.Provider,
 		Endpoint: rec.Endpoint,
-		Proof:    rec.Proof,
 	}, nil
 }
 
 // SelectStorageProvider selects a candidate for blob allocation from the
 // current list of available storage nodes. It may return
 // [ErrCandidateUnavailable] if no candidates are available.
-func (s *Service) SelectStorageProvider(ctx context.Context, blob types.Blob, options ...SelectOption) (StorageProviderInfo, error) {
+func (s *Service) SelectStorageProvider(ctx context.Context, blob blob.Blob, options ...SelectOption) (StorageProviderInfo, error) {
 	cfg := &selectCfg{}
 	for _, option := range options {
 		option(cfg)
@@ -113,14 +105,13 @@ func (s *Service) SelectStorageProvider(ctx context.Context, blob types.Blob, op
 	return StorageProviderInfo{
 		ID:       selected.Provider,
 		Endpoint: selected.Endpoint,
-		Proof:    selected.Proof,
 	}, nil
 }
 
 // SelectReplicationProvider selects a candidate for blob allocation from the
 // current list of available storage nodes, excluding the primary node. It may
 // return [ErrCandidateUnavailable] if no candidates are available.
-func (s *Service) SelectReplicationProvider(ctx context.Context, primary ucan.Principal, blob types.Blob, options ...SelectOption) (StorageProviderInfo, error) {
+func (s *Service) SelectReplicationProvider(ctx context.Context, primary did.DID, blob blob.Blob, options ...SelectOption) (StorageProviderInfo, error) {
 	cfg := &selectCfg{}
 	for _, option := range options {
 		option(cfg)
@@ -144,7 +135,6 @@ func (s *Service) SelectReplicationProvider(ctx context.Context, primary ucan.Pr
 	return StorageProviderInfo{
 		ID:       selected.Provider,
 		Endpoint: selected.Endpoint,
-		Proof:    selected.Proof,
 	}, nil
 }
 
@@ -161,7 +151,7 @@ func listProviders(ctx context.Context, providerStore storageprovider.Store) ([]
 	})
 }
 
-func filterExcludedProviders(providers []storageprovider.Record, exclusions []ucan.Principal) []storageprovider.Record {
+func filterExcludedProviders(providers []storageprovider.Record, exclusions []did.DID) []storageprovider.Record {
 	var filtered []storageprovider.Record
 	for _, prov := range providers {
 		if prov.Weight <= 0 {

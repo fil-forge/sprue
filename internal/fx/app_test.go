@@ -4,10 +4,10 @@ import (
 	"runtime"
 	"testing"
 
-	ed25519 "github.com/fil-forge/go-ucanto/principal/ed25519/signer"
 	"github.com/fil-forge/sprue/internal/config"
 	appfx "github.com/fil-forge/sprue/internal/fx"
 	"github.com/fil-forge/sprue/internal/testutil"
+	"github.com/fil-forge/ucantone/principal/signer"
 	"github.com/google/uuid"
 	"go.uber.org/fx/fxtest"
 )
@@ -45,7 +45,7 @@ func TestWireApp(t *testing.T) {
 						Port: 0,
 					},
 					Identity: config.IdentityConfig{
-						PrivateKey: testutil.Must(ed25519.Format(testutil.WebService))(t),
+						PrivateKey: signer.Format(testutil.WebService),
 						ServiceDID: testutil.WebService.DID().String(),
 					},
 					Indexer: config.IndexerConfig{
@@ -111,7 +111,7 @@ func TestWireApp(t *testing.T) {
 						Port: 0,
 					},
 					Identity: config.IdentityConfig{
-						PrivateKey: testutil.Must(ed25519.Format(testutil.WebService))(t),
+						PrivateKey: signer.Format(testutil.WebService),
 						ServiceDID: testutil.WebService.DID().String(),
 					},
 					Indexer: config.IndexerConfig{
@@ -152,7 +152,7 @@ func TestWireApp(t *testing.T) {
 						Port: 0,
 					},
 					Identity: config.IdentityConfig{
-						PrivateKey: testutil.Must(ed25519.Format(testutil.WebService))(t),
+						PrivateKey: signer.Format(testutil.WebService),
 						ServiceDID: testutil.WebService.DID().String(),
 					},
 					Indexer: config.IndexerConfig{
