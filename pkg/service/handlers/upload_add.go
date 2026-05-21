@@ -3,8 +3,8 @@ package handlers
 import (
 	"fmt"
 
-	accesscaps "github.com/fil-forge/libforge/commands/access"
-	uploadcaps "github.com/fil-forge/libforge/commands/upload"
+	cmdaccess "github.com/fil-forge/libforge/commands/access"
+	cmdupload "github.com/fil-forge/libforge/commands/upload"
 	"github.com/fil-forge/sprue/pkg/provisioning"
 	upload_store "github.com/fil-forge/sprue/pkg/store/upload"
 	"github.com/fil-forge/ucantone/errors"
@@ -14,12 +14,12 @@ import (
 
 // This handler registers an upload (root CID + shards mapping).
 func NewUploadAddHandler(provisioningSvc *provisioning.Service, uploadStore upload_store.Store, logger *zap.Logger) Handler {
-	log := logger.With(zap.Stringer("handler", uploadcaps.Add))
+	log := logger.With(zap.Stringer("handler", cmdupload.Add))
 	return Handler{
-		Command: uploadcaps.Add.Command,
+		Command: cmdupload.Add.Command,
 		Handler: bindexec.NewHandler(func(
-			req *bindexec.Request[*uploadcaps.AddArguments],
-			res *bindexec.Response[*uploadcaps.AddOK],
+			req *bindexec.Request[*cmdupload.AddArguments],
+			res *bindexec.Response[*cmdupload.AddOK],
 		) error {
 			args := req.Task().Arguments()
 			space := req.Invocation().Subject()
@@ -40,7 +40,7 @@ func NewUploadAddHandler(provisioningSvc *provisioning.Service, uploadStore uplo
 			}
 			if len(provs) == 0 {
 				log.Warn("space has no service provider")
-				return res.SetFailure(errors.New(accesscaps.InsufficientStorageErrorName, "space has no service provider"))
+				return res.SetFailure(errors.New(cmdaccess.InsufficientStorageErrorName, "space has no service provider"))
 			}
 
 			err = uploadStore.Upsert(req.Context(), space, args.Root, args.Index, args.Shards, cause)
@@ -49,7 +49,7 @@ func NewUploadAddHandler(provisioningSvc *provisioning.Service, uploadStore uplo
 				return fmt.Errorf("upserting upload: %w", err)
 			}
 
-			return res.SetSuccess(&uploadcaps.AddOK{})
+			return res.SetSuccess(&cmdupload.AddOK{})
 		}),
 	}
 }

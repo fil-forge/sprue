@@ -4,8 +4,8 @@ import (
 	"net/url"
 	"testing"
 
-	blobcaps "github.com/fil-forge/libforge/commands/blob"
-	httpcaps "github.com/fil-forge/libforge/commands/http"
+	cmdblob "github.com/fil-forge/libforge/commands/blob"
+	cmdhttp "github.com/fil-forge/libforge/commands/http"
 	"github.com/fil-forge/libforge/didmailto"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/piriclient"
@@ -71,11 +71,11 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 		nonExistentAllocTask := testutil.RandomCID(t)
 
 		blobProvider := deriveBlobProvider(t, digest)
-		putInv, err := httpcaps.Put.Invoke(
+		putInv, err := cmdhttp.Put.Invoke(
 			blobProvider,
 			blobProvider.DID(),
-			&httpcaps.PutArguments{
-				Body:        blobcaps.Blob{Digest: digest, Size: 1024},
+			&cmdhttp.PutArguments{
+				Body:        cmdblob.Blob{Digest: digest, Size: 1024},
 				Destination: promise.AwaitOK{Task: nonExistentAllocTask},
 			},
 			invocation.WithAudience(blobProvider.DID()),
@@ -85,7 +85,7 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 		putRcpt, err := receipt.IssueOK(
 			blobProvider,
 			putInv.Task().Link(),
-			&httpcaps.PutOK{},
+			&cmdhttp.PutOK{},
 		)
 		require.NoError(t, err)
 
@@ -100,21 +100,21 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 		storageProvider := testutil.RandomSigner(t)
 		space := testutil.RandomSigner(t)
 		digest := testutil.RandomMultihash(t)
-		blob := blobcaps.Blob{Digest: digest, Size: 1024}
+		blob := cmdblob.Blob{Digest: digest, Size: 1024}
 
 		// Persist a /blob/allocate invocation for the storage provider, but do
 		// NOT register that provider in the spStore — router lookup fails.
-		allocInv, err := blobcaps.Allocate.Invoke(
+		allocInv, err := cmdblob.Allocate.Invoke(
 			uploadService,
 			space.DID(),
-			&blobcaps.AllocateArguments{Blob: blob, Cause: testutil.RandomCID(t)},
+			&cmdblob.AllocateArguments{Blob: blob, Cause: testutil.RandomCID(t)},
 			invocation.WithAudience(storageProvider.DID()),
 		)
 		require.NoError(t, err)
 		allocRcpt, err := receipt.IssueOK(
 			storageProvider,
 			allocInv.Task().Link(),
-			&blobcaps.AllocateOK{Size: blob.Size},
+			&cmdblob.AllocateOK{Size: blob.Size},
 		)
 		require.NoError(t, err)
 		msg := container.New(
@@ -124,10 +124,10 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 		require.NoError(t, deps.agentStore.Write(ctx, msg, agent.Index(msg)))
 
 		blobProvider := deriveBlobProvider(t, digest)
-		putInv, err := httpcaps.Put.Invoke(
+		putInv, err := cmdhttp.Put.Invoke(
 			blobProvider,
 			blobProvider.DID(),
-			&httpcaps.PutArguments{
+			&cmdhttp.PutArguments{
 				Body:        blob,
 				Destination: promise.AwaitOK{Task: allocInv.Task().Link()},
 			},
@@ -137,7 +137,7 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 		putRcpt, err := receipt.IssueOK(
 			blobProvider,
 			putInv.Task().Link(),
-			&httpcaps.PutOK{},
+			&cmdhttp.PutOK{},
 		)
 		require.NoError(t, err)
 
@@ -150,16 +150,16 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 		storageProvider := testutil.RandomSigner(t)
 		space := testutil.RandomSigner(t)
 		digest := testutil.RandomMultihash(t)
-		blob := blobcaps.Blob{Digest: digest, Size: 1024}
+		blob := cmdblob.Blob{Digest: digest, Size: 1024}
 		blobAddTaskLink := testutil.RandomCID(t)
 
 		// Stand up a mock piri server. The handler under test only calls
 		// /blob/accept; the allocate handler is irrelevant but the helper
 		// requires both.
-		acceptOK := &blobcaps.AcceptOK{Site: testutil.RandomCID(t)}
+		acceptOK := &cmdblob.AcceptOK{Site: testutil.RandomCID(t)}
 		piriSrv := newMockPiriServer(
 			t, storageProvider, uploadService,
-			&blobcaps.AllocateOK{Size: blob.Size},
+			&cmdblob.AllocateOK{Size: blob.Size},
 			acceptOK,
 		)
 		piriURL := testutil.Must(url.Parse(piriSrv.URL))(t)
@@ -174,17 +174,17 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 		))
 
 		// Prior /blob/allocate invocation in the agent store.
-		allocInv, err := blobcaps.Allocate.Invoke(
+		allocInv, err := cmdblob.Allocate.Invoke(
 			uploadService,
 			space.DID(),
-			&blobcaps.AllocateArguments{Blob: blob, Cause: blobAddTaskLink},
+			&cmdblob.AllocateArguments{Blob: blob, Cause: blobAddTaskLink},
 			invocation.WithAudience(storageProvider.DID()),
 		)
 		require.NoError(t, err)
 		allocRcpt, err := receipt.IssueOK(
 			storageProvider,
 			allocInv.Task().Link(),
-			&blobcaps.AllocateOK{Size: blob.Size},
+			&cmdblob.AllocateOK{Size: blob.Size},
 		)
 		require.NoError(t, err)
 		msg := container.New(
@@ -195,10 +195,10 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 
 		// /http/put invocation referring to the allocation task.
 		blobProvider := deriveBlobProvider(t, digest)
-		putInv, err := httpcaps.Put.Invoke(
+		putInv, err := cmdhttp.Put.Invoke(
 			blobProvider,
 			blobProvider.DID(),
-			&httpcaps.PutArguments{
+			&cmdhttp.PutArguments{
 				Body:        blob,
 				Destination: promise.AwaitOK{Task: allocInv.Task().Link()},
 			},
@@ -208,14 +208,14 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 		putRcpt, err := receipt.IssueOK(
 			blobProvider,
 			putInv.Task().Link(),
-			&httpcaps.PutOK{},
+			&cmdhttp.PutOK{},
 		)
 		require.NoError(t, err)
 
 		// Authorize the upload service to invoke /blob/accept on the space and
 		// pass the proof through the conclude metadata so the piri client can
 		// forward it to the storage provider.
-		acceptProof, err := blobcaps.Accept.Delegate(space, uploadService.DID(), space.DID())
+		acceptProof, err := cmdblob.Accept.Delegate(space, uploadService.DID(), space.DID())
 		require.NoError(t, err)
 		meta := container.New(container.WithDelegations(acceptProof))
 

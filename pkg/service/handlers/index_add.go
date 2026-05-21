@@ -5,8 +5,8 @@ import (
 
 	"go.uber.org/zap"
 
-	accesscaps "github.com/fil-forge/libforge/commands/access"
-	indexcaps "github.com/fil-forge/libforge/commands/index"
+	cmdaccess "github.com/fil-forge/libforge/commands/access"
+	cmdindex "github.com/fil-forge/libforge/commands/index"
 	ucanlib "github.com/fil-forge/libforge/ucan"
 	"github.com/fil-forge/sprue/pkg/identity"
 	"github.com/fil-forge/sprue/pkg/indexerclient"
@@ -17,12 +17,12 @@ import (
 )
 
 func NewIndexAddHandler(id *identity.Identity, provisioningSvc *provisioning.Service, blobRegistry blobregistry.Store, indexerClient *indexerclient.Client, logger *zap.Logger) Handler {
-	log := logger.With(zap.Stringer("handler", indexcaps.Add))
+	log := logger.With(zap.Stringer("handler", cmdindex.Add))
 	return Handler{
-		Command: indexcaps.Add.Command,
+		Command: cmdindex.Add.Command,
 		Handler: bindexec.NewHandler(func(
-			req *bindexec.Request[*indexcaps.AddArguments],
-			res *bindexec.Response[*indexcaps.AddOK],
+			req *bindexec.Request[*cmdindex.AddArguments],
+			res *bindexec.Response[*cmdindex.AddOK],
 		) error {
 			args := req.Task().Arguments()
 			space := req.Invocation().Subject()
@@ -41,7 +41,7 @@ func NewIndexAddHandler(id *identity.Identity, provisioningSvc *provisioning.Ser
 			}
 			if len(provs) == 0 {
 				log.Warn("space has no service provider")
-				return res.SetFailure(errors.New(accesscaps.InsufficientStorageErrorName, "space has no service provider"))
+				return res.SetFailure(errors.New(cmdaccess.InsufficientStorageErrorName, "space has no service provider"))
 			}
 
 			// Ensure the index is stored in the agent's space
@@ -49,7 +49,7 @@ func NewIndexAddHandler(id *identity.Identity, provisioningSvc *provisioning.Ser
 			if err != nil {
 				if errors.Is(err, blobregistry.ErrEntryNotFound) {
 					log.Warn("index not found in space")
-					return res.SetFailure(indexcaps.ErrIndexNotFound)
+					return res.SetFailure(cmdindex.ErrIndexNotFound)
 				}
 				log.Error("failed to get index from blob registry", zap.Error(err))
 				return err
@@ -65,7 +65,7 @@ func NewIndexAddHandler(id *identity.Identity, provisioningSvc *provisioning.Ser
 				return fmt.Errorf("publishing index claim: %w", err)
 			}
 
-			return res.SetSuccess(&indexcaps.AddOK{})
+			return res.SetSuccess(&cmdindex.AddOK{})
 		}),
 	}
 }

@@ -5,7 +5,7 @@ import (
 	"context"
 	"testing"
 
-	spacecaps "github.com/fil-forge/libforge/commands/space"
+	cmdspace "github.com/fil-forge/libforge/commands/space"
 	"github.com/fil-forge/libforge/didmailto"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/provisioning"
@@ -31,10 +31,10 @@ func invokeSpaceInfo(
 	space did.DID,
 ) (execution.Request, *execution.ExecResponse) {
 	t.Helper()
-	inv, err := spacecaps.Info.Invoke(
+	inv, err := cmdspace.Info.Invoke(
 		agent,
 		space,
-		&spacecaps.InfoArguments{},
+		&cmdspace.InfoArguments{},
 		invocation.WithAudience(uploadService.DID()),
 	)
 	require.NoError(t, err)
@@ -76,7 +76,7 @@ func TestSpaceInfoHandler(t *testing.T) {
 		require.Nil(t, x)
 		require.NotNil(t, o)
 
-		var ok spacecaps.InfoOK
+		var ok cmdspace.InfoOK
 		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
 		require.Len(t, ok.Providers, 1)
 		require.Equal(t, uploadService.DID(), ok.Providers[0])
@@ -101,7 +101,7 @@ func TestSpaceInfoHandler(t *testing.T) {
 		o, x := res.Receipt().Out().Unpack()
 		require.Nil(t, x)
 
-		var ok spacecaps.InfoOK
+		var ok cmdspace.InfoOK
 		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
 		require.Empty(t, ok.Providers)
 	})
@@ -128,6 +128,6 @@ func TestSpaceInfoHandler(t *testing.T) {
 
 		var model edm.ErrorModel
 		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
-		require.Equal(t, spacecaps.UnknownSpaceErrorName, model.Name())
+		require.Equal(t, cmdspace.UnknownSpaceErrorName, model.Name())
 	})
 }

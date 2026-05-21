@@ -6,8 +6,8 @@ package handlers
 // 	"fmt"
 
 // 	"github.com/fil-forge/ucantone/errors"
-// 	replicacaps "github.com/storacha/go-libstoracha/capabilities/blob/replica"
-// 	ucancaps "github.com/storacha/go-libstoracha/capabilities/ucan"
+// 	cmdreplica "github.com/storacha/go-libstoracha/capabilities/blob/replica"
+// 	cmducan "github.com/storacha/go-libstoracha/capabilities/ucan"
 // 	"github.com/storacha/go-libstoracha/digestutil"
 // 	"github.com/storacha/go-ucanto/core/delegation"
 // 	"github.com/storacha/go-ucanto/core/invocation"
@@ -45,18 +45,18 @@ package handlers
 // 	logger *zap.Logger,
 // ) ConclusionHandler {
 // 	log := logger.With(
-// 		zap.String("handler", ucancaps.ConcludeAbility),
-// 		zap.String("conclude", replicacaps.TransferAbility),
+// 		zap.String("handler", cmducan.ConcludeAbility),
+// 		zap.String("conclude", cmdreplica.TransferAbility),
 // 	)
 // 	return ConclusionHandler{
-// 		Ability: replicacaps.TransferAbility,
+// 		Ability: cmdreplica.TransferAbility,
 // 		Handler: func(ctx context.Context, transferTask invocation.Invocation, transferRcpt receipt.AnyReceipt, iCtx server.InvocationContext) error {
 // 			log := log.With(zap.Stringer("ran", transferRcpt.Ran().Link()))
 // 			log.Debug("handling conclude")
 
 // 			var err error
 // 			transferCap := transferTask.Capabilities()[0]
-// 			transferMatch, err := replicacaps.Transfer.Match(validator.NewSource(transferCap, transferTask))
+// 			transferMatch, err := cmdreplica.Transfer.Match(validator.NewSource(transferCap, transferTask))
 // 			if err != nil {
 // 				log.Warn("failed to match replica transfer parameters", zap.Error(err))
 // 				return errors.New(InvalidReplicaTransferArgsErrorName, "invalid replica transfer parameters: %v", err)
@@ -92,7 +92,7 @@ package handlers
 // 			}
 
 // 			allocCap := allocTask.Capabilities()[0]
-// 			allocMatch, err := replicacaps.Allocate.Match(validator.NewSource(allocCap, allocTask))
+// 			allocMatch, err := cmdreplica.Allocate.Match(validator.NewSource(allocCap, allocTask))
 // 			if err != nil {
 // 				log.Warn("failed to match replica allocation parameters", zap.Error(err))
 // 				return errors.New(InvalidReplicaTransferCauseErrorName, "invalid replica allocation parameters: %v", err)
@@ -150,7 +150,7 @@ package handlers
 // 			proofs = append(proofs, transferRcpt.Proofs()...)
 // 			_, err = validator.Claim(
 // 				ctx,
-// 				replicacaps.Transfer,
+// 				cmdreplica.Transfer,
 // 				proofs,
 // 				validator.NewClaimContext(
 // 					executor,

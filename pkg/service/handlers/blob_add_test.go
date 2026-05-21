@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"github.com/fil-forge/libforge/commands"
-	accesscaps "github.com/fil-forge/libforge/commands/access"
-	blobcaps "github.com/fil-forge/libforge/commands/blob"
-	httpcaps "github.com/fil-forge/libforge/commands/http"
+	cmdaccess "github.com/fil-forge/libforge/commands/access"
+	cmdblob "github.com/fil-forge/libforge/commands/blob"
+	cmdhttp "github.com/fil-forge/libforge/commands/http"
 	"github.com/fil-forge/libforge/didmailto"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/identity"
@@ -117,8 +117,8 @@ func newMockPiriServer(
 	t *testing.T,
 	storageProvider principal.Signer,
 	uploadService principal.Signer,
-	allocateOK *blobcaps.AllocateOK,
-	acceptOK *blobcaps.AcceptOK,
+	allocateOK *cmdblob.AllocateOK,
+	acceptOK *cmdblob.AcceptOK,
 ) *httptest.Server {
 	t.Helper()
 
@@ -136,16 +136,16 @@ func newMockPiriServer(
 		server.WithValidationOptions(validator.WithDIDVerifierResolver(resolveDIDKey)),
 	)
 
-	srv.Handle(blobcaps.Allocate.Command, bindexec.NewHandler(func(
-		req *bindexec.Request[*blobcaps.AllocateArguments],
-		res *bindexec.Response[*blobcaps.AllocateOK],
+	srv.Handle(cmdblob.Allocate.Command, bindexec.NewHandler(func(
+		req *bindexec.Request[*cmdblob.AllocateArguments],
+		res *bindexec.Response[*cmdblob.AllocateOK],
 	) error {
 		return res.SetSuccess(allocateOK)
 	}))
 
-	srv.Handle(blobcaps.Accept.Command, bindexec.NewHandler(func(
-		req *bindexec.Request[*blobcaps.AcceptArguments],
-		res *bindexec.Response[*blobcaps.AcceptOK],
+	srv.Handle(cmdblob.Accept.Command, bindexec.NewHandler(func(
+		req *bindexec.Request[*cmdblob.AcceptArguments],
+		res *bindexec.Response[*cmdblob.AcceptOK],
 	) error {
 		return res.SetSuccess(acceptOK)
 	}))
@@ -165,11 +165,11 @@ func TestBlobAddHandler(t *testing.T) {
 		deps := newBlobAddTestDeps(t, uploadService, logger)
 
 		space := testutil.RandomSigner(t)
-		args := blobcaps.AddArguments{
-			Blob: blobcaps.Blob{Digest: testutil.RandomMultihash(t), Size: 1024},
+		args := cmdblob.AddArguments{
+			Blob: cmdblob.Blob{Digest: testutil.RandomMultihash(t), Size: 1024},
 		}
 
-		inv, err := blobcaps.Add.Invoke(
+		inv, err := cmdblob.Add.Invoke(
 			testutil.Alice,
 			space.DID(),
 			&args,
@@ -189,7 +189,7 @@ func TestBlobAddHandler(t *testing.T) {
 
 		var model edm.ErrorModel
 		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
-		require.Equal(t, accesscaps.InsufficientStorageErrorName, model.Name())
+		require.Equal(t, cmdaccess.InsufficientStorageErrorName, model.Name())
 	})
 
 	t.Run("no candidates available", func(t *testing.T) {
@@ -199,11 +199,11 @@ func TestBlobAddHandler(t *testing.T) {
 		provisionSpace(t, deps, uploadService, space.DID())
 
 		// No storage providers in spStore — the router will return ErrCandidateUnavailable.
-		args := blobcaps.AddArguments{
-			Blob: blobcaps.Blob{Digest: testutil.RandomMultihash(t), Size: 1024},
+		args := cmdblob.AddArguments{
+			Blob: cmdblob.Blob{Digest: testutil.RandomMultihash(t), Size: 1024},
 		}
 
-		inv, err := blobcaps.Add.Invoke(
+		inv, err := cmdblob.Add.Invoke(
 			testutil.Alice,
 			space.DID(),
 			&args,
@@ -238,11 +238,11 @@ func TestBlobAddHandler(t *testing.T) {
 		err := deps.spStore.Put(ctx, storageProvider.DID(), *endpoint, 0, nil)
 		require.NoError(t, err)
 
-		args := blobcaps.AddArguments{
-			Blob: blobcaps.Blob{Digest: testutil.RandomMultihash(t), Size: 1024},
+		args := cmdblob.AddArguments{
+			Blob: cmdblob.Blob{Digest: testutil.RandomMultihash(t), Size: 1024},
 		}
 
-		inv, err := blobcaps.Add.Invoke(
+		inv, err := cmdblob.Add.Invoke(
 			testutil.Alice,
 			space.DID(),
 			&args,
@@ -273,9 +273,9 @@ func TestBlobAddHandler(t *testing.T) {
 
 		storageProvider := testutil.RandomSigner(t)
 		putURL := testutil.Must(url.Parse("https://storage.example.com/put"))(t)
-		allocateOK := &blobcaps.AllocateOK{
+		allocateOK := &cmdblob.AllocateOK{
 			Size: 1024,
-			Address: &blobcaps.BlobAddress{
+			Address: &cmdblob.BlobAddress{
 				URL:     commands.CborURL(*putURL),
 				Headers: map[string]string{},
 				Expires: time.Now().Add(time.Hour).Unix(),
@@ -283,7 +283,7 @@ func TestBlobAddHandler(t *testing.T) {
 		}
 		// Accept handler is registered but should not be invoked when an Address is
 		// returned — the put receipt isn't issued, so maybeAccept skips Accept.
-		acceptOK := &blobcaps.AcceptOK{Site: testutil.RandomCID(t)}
+		acceptOK := &cmdblob.AcceptOK{Site: testutil.RandomCID(t)}
 
 		piriSrv := newMockPiriServer(t, storageProvider, uploadService, allocateOK, acceptOK)
 		piriURL := testutil.Must(url.Parse(piriSrv.URL))(t)
@@ -291,11 +291,11 @@ func TestBlobAddHandler(t *testing.T) {
 		err := deps.spStore.Put(ctx, storageProvider.DID(), *piriURL, 100, nil)
 		require.NoError(t, err)
 
-		args := blobcaps.AddArguments{
-			Blob: blobcaps.Blob{Digest: testutil.RandomMultihash(t), Size: 1024},
+		args := cmdblob.AddArguments{
+			Blob: cmdblob.Blob{Digest: testutil.RandomMultihash(t), Size: 1024},
 		}
 
-		inv, err := blobcaps.Add.Invoke(
+		inv, err := cmdblob.Add.Invoke(
 			testutil.Alice,
 			space.DID(),
 			&args,
@@ -306,8 +306,8 @@ func TestBlobAddHandler(t *testing.T) {
 		// Authorize the upload service to invoke /blob/allocate and /blob/accept
 		// on the space. This is the proof chain the upload service forwards to the
 		// storage provider.
-		allocProof := testutil.Must(blobcaps.Allocate.Delegate(space, uploadService.DID(), space.DID()))(t)
-		acceptProof := testutil.Must(blobcaps.Accept.Delegate(space, uploadService.DID(), space.DID()))(t)
+		allocProof := testutil.Must(cmdblob.Allocate.Delegate(space, uploadService.DID(), space.DID()))(t)
+		acceptProof := testutil.Must(cmdblob.Accept.Delegate(space, uploadService.DID(), space.DID()))(t)
 
 		req := execution.NewRequest(ctx, inv, execution.WithDelegations(allocProof, acceptProof))
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
@@ -332,8 +332,8 @@ func TestBlobAddHandler(t *testing.T) {
 		storageProvider := testutil.RandomSigner(t)
 		// No address signals the blob is already on the provider — the handler
 		// then issues the put receipt itself and proceeds to Accept on piri.
-		allocateOK := &blobcaps.AllocateOK{Size: 1024, Address: nil}
-		acceptOK := &blobcaps.AcceptOK{Site: testutil.RandomCID(t)}
+		allocateOK := &cmdblob.AllocateOK{Size: 1024, Address: nil}
+		acceptOK := &cmdblob.AcceptOK{Site: testutil.RandomCID(t)}
 
 		piriSrv := newMockPiriServer(t, storageProvider, uploadService, allocateOK, acceptOK)
 		piriURL := testutil.Must(url.Parse(piriSrv.URL))(t)
@@ -341,11 +341,11 @@ func TestBlobAddHandler(t *testing.T) {
 		err := deps.spStore.Put(ctx, storageProvider.DID(), *piriURL, 100, nil)
 		require.NoError(t, err)
 
-		args := blobcaps.AddArguments{
-			Blob: blobcaps.Blob{Digest: testutil.RandomMultihash(t), Size: 1024},
+		args := cmdblob.AddArguments{
+			Blob: cmdblob.Blob{Digest: testutil.RandomMultihash(t), Size: 1024},
 		}
 
-		inv, err := blobcaps.Add.Invoke(
+		inv, err := cmdblob.Add.Invoke(
 			testutil.Alice,
 			space.DID(),
 			&args,
@@ -353,8 +353,8 @@ func TestBlobAddHandler(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		allocProof := testutil.Must(blobcaps.Allocate.Delegate(space, uploadService.DID(), space.DID()))(t)
-		acceptProof := testutil.Must(blobcaps.Accept.Delegate(space, uploadService.DID(), space.DID()))(t)
+		allocProof := testutil.Must(cmdblob.Allocate.Delegate(space, uploadService.DID(), space.DID()))(t)
+		acceptProof := testutil.Must(cmdblob.Accept.Delegate(space, uploadService.DID(), space.DID()))(t)
 
 		req := execution.NewRequest(ctx, inv, execution.WithDelegations(allocProof, acceptProof))
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
@@ -379,30 +379,30 @@ func TestBlobAddHandler(t *testing.T) {
 
 		storageProvider := testutil.RandomSigner(t)
 		digest := testutil.RandomMultihash(t)
-		blob := blobcaps.Blob{Digest: digest, Size: 1024}
+		blob := cmdblob.Blob{Digest: digest, Size: 1024}
 
 		// Build the chain that the handler will walk back through:
 		//   addRcpt → accInv/accRcpt → putInv/putRcpt → allocInv/allocRcpt
 		blobProvider := deriveBlobProvider(t, digest)
 
 		// /blob/allocate
-		allocInv := testutil.Must(blobcaps.Allocate.Invoke(
+		allocInv := testutil.Must(cmdblob.Allocate.Invoke(
 			uploadService,
 			space.DID(),
-			&blobcaps.AllocateArguments{Blob: blob, Cause: testutil.RandomCID(t)},
+			&cmdblob.AllocateArguments{Blob: blob, Cause: testutil.RandomCID(t)},
 			invocation.WithAudience(storageProvider.DID()),
 		))(t)
 		allocRcpt := testutil.Must(receipt.IssueOK(
 			storageProvider,
 			allocInv.Task().Link(),
-			&blobcaps.AllocateOK{Size: blob.Size},
+			&cmdblob.AllocateOK{Size: blob.Size},
 		))(t)
 
 		// /http/put — issued by the principal derived from the blob digest.
-		putInv := testutil.Must(httpcaps.Put.Invoke(
+		putInv := testutil.Must(cmdhttp.Put.Invoke(
 			blobProvider,
 			blobProvider.DID(),
-			&httpcaps.PutArguments{
+			&cmdhttp.PutArguments{
 				Body:        blob,
 				Destination: promise.AwaitOK{Task: allocInv.Task().Link()},
 			},
@@ -411,14 +411,14 @@ func TestBlobAddHandler(t *testing.T) {
 		putRcpt := testutil.Must(receipt.IssueOK(
 			blobProvider,
 			putInv.Task().Link(),
-			&httpcaps.PutOK{},
+			&cmdhttp.PutOK{},
 		))(t)
 
 		// /blob/accept
-		accInv := testutil.Must(blobcaps.Accept.Invoke(
+		accInv := testutil.Must(cmdblob.Accept.Invoke(
 			uploadService,
 			space.DID(),
-			&blobcaps.AcceptArguments{
+			&cmdblob.AcceptArguments{
 				Blob: blob,
 				Put:  promise.AwaitOK{Task: putInv.Task().Link()},
 			},
@@ -427,21 +427,21 @@ func TestBlobAddHandler(t *testing.T) {
 		accRcpt := testutil.Must(receipt.IssueOK(
 			storageProvider,
 			accInv.Task().Link(),
-			&blobcaps.AcceptOK{Site: testutil.RandomCID(t)},
+			&cmdblob.AcceptOK{Site: testutil.RandomCID(t)},
 		))(t)
 
 		// The original /space/blob/add invocation and receipt — its receipt's
 		// task CID is what gets stored in the registry as the cause.
-		prevAddInv := testutil.Must(blobcaps.Add.Invoke(
+		prevAddInv := testutil.Must(cmdblob.Add.Invoke(
 			testutil.Alice,
 			space.DID(),
-			&blobcaps.AddArguments{Blob: blob},
+			&cmdblob.AddArguments{Blob: blob},
 			invocation.WithAudience(uploadService.DID()),
 		))(t)
 		prevAddRcpt := testutil.Must(receipt.IssueOK(
 			uploadService,
 			prevAddInv.Task().Link(),
-			&blobcaps.AddOK{
+			&cmdblob.AddOK{
 				Site: promise.AwaitOK{Task: accInv.Task().Link()},
 			},
 		))(t)
@@ -458,10 +458,10 @@ func TestBlobAddHandler(t *testing.T) {
 		// Re-invoke /blob/add for the same blob/space — the handler should hit
 		// the already-registered short-circuit, walk the chain, and return the
 		// stored AddOK without contacting any storage provider.
-		inv := testutil.Must(blobcaps.Add.Invoke(
+		inv := testutil.Must(cmdblob.Add.Invoke(
 			testutil.Alice,
 			space.DID(),
-			&blobcaps.AddArguments{Blob: blob},
+			&cmdblob.AddArguments{Blob: blob},
 			invocation.WithAudience(uploadService.DID()),
 		))(t)
 
@@ -477,7 +477,7 @@ func TestBlobAddHandler(t *testing.T) {
 		require.NotNil(t, o)
 
 		// The returned AddOK should match the one from the prior receipt.
-		var gotAddOK blobcaps.AddOK
+		var gotAddOK cmdblob.AddOK
 		require.NoError(t, gotAddOK.UnmarshalCBOR(bytes.NewReader(o)))
 		require.Equal(t, accInv.Task().Link(), gotAddOK.Site.Task)
 

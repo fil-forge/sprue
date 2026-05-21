@@ -5,7 +5,7 @@ import (
 	"context"
 	"testing"
 
-	providercaps "github.com/fil-forge/libforge/commands/provider"
+	cmdprovider "github.com/fil-forge/libforge/commands/provider"
 	"github.com/fil-forge/libforge/didmailto"
 	"github.com/fil-forge/sprue/internal/config"
 	"github.com/fil-forge/sprue/internal/testutil"
@@ -54,10 +54,10 @@ func invokeProviderAdd(
 	agent principal.Signer,
 	uploadService principal.Signer,
 	account did.DID,
-	args *providercaps.AddArguments,
+	args *cmdprovider.AddArguments,
 ) (execution.Request, *execution.ExecResponse) {
 	t.Helper()
-	inv, err := providercaps.Add.Invoke(
+	inv, err := cmdprovider.Add.Invoke(
 		agent,
 		account,
 		args,
@@ -92,7 +92,7 @@ func TestProviderAddHandler(t *testing.T) {
 		space := testutil.RandomSigner(t)
 		agent := testutil.RandomSigner(t)
 		req, res := invokeProviderAdd(t, ctx, agent, uploadService, account,
-			&providercaps.AddArguments{
+			&cmdprovider.AddArguments{
 				Provider: serviceProvider.DID(),
 				Consumer: space.DID(),
 			},
@@ -105,7 +105,7 @@ func TestProviderAddHandler(t *testing.T) {
 		require.Nil(t, x)
 		require.NotNil(t, o)
 
-		var ok providercaps.AddOK
+		var ok cmdprovider.AddOK
 		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
 		require.NotEmpty(t, ok.ID)
 	})
@@ -124,7 +124,7 @@ func TestProviderAddHandler(t *testing.T) {
 		space := testutil.RandomSigner(t)
 		agent := testutil.RandomSigner(t)
 		req, res := invokeProviderAdd(t, ctx, agent, uploadService, account,
-			&providercaps.AddArguments{
+			&cmdprovider.AddArguments{
 				Provider: serviceProvider.DID(),
 				Consumer: space.DID(),
 			},
@@ -135,7 +135,7 @@ func TestProviderAddHandler(t *testing.T) {
 
 		o, x := res.Receipt().Out().Unpack()
 		require.Nil(t, x)
-		var ok providercaps.AddOK
+		var ok cmdprovider.AddOK
 		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
 		require.NotEmpty(t, ok.ID)
 	})
@@ -154,7 +154,7 @@ func TestProviderAddHandler(t *testing.T) {
 		space := testutil.RandomSigner(t)
 		agent := testutil.RandomSigner(t)
 		req, res := invokeProviderAdd(t, ctx, agent, uploadService, notAMailto.DID(),
-			&providercaps.AddArguments{
+			&cmdprovider.AddArguments{
 				Provider: serviceProvider.DID(),
 				Consumer: space.DID(),
 			},
@@ -168,7 +168,7 @@ func TestProviderAddHandler(t *testing.T) {
 
 		var model edm.ErrorModel
 		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
-		require.Equal(t, providercaps.InvalidAccountErrorName, model.Name())
+		require.Equal(t, cmdprovider.InvalidAccountErrorName, model.Name())
 	})
 
 	t.Run("missing payment plan", func(t *testing.T) {
@@ -185,7 +185,7 @@ func TestProviderAddHandler(t *testing.T) {
 		space := testutil.RandomSigner(t)
 		agent := testutil.RandomSigner(t)
 		req, res := invokeProviderAdd(t, ctx, agent, uploadService, account,
-			&providercaps.AddArguments{
+			&cmdprovider.AddArguments{
 				Provider: serviceProvider.DID(),
 				Consumer: space.DID(),
 			},
@@ -199,7 +199,7 @@ func TestProviderAddHandler(t *testing.T) {
 
 		var model edm.ErrorModel
 		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
-		require.Equal(t, providercaps.AccountPlanMissingErrorName, model.Name())
+		require.Equal(t, cmdprovider.AccountPlanMissingErrorName, model.Name())
 	})
 
 	t.Run("provider not allowed", func(t *testing.T) {
@@ -217,7 +217,7 @@ func TestProviderAddHandler(t *testing.T) {
 		space := testutil.RandomSigner(t)
 		agent := testutil.RandomSigner(t)
 		req, res := invokeProviderAdd(t, ctx, agent, uploadService, account,
-			&providercaps.AddArguments{
+			&cmdprovider.AddArguments{
 				Provider: otherProvider.DID(),
 				Consumer: space.DID(),
 			},
