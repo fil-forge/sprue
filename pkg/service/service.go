@@ -2,7 +2,6 @@ package service
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"net/http"
 	"slices"
@@ -18,6 +17,7 @@ import (
 	"github.com/fil-forge/ucantone/ipld/codec/dagcbor"
 	"github.com/fil-forge/ucantone/principal"
 	"github.com/fil-forge/ucantone/server"
+	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/container"
 	"github.com/fil-forge/ucantone/validator"
 	"github.com/ipfs/go-cid"
@@ -135,17 +135,36 @@ func (s *Service) HandleReceiptRequest(c echo.Context) error {
 	}
 
 	s.logger.Debug("receipt request", zap.String("task", task.String()))
-	rcpt, err := s.agentStore.GetReceipt(c.Request().Context(), task)
+	page, err := s.agentStore.List(c.Request().Context(), task, agent.WithListLimit(25))
 	if err != nil {
-		if errors.Is(err, agent.ErrReceiptNotFound) {
-			return c.JSON(http.StatusNotFound, map[string]string{
-				"error": "receipt not found",
-			})
-		}
-		return fmt.Errorf("getting receipt: %w", err)
+		return fmt.Errorf("listing agent messages: %w", err)
 	}
 
-	ct := container.New(container.WithReceipts(rcpt))
+	found := false
+	var invs []ucan.Invocation
+	var dlgs []ucan.Delegation
+	var rcpts []ucan.Receipt
+	for _, msg := range page.Results {
+		invs = append(invs, msg.Invocations()...)
+		dlgs = append(dlgs, msg.Delegations()...)
+		rcpts = append(rcpts, msg.Receipts()...)
+		for _, r := range msg.Receipts() {
+			if r.Ran() == task {
+				found = true
+			}
+		}
+	}
+	if !found {
+		return c.JSON(http.StatusNotFound, map[string]string{
+			"error": "receipt not found",
+		})
+	}
+
+	ct := container.New(
+		container.WithInvocations(invs...),
+		container.WithDelegations(dlgs...),
+		container.WithReceipts(rcpts...),
+	)
 	var buf bytes.Buffer
 	if err := ct.MarshalCBOR(&buf); err != nil {
 		return fmt.Errorf("marshaling receipt container: %w", err)

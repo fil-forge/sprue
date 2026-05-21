@@ -12,6 +12,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/fil-forge/sprue/pkg/store"
 	"github.com/fil-forge/sprue/pkg/store/agent"
 	"github.com/fil-forge/ucantone/ipld/codec/dagcbor"
 	"github.com/fil-forge/ucantone/ucan"
@@ -21,6 +22,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/multiformats/go-multihash"
 )
+
+const defaultListLimit = 1000
 
 type Store struct {
 	pool       *pgxpool.Pool
@@ -74,6 +77,82 @@ func (s *Store) GetReceipt(ctx context.Context, task cid.Cid) (ucan.Receipt, err
 		return nil, agent.ErrReceiptNotFound
 	}
 	return rcpt, nil
+}
+
+func (s *Store) List(ctx context.Context, task cid.Cid, options ...agent.ListOption) (store.Page[ucan.Container], error) {
+	cfg := agent.ListConfig{}
+	for _, opt := range options {
+		opt(&cfg)
+	}
+	limit := defaultListLimit
+	if cfg.Limit != nil && *cfg.Limit > 0 {
+		limit = *cfg.Limit
+	}
+
+	args := []any{task.String(), limit + 1}
+	query := `SELECT message FROM agent_index WHERE task = $1`
+	if cfg.Cursor != nil {
+		args = append(args, *cfg.Cursor)
+		query += ` AND message > $3`
+	}
+	query += ` ORDER BY message ASC LIMIT $2`
+
+	rows, err := s.pool.Query(ctx, query, args...)
+	if err != nil {
+		return store.Page[ucan.Container]{}, fmt.Errorf("querying agent_index: %w", err)
+	}
+	defer rows.Close()
+
+	msgRoots := make([]string, 0, limit)
+	for rows.Next() {
+		var msgRoot string
+		if err := rows.Scan(&msgRoot); err != nil {
+			return store.Page[ucan.Container]{}, fmt.Errorf("scanning message: %w", err)
+		}
+		msgRoots = append(msgRoots, msgRoot)
+	}
+	if err := rows.Err(); err != nil {
+		return store.Page[ucan.Container]{}, fmt.Errorf("iterating messages: %w", err)
+	}
+
+	var cursor *string
+	if len(msgRoots) > limit {
+		last := msgRoots[limit-1]
+		cursor = &last
+		msgRoots = msgRoots[:limit]
+	}
+
+	results := make([]ucan.Container, 0, len(msgRoots))
+	for _, m := range msgRoots {
+		msgRoot, err := cid.Parse(m)
+		if err != nil {
+			return store.Page[ucan.Container]{}, fmt.Errorf("parsing message CID: %w", err)
+		}
+		ct, err := s.fetchMessage(ctx, msgRoot)
+		if err != nil {
+			return store.Page[ucan.Container]{}, err
+		}
+		results = append(results, ct)
+	}
+
+	return store.Page[ucan.Container]{Results: results, Cursor: cursor}, nil
+}
+
+func (s *Store) fetchMessage(ctx context.Context, msgRoot cid.Cid) (*container.Container, error) {
+	out, err := s.s3.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: &s.bucketName,
+		Key:    aws.String(toMessagePath(msgRoot)),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("getting message from S3: %w", err)
+	}
+	defer out.Body.Close()
+
+	var ct container.Container
+	if err := ct.UnmarshalCBOR(out.Body); err != nil {
+		return nil, fmt.Errorf("decoding container: %w", err)
+	}
+	return &ct, nil
 }
 
 func (s *Store) getByTask(ctx context.Context, task cid.Cid, kind string) (cid.Cid, *container.Container, error) {

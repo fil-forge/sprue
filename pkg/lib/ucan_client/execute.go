@@ -23,7 +23,7 @@ func Execute[T cbg.CBORUnmarshaler](
 	logger *zap.Logger,
 	inv ucan.Invocation,
 	options ...execution.RequestOption,
-) (T, ucan.Receipt, error) {
+) (T, ucan.Receipt, ucan.Container, error) {
 	fields := []zap.Field{
 		zap.Stringer("issuer", inv.Issuer()),
 		zap.Stringer("subject", inv.Subject()),
@@ -46,7 +46,7 @@ func Execute[T cbg.CBORUnmarshaler](
 	resp, err := client.Execute(execution.NewRequest(ctx, inv, options...))
 	if err != nil {
 		log.Error("failed to execute invocation", zap.Error(err))
-		return zero, nil, fmt.Errorf("executing invocation: %w", err)
+		return zero, nil, nil, fmt.Errorf("executing invocation: %w", err)
 	}
 
 	rcpt := resp.Receipt()
@@ -56,10 +56,10 @@ func Execute[T cbg.CBORUnmarshaler](
 		var model edm.ErrorModel
 		if err := model.UnmarshalCBOR(bytes.NewReader(x)); err != nil {
 			log.Error("failed to unmarshal execution failure", zap.Error(err), zap.Binary("input", x))
-			return zero, nil, fmt.Errorf("executing invocation")
+			return zero, nil, nil, fmt.Errorf("executing invocation")
 		}
 		log.Error("failed execution", zap.String("name", model.ErrorName), zap.Error(model))
-		return zero, nil, fmt.Errorf("executing invocation: %w", model)
+		return zero, nil, nil, fmt.Errorf("executing invocation: %w", model)
 	}
 
 	// if ok is a pointer type, allocate the underlying value so
@@ -71,7 +71,7 @@ func Execute[T cbg.CBORUnmarshaler](
 	}
 	if err := ok.UnmarshalCBOR(bytes.NewReader(o)); err != nil {
 		log.Error("failed to unmarshal invocation response", zap.Error(err), zap.Binary("input", o))
-		return zero, nil, fmt.Errorf("unmarshaling invocation response: %w", err)
+		return zero, nil, nil, fmt.Errorf("unmarshaling invocation response: %w", err)
 	}
-	return ok, rcpt, nil
+	return ok, rcpt, resp.Metadata(), nil
 }

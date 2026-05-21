@@ -75,7 +75,7 @@ func (c *Client) PublishIndexClaim(ctx context.Context, space did.DID, index cid
 		return nil, fmt.Errorf("creating invocation: %w", err)
 	}
 
-	_, rcpt, err := ucan_client.Execute[*assertcaps.IndexOK](
+	_, rcpt, _, err := ucan_client.Execute[*assertcaps.IndexOK](
 		ctx,
 		c.client,
 		c.logger,

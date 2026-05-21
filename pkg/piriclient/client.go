@@ -78,7 +78,7 @@ func (c *Client) Allocate(ctx context.Context, req *AllocateRequest, proofStore 
 		zap.Int("attestations", len(attestations)),
 	)
 
-	allocOK, rcpt, err := ucan_client.Execute[*blobcap.AllocateOK](
+	allocOK, rcpt, _, err := ucan_client.Execute[*blobcap.AllocateOK](
 		ctx,
 		c.client,
 		c.logger,
@@ -141,10 +141,10 @@ type AcceptRequest struct {
 }
 
 // Accept sends a /blob/accept invocation to the piri node.
-func (c *Client) Accept(ctx context.Context, req *AcceptRequest, proofStore ucanlib.ProofStore, options ...invocation.Option) (*blobcap.AcceptOK, ucan.Invocation, ucan.Receipt, error) {
+func (c *Client) Accept(ctx context.Context, req *AcceptRequest, proofStore ucanlib.ProofStore, options ...invocation.Option) (*blobcap.AcceptOK, ucan.Invocation, ucan.Receipt, ucan.Container, error) {
 	inv, prfs, attestations, err := c.AcceptInvocation(ctx, req, proofStore, options...)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("creating accept invocation: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("creating accept invocation: %w", err)
 	}
 
 	c.logger.Debug("ACCEPT invocation created",
@@ -154,7 +154,7 @@ func (c *Client) Accept(ctx context.Context, req *AcceptRequest, proofStore ucan
 		zap.Int("attestations", len(attestations)),
 	)
 
-	acceptOK, rcpt, err := ucan_client.Execute[*blobcap.AcceptOK](
+	acceptOK, rcpt, meta, err := ucan_client.Execute[*blobcap.AcceptOK](
 		ctx,
 		c.client,
 		c.logger,
@@ -163,9 +163,9 @@ func (c *Client) Accept(ctx context.Context, req *AcceptRequest, proofStore ucan
 		execution.WithInvocations(attestations...),
 	)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
-	return acceptOK, inv, rcpt, nil
+	return acceptOK, inv, rcpt, meta, nil
 }
 
 // AcceptInvocation returns the invocation for the accept request (for use in effects).
@@ -213,17 +213,17 @@ type ReplicaAllocateRequest struct {
 }
 
 // ReplicaAllocate sends a /blob/replica/allocate invocation to the piri node.
-// Returns the response data, the invocation that was sent, and the receipt from
-// piri. It returns an error if the receipt contains a failure result.
-func (c *Client) ReplicaAllocate(ctx context.Context, req *ReplicaAllocateRequest, proofStore ucanlib.ProofStore, options ...invocation.Option) (*blobreplicacap.AllocateOK, ucan.Invocation, ucan.Receipt, error) {
+// Returns the response data, the invocation that was sent, the receipt from
+// piri, and any metadata. It returns an error if the receipt contains a failure result.
+func (c *Client) ReplicaAllocate(ctx context.Context, req *ReplicaAllocateRequest, proofStore ucanlib.ProofStore, options ...invocation.Option) (*blobreplicacap.AllocateOK, ucan.Invocation, ucan.Receipt, ucan.Container, error) {
 	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.signer.DID(), blobreplicacap.Allocate.Command, req.Space)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("building proof chain: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("building proof chain: %w", err)
 	}
 
 	attestations, err := proofStore.ProofAttestations(ctx, prfs, c.signer.DID())
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("getting proof attestations: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("getting proof attestations: %w", err)
 	}
 
 	options = slices.Clone(options)
@@ -248,7 +248,7 @@ func (c *Client) ReplicaAllocate(ctx context.Context, req *ReplicaAllocateReques
 		options...,
 	)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("creating replica allocate invocation: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("creating replica allocate invocation: %w", err)
 	}
 
 	c.logger.Debug("REPLICA ALLOCATE invocation created",
@@ -256,7 +256,7 @@ func (c *Client) ReplicaAllocate(ctx context.Context, req *ReplicaAllocateReques
 		zap.Stringer("audience", inv.Audience()),
 		zap.Int("proofs", len(inv.Proofs())))
 
-	allocOK, rcpt, err := ucan_client.Execute[*blobreplicacap.AllocateOK](
+	allocOK, rcpt, meta, err := ucan_client.Execute[*blobreplicacap.AllocateOK](
 		ctx,
 		c.client,
 		c.logger,
@@ -265,7 +265,7 @@ func (c *Client) ReplicaAllocate(ctx context.Context, req *ReplicaAllocateReques
 		execution.WithInvocations(attestations...),
 	)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
-	return allocOK, inv, rcpt, nil
+	return allocOK, inv, rcpt, meta, nil
 }

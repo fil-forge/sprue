@@ -84,7 +84,7 @@ func NewHTTPPutConcludeHandler(
 			}
 
 			proofStore := ucanlib.NewContainerProofStore(meta)
-			res, accInv, accRcpt, err := client.Accept(ctx, &piriclient.AcceptRequest{
+			res, accInv, accRcpt, meta, err := client.Accept(ctx, &piriclient.AcceptRequest{
 				Space:  space,
 				Digest: allocArgs.Blob.Digest,
 				Size:   allocArgs.Blob.Size,
@@ -96,7 +96,15 @@ func NewHTTPPutConcludeHandler(
 			}
 			log = log.With(zap.Stringer("site", res.Site))
 
-			err = writeAgentMessage(ctx, agentStore, []ucan.Invocation{accInv}, []ucan.Receipt{accRcpt})
+			// accept invocation includes a location commitment (invocation) in response
+			accInvs := []ucan.Invocation{accInv}
+			accRcpts := []ucan.Receipt{accRcpt}
+			if meta != nil {
+				accInvs = append(accInvs, meta.Invocations()...)
+				accRcpts = append(accRcpts, meta.Receipts()...)
+			}
+
+			err = writeAgentMessage(ctx, agentStore, accInvs, accRcpts)
 			if err != nil {
 				log.Error("failed to write agent message", zap.Error(err))
 				return fmt.Errorf("writing agent message: %w", err)

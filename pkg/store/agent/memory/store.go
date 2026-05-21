@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 
+	"github.com/fil-forge/sprue/pkg/store"
 	"github.com/fil-forge/sprue/pkg/store/agent"
 	"github.com/fil-forge/ucantone/ipld/codec/dagcbor"
 	"github.com/fil-forge/ucantone/ucan"
@@ -100,4 +102,58 @@ func (s *Store) Write(ctx context.Context, message ucan.Container, index []agent
 		}
 	}
 	return nil
+}
+
+func (s *Store) List(ctx context.Context, task cid.Cid, options ...agent.ListOption) (store.Page[ucan.Container], error) {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+
+	cfg := &agent.ListConfig{}
+	for _, opt := range options {
+		opt(cfg)
+	}
+
+	var msgLinks []cid.Cid
+	for _, l := range s.index[fmt.Sprintf("/%s/invocation/", task)] {
+		msgLinks = append(msgLinks, l)
+	}
+	for _, l := range s.index[fmt.Sprintf("/%s/receipt/", task)] {
+		msgLinks = append(msgLinks, l)
+	}
+	slices.SortFunc(msgLinks, func(a, b cid.Cid) int {
+		return bytes.Compare(a.Bytes(), b.Bytes())
+	})
+
+	resultLinks := slices.Clone(msgLinks)
+	results := make([]ucan.Container, 0, len(msgLinks))
+	for _, l := range msgLinks {
+		results = append(results, s.store[l])
+	}
+
+	if cfg.Cursor != nil {
+		index := slices.IndexFunc(msgLinks, func(c cid.Cid) bool {
+			return c.String() == *cfg.Cursor
+		})
+		if index == -1 {
+			return store.Page[ucan.Container]{}, fmt.Errorf("invalid cursor: %s", *cfg.Cursor)
+		}
+		results = results[index+1:]
+		resultLinks = resultLinks[index+1:]
+	}
+
+	if cfg.Limit != nil && len(results) > *cfg.Limit {
+		results = results[:*cfg.Limit]
+		resultLinks = resultLinks[:*cfg.Limit]
+	}
+
+	var nextCursor *string
+	if len(results) > 0 && resultLinks[len(results)-1] != msgLinks[len(msgLinks)-1] {
+		cursor := resultLinks[len(resultLinks)-1].String()
+		nextCursor = &cursor
+	}
+
+	return store.Page[ucan.Container]{
+		Results: results,
+		Cursor:  nextCursor,
+	}, nil
 }

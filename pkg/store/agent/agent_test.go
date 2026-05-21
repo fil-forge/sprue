@@ -203,6 +203,84 @@ func TestAgentStore(t *testing.T) {
 				require.NoError(t, err)
 				require.Equal(t, rcpt.Link().String(), gotRcpt.Link().String())
 			})
+
+			t.Run("returns empty list for unknown task", func(t *testing.T) {
+				page, err := store.List(t.Context(), testutil.RandomCID(t))
+				require.NoError(t, err)
+				require.Empty(t, page.Results)
+				require.Nil(t, page.Cursor)
+			})
+
+			t.Run("lists messages with invocations and receipts for a task", func(t *testing.T) {
+				inv := makeInvocation(t)
+				rcpt := makeReceipt(t, inv)
+				task := inv.Task().Link()
+
+				// Write the invocation and receipt in separate messages so the
+				// index references two distinct agent messages for the task.
+				buildAndWrite(t, store, []ucan.Invocation{inv}, nil)
+				buildAndWrite(t, store, nil, []ucan.Receipt{rcpt})
+
+				page, err := store.List(t.Context(), task)
+				require.NoError(t, err)
+				require.Nil(t, page.Cursor)
+				require.Len(t, page.Results, 2)
+
+				var hasInv, hasRcpt bool
+				for _, m := range page.Results {
+					for _, i := range m.Invocations() {
+						if i.Task().Link() == task {
+							hasInv = true
+						}
+					}
+					if _, ok := m.Receipt(task); ok {
+						hasRcpt = true
+					}
+				}
+				require.True(t, hasInv, "expected listed messages to contain the invocation")
+				require.True(t, hasRcpt, "expected listed messages to contain the receipt")
+			})
+
+			t.Run("paginates list results", func(t *testing.T) {
+				inv := makeInvocation(t)
+				rcpt := makeReceipt(t, inv)
+				task := inv.Task().Link()
+
+				buildAndWrite(t, store, []ucan.Invocation{inv}, nil)
+				buildAndWrite(t, store, nil, []ucan.Receipt{rcpt})
+
+				var collected []ucan.Container
+				var cursor *string
+				for i := 0; i < 4; i++ {
+					opts := []agent.ListOption{agent.WithListLimit(1)}
+					if cursor != nil {
+						opts = append(opts, agent.WithListCursor(*cursor))
+					}
+					page, err := store.List(t.Context(), task, opts...)
+					require.NoError(t, err)
+					require.LessOrEqual(t, len(page.Results), 1)
+					collected = append(collected, page.Results...)
+					if page.Cursor == nil {
+						break
+					}
+					cursor = page.Cursor
+				}
+				require.Len(t, collected, 2)
+
+				var hasInv, hasRcpt bool
+				for _, m := range collected {
+					for _, i := range m.Invocations() {
+						if i.Task().Link() == task {
+							hasInv = true
+						}
+					}
+					if _, ok := m.Receipt(task); ok {
+						hasRcpt = true
+					}
+				}
+				require.True(t, hasInv)
+				require.True(t, hasRcpt)
+			})
 		})
 	}
 }

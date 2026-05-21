@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 
+	"github.com/fil-forge/sprue/pkg/store"
 	"github.com/fil-forge/ucantone/errors"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/ipfs/go-cid"
@@ -19,6 +20,23 @@ var (
 	// ErrReceiptNotFound indicates a receipt was not found that matches the passed details.
 	ErrReceiptNotFound = errors.New(ReceiptNotFoundErrorName, "receipt not found")
 )
+
+type (
+	ListConfig = store.PaginationConfig
+	ListOption func(cfg *ListConfig)
+)
+
+func WithListLimit(limit int) ListOption {
+	return func(cfg *ListConfig) {
+		cfg.Limit = &limit
+	}
+}
+
+func WithListCursor(cursor string) ListOption {
+	return func(cfg *ListConfig) {
+		cfg.Cursor = &cursor
+	}
+}
 
 type InvocationSource struct {
 	Task       cid.Cid
@@ -43,4 +61,6 @@ type Store interface {
 	GetInvocation(ctx context.Context, task cid.Cid) (ucan.Invocation, error)
 	// GetReceipt retrieves a receipt by its task CID. May return [ErrReceiptNotFound].
 	GetReceipt(ctx context.Context, task cid.Cid) (ucan.Receipt, error)
+	// List agent messages with invocations and receipts relevant to the task CID.
+	List(ctx context.Context, task cid.Cid, options ...ListOption) (store.Page[ucan.Container], error)
 }

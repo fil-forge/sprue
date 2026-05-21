@@ -64,7 +64,7 @@ func (c *Client) AdminProviderRegister(ctx context.Context, providerID did.DID, 
 		return nil, fmt.Errorf("invoking provider register: %w", err)
 	}
 
-	_, rcpt, err := ucan_client.Execute[*providercap.RegisterOK](ctx, c.client, c.logger, inv)
+	_, rcpt, _, err := ucan_client.Execute[*providercap.RegisterOK](ctx, c.client, c.logger, inv)
 	if err != nil {
 		return nil, fmt.Errorf("executing provider register invocation: %w", err)
 	}
@@ -94,7 +94,7 @@ func (c *Client) AdminProviderDeregister(ctx context.Context, providerID did.DID
 		return nil, fmt.Errorf("invoking provider deregister: %w", err)
 	}
 
-	_, rcpt, err := ucan_client.Execute[*providercap.DeregisterOK](ctx, c.client, c.logger, inv)
+	_, rcpt, _, err := ucan_client.Execute[*providercap.DeregisterOK](ctx, c.client, c.logger, inv)
 	if err != nil {
 		return nil, fmt.Errorf("executing provider deregister invocation: %w", err)
 	}
@@ -122,7 +122,7 @@ func (c *Client) AdminProviderList(ctx context.Context, options ...invocation.Op
 		return nil, nil, fmt.Errorf("invoking provider list: %w", err)
 	}
 
-	listOK, rcpt, err := ucan_client.Execute[*providercap.ListOK](ctx, c.client, c.logger, inv)
+	listOK, rcpt, _, err := ucan_client.Execute[*providercap.ListOK](ctx, c.client, c.logger, inv)
 	if err != nil {
 		return nil, nil, fmt.Errorf("executing provider list invocation: %w", err)
 	}
@@ -154,7 +154,7 @@ func (c *Client) AdminProviderWeightSet(ctx context.Context, providerID did.DID,
 		return nil, fmt.Errorf("invoking provider weight set: %w", err)
 	}
 
-	_, rcpt, err := ucan_client.Execute[*weightcap.SetOK](ctx, c.client, c.logger, inv)
+	_, rcpt, _, err := ucan_client.Execute[*weightcap.SetOK](ctx, c.client, c.logger, inv)
 	if err != nil {
 		return nil, fmt.Errorf("executing provider weight set invocation: %w", err)
 	}

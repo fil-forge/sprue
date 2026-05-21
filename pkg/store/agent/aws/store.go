@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/fil-forge/libforge/jobqueue"
+	"github.com/fil-forge/sprue/pkg/store"
 	"github.com/fil-forge/sprue/pkg/store/agent"
 	"github.com/fil-forge/ucantone/ipld/codec/dagcbor"
 	"github.com/fil-forge/ucantone/ucan"
@@ -158,6 +160,106 @@ func (s *Store) GetReceipt(ctx context.Context, task cid.Cid) (ucan.Receipt, err
 		return nil, agent.ErrReceiptNotFound
 	}
 	return rcpt, nil
+}
+
+func (s *Store) List(ctx context.Context, task cid.Cid, options ...agent.ListOption) (store.Page[ucan.Container], error) {
+	cfg := agent.ListConfig{}
+	for _, opt := range options {
+		opt(&cfg)
+	}
+
+	// Index entries for a task live under two partition keys (<task>.in and
+	// <task>.out). Query both, then sort + paginate by message CID so the
+	// resulting page is stable across calls.
+	var msgRoots []cid.Cid
+	for _, kind := range []string{"in", "out"} {
+		taskkind := fmt.Sprintf("%s.%s", task, kind)
+		var startKey map[string]types.AttributeValue
+		for {
+			out, err := s.dynamo.Query(ctx, &dynamodb.QueryInput{
+				TableName:              &s.tableName,
+				KeyConditionExpression: aws.String("taskkind = :taskkind"),
+				ExpressionAttributeValues: map[string]types.AttributeValue{
+					":taskkind": &types.AttributeValueMemberS{Value: taskkind},
+				},
+				ExclusiveStartKey: startKey,
+			})
+			if err != nil {
+				return store.Page[ucan.Container]{}, fmt.Errorf("querying DynamoDB for %s: %w", taskkind, err)
+			}
+			for _, item := range out.Items {
+				v, ok := item["identifier"]
+				if !ok {
+					return store.Page[ucan.Container]{}, fmt.Errorf("missing identifier attribute in DynamoDB item: %v", item)
+				}
+				sv, ok := v.(*types.AttributeValueMemberS)
+				if !ok {
+					return store.Page[ucan.Container]{}, fmt.Errorf("unexpected type for identifier attribute in DynamoDB item: %T", v)
+				}
+				parts := strings.SplitN(sv.Value, "@", 2)
+				if len(parts) != 2 {
+					return store.Page[ucan.Container]{}, fmt.Errorf("invalid identifier format in DynamoDB item: %s", sv.Value)
+				}
+				msgRoot, err := cid.Parse(parts[1])
+				if err != nil {
+					return store.Page[ucan.Container]{}, fmt.Errorf("parsing message root CID: %w", err)
+				}
+				msgRoots = append(msgRoots, msgRoot)
+			}
+			if len(out.LastEvaluatedKey) == 0 {
+				break
+			}
+			startKey = out.LastEvaluatedKey
+		}
+	}
+
+	slices.SortFunc(msgRoots, func(a, b cid.Cid) int {
+		return bytes.Compare(a.Bytes(), b.Bytes())
+	})
+
+	if cfg.Cursor != nil {
+		idx := slices.IndexFunc(msgRoots, func(c cid.Cid) bool {
+			return c.String() == *cfg.Cursor
+		})
+		if idx == -1 {
+			return store.Page[ucan.Container]{}, fmt.Errorf("invalid cursor: %s", *cfg.Cursor)
+		}
+		msgRoots = msgRoots[idx+1:]
+	}
+
+	var nextCursor *string
+	if cfg.Limit != nil && len(msgRoots) > *cfg.Limit {
+		last := msgRoots[*cfg.Limit-1].String()
+		nextCursor = &last
+		msgRoots = msgRoots[:*cfg.Limit]
+	}
+
+	results := make([]ucan.Container, 0, len(msgRoots))
+	for _, m := range msgRoots {
+		ct, err := s.fetchMessage(ctx, m)
+		if err != nil {
+			return store.Page[ucan.Container]{}, err
+		}
+		results = append(results, ct)
+	}
+	return store.Page[ucan.Container]{Results: results, Cursor: nextCursor}, nil
+}
+
+func (s *Store) fetchMessage(ctx context.Context, msgRoot cid.Cid) (*container.Container, error) {
+	out, err := s.s3.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: &s.bucketName,
+		Key:    aws.String(toMessagePath(msgRoot)),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("getting message from S3: %w", err)
+	}
+	defer out.Body.Close()
+
+	var ct container.Container
+	if err := ct.UnmarshalCBOR(out.Body); err != nil {
+		return nil, fmt.Errorf("unmarshaling agent message from CBOR: %w", err)
+	}
+	return &ct, nil
 }
 
 // getByTask is a helper method that retrieves the invocation or receipt
