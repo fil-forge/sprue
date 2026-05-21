@@ -3,19 +3,19 @@ package handlers
 import (
 	"fmt"
 
-	blobcaps "github.com/fil-forge/libforge/commands/blob"
+	cmdblob "github.com/fil-forge/libforge/commands/blob"
 	blobregistry "github.com/fil-forge/sprue/pkg/store/blob_registry"
 	"github.com/fil-forge/ucantone/execution/bindexec"
 	"go.uber.org/zap"
 )
 
 func NewBlobListHandler(blobRegistry blobregistry.Store, logger *zap.Logger) Handler {
-	log := logger.With(zap.Stringer("handler", blobcaps.List))
+	log := logger.With(zap.Stringer("handler", cmdblob.List))
 	return Handler{
-		Command: blobcaps.List.Command,
+		Command: cmdblob.List.Command,
 		Handler: bindexec.NewHandler(func(
-			req *bindexec.Request[*blobcaps.ListArguments],
-			res *bindexec.Response[*blobcaps.ListOK],
+			req *bindexec.Request[*cmdblob.ListArguments],
+			res *bindexec.Response[*cmdblob.ListOK],
 		) error {
 			args := req.Task().Arguments()
 			space := req.Invocation().Subject()
@@ -38,15 +38,15 @@ func NewBlobListHandler(blobRegistry blobregistry.Store, logger *zap.Logger) Han
 				return fmt.Errorf("listing blobs: %w", err)
 			}
 
-			results := make([]blobcaps.ListBlobItem, 0, len(page.Results))
+			results := make([]cmdblob.ListBlobItem, 0, len(page.Results))
 			for _, r := range page.Results {
-				results = append(results, blobcaps.ListBlobItem{
+				results = append(results, cmdblob.ListBlobItem{
 					Blob:       r.Blob,
 					InsertedAt: r.InsertedAt.Unix(),
 				})
 			}
 
-			return res.SetSuccess(&blobcaps.ListOK{
+			return res.SetSuccess(&cmdblob.ListOK{
 				Cursor:  page.Cursor,
 				Results: results,
 			})

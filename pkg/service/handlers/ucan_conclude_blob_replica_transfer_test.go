@@ -5,7 +5,7 @@ package handlers_test
 // 	"testing"
 
 // 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
-// 	replicacaps "github.com/storacha/go-libstoracha/capabilities/blob/replica"
+// 	cmdreplica "github.com/storacha/go-libstoracha/capabilities/blob/replica"
 // 	"github.com/storacha/go-libstoracha/capabilities/types"
 // 	"github.com/storacha/go-ucanto/core/car"
 // 	"github.com/storacha/go-ucanto/core/delegation"
@@ -108,9 +108,9 @@ package handlers_test
 // 		cause := cidlink.Link{Cid: testutil.RandomCID(t)}
 
 // 		transferCap := ucan.NewCapability(
-// 			replicacaps.TransferAbility,
+// 			cmdreplica.TransferAbility,
 // 			storageProvider.DID().String(),
-// 			replicacaps.TransferCaveats{
+// 			cmdreplica.TransferCaveats{
 // 				Space: space.DID(),
 // 				Blob:  blob,
 // 				Site:  site,
@@ -149,9 +149,9 @@ package handlers_test
 // 		// Create allocation invocation signed by someone OTHER than uploadService
 // 		imposter := testutil.RandomSigner(t)
 // 		allocCap := ucan.NewCapability(
-// 			replicacaps.AllocateAbility,
+// 			cmdreplica.AllocateAbility,
 // 			storageProvider.DID().String(),
-// 			replicacaps.AllocateCaveats{
+// 			cmdreplica.AllocateCaveats{
 // 				Space: space.DID(),
 // 				Blob:  blob,
 // 				Site:  site,
@@ -173,9 +173,9 @@ package handlers_test
 
 // 		// Create transfer invocation referencing the allocation
 // 		transferCap := ucan.NewCapability(
-// 			replicacaps.TransferAbility,
+// 			cmdreplica.TransferAbility,
 // 			storageProvider.DID().String(),
-// 			replicacaps.TransferCaveats{
+// 			cmdreplica.TransferCaveats{
 // 				Space: space.DID(),
 // 				Blob:  blob,
 // 				Site:  site,
@@ -216,7 +216,7 @@ package handlers_test
 // 			storageProvider, uploadService,
 // 			[]ucan.Capability[ucan.NoCaveats]{
 // 				ucan.NewCapability(
-// 					replicacaps.AllocateAbility,
+// 					cmdreplica.AllocateAbility,
 // 					storageProvider.DID().String(),
 // 					ucan.NoCaveats{},
 // 				),
@@ -225,10 +225,10 @@ package handlers_test
 // 		require.NoError(t, err)
 
 // 		// uploadService invokes allocate on storageProvider with the delegation as proof
-// 		allocInv, err := replicacaps.Allocate.Invoke(
+// 		allocInv, err := cmdreplica.Allocate.Invoke(
 // 			uploadService, storageProvider,
 // 			storageProvider.DID().String(),
-// 			replicacaps.AllocateCaveats{
+// 			cmdreplica.AllocateCaveats{
 // 				Space: space.DID(),
 // 				Blob:  blob,
 // 				Site:  site,
@@ -252,10 +252,10 @@ package handlers_test
 // 		require.NoError(t, err)
 
 // 		// storageProvider self-issues the transfer invocation
-// 		transferInv, err := replicacaps.Transfer.Invoke(
+// 		transferInv, err := cmdreplica.Transfer.Invoke(
 // 			storageProvider, storageProvider,
 // 			storageProvider.DID().String(),
-// 			replicacaps.TransferCaveats{
+// 			cmdreplica.TransferCaveats{
 // 				Space: space.DID(),
 // 				Blob:  blob,
 // 				Site:  site,
@@ -299,9 +299,9 @@ package handlers_test
 
 // 		// Create allocation invocation signed by uploadService, audience = storageProvider
 // 		allocCap := ucan.NewCapability(
-// 			replicacaps.AllocateAbility,
+// 			cmdreplica.AllocateAbility,
 // 			storageProvider.DID().String(),
-// 			replicacaps.AllocateCaveats{
+// 			cmdreplica.AllocateCaveats{
 // 				Space: space.DID(),
 // 				Blob:  blob,
 // 				Site:  site,
@@ -323,9 +323,9 @@ package handlers_test
 // 		// Create transfer invocation from a DIFFERENT provider than the allocation audience
 // 		otherProvider := testutil.RandomSigner(t)
 // 		transferCap := ucan.NewCapability(
-// 			replicacaps.TransferAbility,
+// 			cmdreplica.TransferAbility,
 // 			otherProvider.DID().String(),
-// 			replicacaps.TransferCaveats{
+// 			cmdreplica.TransferCaveats{
 // 				Space: space.DID(),
 // 				Blob:  blob,
 // 				Site:  site,

@@ -5,7 +5,7 @@ import (
 	"context"
 	"testing"
 
-	shardcaps "github.com/fil-forge/libforge/commands/upload/shard"
+	cmdshard "github.com/fil-forge/libforge/commands/upload/shard"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/service/handlers"
 	upload_store "github.com/fil-forge/sprue/pkg/store/upload/memory"
@@ -25,10 +25,10 @@ func invokeUploadShardList(
 	agent principal.Signer,
 	uploadService principal.Signer,
 	space principal.Signer,
-	args *shardcaps.ListArguments,
+	args *cmdshard.ListArguments,
 ) (execution.Request, *execution.ExecResponse) {
 	t.Helper()
-	inv, err := shardcaps.List.Invoke(
+	inv, err := cmdshard.List.Invoke(
 		agent,
 		space.DID(),
 		args,
@@ -58,7 +58,7 @@ func TestUploadShardListHandler(t *testing.T) {
 		// Upload exists with no shards.
 		require.NoError(t, store.Upsert(ctx, space.DID(), root, nil, nil, testutil.RandomCID(t)))
 
-		req, res := invokeUploadShardList(t, ctx, alice, uploadService, space, &shardcaps.ListArguments{Root: root})
+		req, res := invokeUploadShardList(t, ctx, alice, uploadService, space, &cmdshard.ListArguments{Root: root})
 
 		err := handler.Handler(req, res)
 		require.NoError(t, err)
@@ -67,7 +67,7 @@ func TestUploadShardListHandler(t *testing.T) {
 		require.Nil(t, x)
 		require.NotNil(t, o)
 
-		var ok shardcaps.ListOK
+		var ok cmdshard.ListOK
 		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
 		require.Empty(t, ok.Results)
 	})
@@ -83,14 +83,14 @@ func TestUploadShardListHandler(t *testing.T) {
 
 		require.NoError(t, store.Upsert(ctx, space.DID(), root, nil, []cid.Cid{shard1, shard2}, testutil.RandomCID(t)))
 
-		req, res := invokeUploadShardList(t, ctx, alice, uploadService, space, &shardcaps.ListArguments{Root: root})
+		req, res := invokeUploadShardList(t, ctx, alice, uploadService, space, &cmdshard.ListArguments{Root: root})
 
 		err := handler.Handler(req, res)
 		require.NoError(t, err)
 
 		o, x := res.Receipt().Out().Unpack()
 		require.Nil(t, x)
-		var ok shardcaps.ListOK
+		var ok cmdshard.ListOK
 		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
 		require.Len(t, ok.Results, 2)
 
@@ -114,14 +114,14 @@ func TestUploadShardListHandler(t *testing.T) {
 		require.NoError(t, store.Upsert(ctx, space.DID(), root, nil, []cid.Cid{shard1, shard2, shard3}, testutil.RandomCID(t)))
 
 		size := uint64(2)
-		req, res := invokeUploadShardList(t, ctx, alice, uploadService, space, &shardcaps.ListArguments{Root: root, Size: &size})
+		req, res := invokeUploadShardList(t, ctx, alice, uploadService, space, &cmdshard.ListArguments{Root: root, Size: &size})
 
 		err := handler.Handler(req, res)
 		require.NoError(t, err)
 
 		o, x := res.Receipt().Out().Unpack()
 		require.Nil(t, x)
-		var ok shardcaps.ListOK
+		var ok cmdshard.ListOK
 		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
 		require.Len(t, ok.Results, 2)
 		require.NotNil(t, ok.Cursor)
@@ -139,24 +139,24 @@ func TestUploadShardListHandler(t *testing.T) {
 		require.NoError(t, store.Upsert(ctx, space.DID(), root, nil, []cid.Cid{shard1, shard2, shard3}, testutil.RandomCID(t)))
 
 		size := uint64(1)
-		req1, res1 := invokeUploadShardList(t, ctx, alice, uploadService, space, &shardcaps.ListArguments{Root: root, Size: &size})
+		req1, res1 := invokeUploadShardList(t, ctx, alice, uploadService, space, &cmdshard.ListArguments{Root: root, Size: &size})
 		require.NoError(t, handler.Handler(req1, res1))
 
 		o1, x := res1.Receipt().Out().Unpack()
 		require.Nil(t, x)
-		var ok1 shardcaps.ListOK
+		var ok1 cmdshard.ListOK
 		require.NoError(t, ok1.UnmarshalCBOR(bytes.NewReader(o1)))
 		require.Len(t, ok1.Results, 1)
 		require.NotNil(t, ok1.Cursor)
 
 		// Second page using cursor.
 		cursor := *ok1.Cursor
-		req2, res2 := invokeUploadShardList(t, ctx, alice, uploadService, space, &shardcaps.ListArguments{Root: root, Cursor: &cursor, Size: &size})
+		req2, res2 := invokeUploadShardList(t, ctx, alice, uploadService, space, &cmdshard.ListArguments{Root: root, Cursor: &cursor, Size: &size})
 		require.NoError(t, handler.Handler(req2, res2))
 
 		o2, x := res2.Receipt().Out().Unpack()
 		require.Nil(t, x)
-		var ok2 shardcaps.ListOK
+		var ok2 cmdshard.ListOK
 		require.NoError(t, ok2.UnmarshalCBOR(bytes.NewReader(o2)))
 		require.Len(t, ok2.Results, 1)
 		require.NotEqual(t, ok1.Results[0].String(), ok2.Results[0].String())

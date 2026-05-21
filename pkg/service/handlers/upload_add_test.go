@@ -5,8 +5,8 @@ import (
 	"context"
 	"testing"
 
-	accesscaps "github.com/fil-forge/libforge/commands/access"
-	uploadcaps "github.com/fil-forge/libforge/commands/upload"
+	cmdaccess "github.com/fil-forge/libforge/commands/access"
+	cmdupload "github.com/fil-forge/libforge/commands/upload"
 	"github.com/fil-forge/libforge/didmailto"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/provisioning"
@@ -52,10 +52,10 @@ func invokeUploadAdd(
 	agent principal.Signer,
 	uploadService principal.Signer,
 	space principal.Signer,
-	args *uploadcaps.AddArguments,
+	args *cmdupload.AddArguments,
 ) (execution.Request, *execution.ExecResponse) {
 	t.Helper()
-	inv, err := uploadcaps.Add.Invoke(
+	inv, err := cmdupload.Add.Invoke(
 		agent,
 		space.DID(),
 		args,
@@ -95,7 +95,7 @@ func TestUploadAddHandler(t *testing.T) {
 
 		space := testutil.RandomSigner(t)
 		root := testutil.RandomCID(t)
-		req, res := invokeUploadAdd(t, ctx, alice, uploadService, space, &uploadcaps.AddArguments{Root: root})
+		req, res := invokeUploadAdd(t, ctx, alice, uploadService, space, &cmdupload.AddArguments{Root: root})
 
 		err := deps.handler.Handler(req, res)
 		require.NoError(t, err)
@@ -105,7 +105,7 @@ func TestUploadAddHandler(t *testing.T) {
 
 		var model edm.ErrorModel
 		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
-		require.Equal(t, accesscaps.InsufficientStorageErrorName, model.Name())
+		require.Equal(t, cmdaccess.InsufficientStorageErrorName, model.Name())
 
 		// Nothing should have been persisted.
 		exists, err := deps.store.Exists(ctx, space.DID(), root)
@@ -120,7 +120,7 @@ func TestUploadAddHandler(t *testing.T) {
 		provisionUploadSpace(t, deps.consumerStore, uploadService, space)
 
 		root := testutil.RandomCID(t)
-		req, res := invokeUploadAdd(t, ctx, alice, uploadService, space, &uploadcaps.AddArguments{Root: root})
+		req, res := invokeUploadAdd(t, ctx, alice, uploadService, space, &cmdupload.AddArguments{Root: root})
 
 		err := deps.handler.Handler(req, res)
 		require.NoError(t, err)
@@ -148,7 +148,7 @@ func TestUploadAddHandler(t *testing.T) {
 		shard1 := testutil.RandomCID(t)
 		shard2 := testutil.RandomCID(t)
 
-		req, res := invokeUploadAdd(t, ctx, alice, uploadService, space, &uploadcaps.AddArguments{
+		req, res := invokeUploadAdd(t, ctx, alice, uploadService, space, &cmdupload.AddArguments{
 			Root:   root,
 			Shards: []cid.Cid{shard1, shard2},
 		})
@@ -172,7 +172,7 @@ func TestUploadAddHandler(t *testing.T) {
 		root := testutil.RandomCID(t)
 		index := testutil.RandomCID(t)
 
-		req, res := invokeUploadAdd(t, ctx, alice, uploadService, space, &uploadcaps.AddArguments{
+		req, res := invokeUploadAdd(t, ctx, alice, uploadService, space, &cmdupload.AddArguments{
 			Root:  root,
 			Index: &index,
 		})
@@ -196,7 +196,7 @@ func TestUploadAddHandler(t *testing.T) {
 		root := testutil.RandomCID(t)
 		shard1 := testutil.RandomCID(t)
 
-		req1, res1 := invokeUploadAdd(t, ctx, alice, uploadService, space, &uploadcaps.AddArguments{
+		req1, res1 := invokeUploadAdd(t, ctx, alice, uploadService, space, &cmdupload.AddArguments{
 			Root:   root,
 			Shards: []cid.Cid{shard1},
 		})
@@ -205,7 +205,7 @@ func TestUploadAddHandler(t *testing.T) {
 
 		// Add again with a new shard.
 		shard2 := testutil.RandomCID(t)
-		req2, res2 := invokeUploadAdd(t, ctx, alice, uploadService, space, &uploadcaps.AddArguments{
+		req2, res2 := invokeUploadAdd(t, ctx, alice, uploadService, space, &cmdupload.AddArguments{
 			Root:   root,
 			Shards: []cid.Cid{shard2},
 		})

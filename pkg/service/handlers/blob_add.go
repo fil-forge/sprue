@@ -6,9 +6,9 @@ import (
 	"crypto/ed25519"
 	"fmt"
 
-	accesscaps "github.com/fil-forge/libforge/commands/access"
-	blobcaps "github.com/fil-forge/libforge/commands/blob"
-	httpcaps "github.com/fil-forge/libforge/commands/http"
+	cmdaccess "github.com/fil-forge/libforge/commands/access"
+	cmdblob "github.com/fil-forge/libforge/commands/blob"
+	cmdhttp "github.com/fil-forge/libforge/commands/http"
 	"github.com/fil-forge/libforge/digestutil"
 	ucanlib "github.com/fil-forge/libforge/ucan"
 	"github.com/fil-forge/sprue/pkg/identity"
@@ -34,12 +34,12 @@ import (
 )
 
 func NewBlobAddHandler(id *identity.Identity, provisioningSvc *provisioning.Service, router *routing.Service, nodeProvider piriclient.Provider, agentStore agent.Store, blobRegistry blobregistry.Store, logger *zap.Logger) Handler {
-	log := logger.With(zap.Stringer("handler", blobcaps.Add))
+	log := logger.With(zap.Stringer("handler", cmdblob.Add))
 	return Handler{
-		Command: blobcaps.Add.Command,
+		Command: cmdblob.Add.Command,
 		Handler: bindexec.NewHandler(func(
-			req *bindexec.Request[*blobcaps.AddArguments],
-			res *bindexec.Response[*blobcaps.AddOK],
+			req *bindexec.Request[*cmdblob.AddArguments],
+			res *bindexec.Response[*cmdblob.AddOK],
 		) error {
 			args := req.Task().Arguments()
 			blob := args.Blob
@@ -62,7 +62,7 @@ func NewBlobAddHandler(id *identity.Identity, provisioningSvc *provisioning.Serv
 				return fmt.Errorf("listing service providers: %w", err)
 			}
 			if len(providers) == 0 {
-				return res.SetFailure(errors.New(accesscaps.InsufficientStorageErrorName, "space has no storage provider"))
+				return res.SetFailure(errors.New(cmdaccess.InsufficientStorageErrorName, "space has no storage provider"))
 			}
 
 			reg, err := blobRegistry.Get(req.Context(), space, blob.Digest)
@@ -94,7 +94,7 @@ func NewBlobAddHandler(id *identity.Identity, provisioningSvc *provisioning.Serv
 				}
 
 				o, _ := addRcpt.Out().Unpack()
-				var addOK blobcaps.AddOK
+				var addOK cmdblob.AddOK
 				if err := addOK.UnmarshalCBOR(bytes.NewReader(o)); err != nil {
 					log.Error("failed to unmarshal add OK result", zap.Error(err))
 					return fmt.Errorf("unmarshaling add OK result: %w", err)
@@ -112,7 +112,7 @@ func NewBlobAddHandler(id *identity.Identity, provisioningSvc *provisioning.Serv
 					return fmt.Errorf("getting invocation for blob accept: %w", err)
 				}
 
-				var accArgs blobcaps.AcceptArguments
+				var accArgs cmdblob.AcceptArguments
 				if err := accArgs.UnmarshalCBOR(bytes.NewReader(accInv.ArgumentsBytes())); err != nil {
 					log.Error("failed to rebind accept OK result", zap.Error(err))
 					return fmt.Errorf("rebinding accept OK result: %w", err)
@@ -130,7 +130,7 @@ func NewBlobAddHandler(id *identity.Identity, provisioningSvc *provisioning.Serv
 					return fmt.Errorf("getting invocation for HTTP PUT: %w", err)
 				}
 
-				var putArgs httpcaps.PutArguments
+				var putArgs cmdhttp.PutArguments
 				if err := putArgs.UnmarshalCBOR(bytes.NewReader(putInv.ArgumentsBytes())); err != nil {
 					log.Error("failed to unmarshal HTTP PUT arguments", zap.Error(err))
 					return fmt.Errorf("unmarshaling HTTP PUT arguments: %w", err)
@@ -187,7 +187,7 @@ func NewBlobAddHandler(id *identity.Identity, provisioningSvc *provisioning.Serv
 			}
 			res.SetMetadata(container.New(metaOpts...))
 
-			return res.SetSuccess(&blobcaps.AddOK{
+			return res.SetSuccess(&cmdblob.AddOK{
 				Site: promise.AwaitOK{
 					Task: accInv.Task().Link(),
 				},
@@ -202,11 +202,11 @@ func doAllocate(
 	nodeProvider piriclient.Provider,
 	agentStore agent.Store,
 	space did.DID,
-	blob blobcaps.Blob,
+	blob cmdblob.Blob,
 	cause cid.Cid,
 	proofStore ucanlib.ProofStore,
 	logger *zap.Logger,
-) (routing.StorageProviderInfo, ucan.Invocation, ucan.Receipt, blobcaps.AllocateOK, error) {
+) (routing.StorageProviderInfo, ucan.Invocation, ucan.Receipt, cmdblob.AllocateOK, error) {
 	log := logger.With(zap.Stringer("cause", cause))
 	log.Debug("doing allocation")
 
@@ -215,7 +215,7 @@ func doAllocate(
 		candidate, err := router.SelectStorageProvider(ctx, blob, routing.WithExclusions(exclusions...))
 		if err != nil {
 			log.Error("failed to select storage node", zap.Error(err))
-			return routing.StorageProviderInfo{}, nil, nil, blobcaps.AllocateOK{}, err
+			return routing.StorageProviderInfo{}, nil, nil, cmdblob.AllocateOK{}, err
 		}
 		log := logger.With(zap.Stringer("candidate", candidate.ID), zap.String("endpoint", candidate.Endpoint.String()))
 		log.Debug("selected storage provider candidate")
@@ -223,7 +223,7 @@ func doAllocate(
 		client, err := nodeProvider.Client(candidate.ID, candidate.Endpoint)
 		if err != nil {
 			log.Error("failed to create piri node", zap.Error(err))
-			return routing.StorageProviderInfo{}, nil, nil, blobcaps.AllocateOK{}, err
+			return routing.StorageProviderInfo{}, nil, nil, cmdblob.AllocateOK{}, err
 		}
 
 		res, inv, rcpt, err := client.Allocate(ctx, &piriclient.AllocateRequest{
@@ -259,7 +259,7 @@ func writeAgentMessage(ctx context.Context, agentStore agent.Store, invs []ucan.
 // Generates an invocation to put the blob to the storage provider. It MAY
 // return a receipt if the allocation result indicates that the provider already
 // has the blob.
-func genPut(blob blobcaps.Blob, allocInv ucan.Invocation, allocOK blobcaps.AllocateOK, logger *zap.Logger) (ucan.Invocation, ucan.Receipt, error) {
+func genPut(blob cmdblob.Blob, allocInv ucan.Invocation, allocOK cmdblob.AllocateOK, logger *zap.Logger) (ucan.Invocation, ucan.Receipt, error) {
 	log := logger
 	log.Debug("generating put invocation")
 
@@ -271,10 +271,10 @@ func genPut(blob blobcaps.Blob, allocInv ucan.Invocation, allocOK blobcaps.Alloc
 		return nil, nil, err
 	}
 
-	putInv, err := httpcaps.Put.Invoke(
+	putInv, err := cmdhttp.Put.Invoke(
 		blobProvider,
 		blobProvider.DID(),
-		&httpcaps.PutArguments{
+		&cmdhttp.PutArguments{
 			Body:        blob,
 			Destination: promise.AwaitOK{Task: allocInv.Task().Link()},
 		},
@@ -296,7 +296,7 @@ func genPut(blob blobcaps.Blob, allocInv ucan.Invocation, allocOK blobcaps.Alloc
 		),
 	)
 	if err != nil {
-		return nil, nil, fmt.Errorf("invoking %q: %w", httpcaps.Put, err)
+		return nil, nil, fmt.Errorf("invoking %q: %w", cmdhttp.Put, err)
 	}
 
 	var putRcpt ucan.Receipt
@@ -308,10 +308,10 @@ func genPut(blob blobcaps.Blob, allocInv ucan.Invocation, allocOK blobcaps.Alloc
 		putRcpt, err = receipt.IssueOK(
 			blobProvider,
 			putInv.Task().Link(),
-			&httpcaps.PutOK{},
+			&cmdhttp.PutOK{},
 		)
 		if err != nil {
-			return nil, nil, fmt.Errorf("issuing %q receipt: %w", httpcaps.Put, err)
+			return nil, nil, fmt.Errorf("issuing %q receipt: %w", cmdhttp.Put, err)
 		}
 	}
 
@@ -337,7 +337,7 @@ func maybeAccept(
 	nodeProvider piriclient.Provider,
 	providerInfo routing.StorageProviderInfo,
 	space did.DID,
-	blob blobcaps.Blob,
+	blob cmdblob.Blob,
 	cause cid.Cid, // original /space/blob/add task
 	putInv ucan.Invocation,
 	putRcpt ucan.Receipt,

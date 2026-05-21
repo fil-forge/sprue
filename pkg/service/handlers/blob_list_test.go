@@ -5,7 +5,7 @@ import (
 	"context"
 	"testing"
 
-	blobcaps "github.com/fil-forge/libforge/commands/blob"
+	cmdblob "github.com/fil-forge/libforge/commands/blob"
 	"github.com/fil-forge/libforge/didmailto"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/service/handlers"
@@ -39,10 +39,10 @@ func invokeBlobList(
 	agent principal.Signer,
 	uploadService principal.Signer,
 	space principal.Signer,
-	args *blobcaps.ListArguments,
+	args *cmdblob.ListArguments,
 ) (execution.Request, *execution.ExecResponse) {
 	t.Helper()
-	inv, err := blobcaps.List.Invoke(
+	inv, err := cmdblob.List.Invoke(
 		agent,
 		space.DID(),
 		args,
@@ -69,7 +69,7 @@ func TestBlobListHandler(t *testing.T) {
 
 		space := testutil.RandomSigner(t)
 
-		req, res := invokeBlobList(t, ctx, alice, uploadService, space, &blobcaps.ListArguments{})
+		req, res := invokeBlobList(t, ctx, alice, uploadService, space, &cmdblob.ListArguments{})
 
 		err := handler.Handler(req, res)
 		require.NoError(t, err)
@@ -78,7 +78,7 @@ func TestBlobListHandler(t *testing.T) {
 		require.Nil(t, x)
 		require.NotNil(t, o)
 
-		var ok blobcaps.ListOK
+		var ok cmdblob.ListOK
 		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
 		require.Empty(t, ok.Results)
 	})
@@ -90,19 +90,19 @@ func TestBlobListHandler(t *testing.T) {
 		space := testutil.RandomSigner(t)
 		require.NoError(t, consumerStore.Add(ctx, uploadService.DID(), space.DID(), aliceAccount, "sub-1", testutil.RandomCID(t)))
 
-		blob1 := blobcaps.Blob{Digest: testutil.RandomMultihash(t), Size: 100}
-		blob2 := blobcaps.Blob{Digest: testutil.RandomMultihash(t), Size: 200}
+		blob1 := cmdblob.Blob{Digest: testutil.RandomMultihash(t), Size: 100}
+		blob2 := cmdblob.Blob{Digest: testutil.RandomMultihash(t), Size: 200}
 		require.NoError(t, blobReg.Register(ctx, space.DID(), blob1, testutil.RandomCID(t)))
 		require.NoError(t, blobReg.Register(ctx, space.DID(), blob2, testutil.RandomCID(t)))
 
-		req, res := invokeBlobList(t, ctx, alice, uploadService, space, &blobcaps.ListArguments{})
+		req, res := invokeBlobList(t, ctx, alice, uploadService, space, &cmdblob.ListArguments{})
 
 		err := handler.Handler(req, res)
 		require.NoError(t, err)
 
 		o, x := res.Receipt().Out().Unpack()
 		require.Nil(t, x)
-		var ok blobcaps.ListOK
+		var ok cmdblob.ListOK
 		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
 		require.Len(t, ok.Results, 2)
 	})
@@ -117,20 +117,20 @@ func TestBlobListHandler(t *testing.T) {
 		for i := range 3 {
 			require.NoError(t, blobReg.Register(
 				ctx, space.DID(),
-				blobcaps.Blob{Digest: testutil.RandomMultihash(t), Size: uint64(i + 1)},
+				cmdblob.Blob{Digest: testutil.RandomMultihash(t), Size: uint64(i + 1)},
 				testutil.RandomCID(t),
 			))
 		}
 
 		size := uint64(2)
-		req, res := invokeBlobList(t, ctx, alice, uploadService, space, &blobcaps.ListArguments{Size: &size})
+		req, res := invokeBlobList(t, ctx, alice, uploadService, space, &cmdblob.ListArguments{Size: &size})
 
 		err := handler.Handler(req, res)
 		require.NoError(t, err)
 
 		o, x := res.Receipt().Out().Unpack()
 		require.Nil(t, x)
-		var ok blobcaps.ListOK
+		var ok cmdblob.ListOK
 		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
 		require.Len(t, ok.Results, 2)
 		require.NotNil(t, ok.Cursor)
@@ -146,30 +146,30 @@ func TestBlobListHandler(t *testing.T) {
 		for i := range 3 {
 			require.NoError(t, blobReg.Register(
 				ctx, space.DID(),
-				blobcaps.Blob{Digest: testutil.RandomMultihash(t), Size: uint64(i + 1)},
+				cmdblob.Blob{Digest: testutil.RandomMultihash(t), Size: uint64(i + 1)},
 				testutil.RandomCID(t),
 			))
 		}
 
 		size := uint64(1)
-		req1, res1 := invokeBlobList(t, ctx, alice, uploadService, space, &blobcaps.ListArguments{Size: &size})
+		req1, res1 := invokeBlobList(t, ctx, alice, uploadService, space, &cmdblob.ListArguments{Size: &size})
 		require.NoError(t, handler.Handler(req1, res1))
 
 		o1, x := res1.Receipt().Out().Unpack()
 		require.Nil(t, x)
-		var ok1 blobcaps.ListOK
+		var ok1 cmdblob.ListOK
 		require.NoError(t, ok1.UnmarshalCBOR(bytes.NewReader(o1)))
 		require.Len(t, ok1.Results, 1)
 		require.NotNil(t, ok1.Cursor)
 
 		// Second page using cursor.
 		cursor := *ok1.Cursor
-		req2, res2 := invokeBlobList(t, ctx, alice, uploadService, space, &blobcaps.ListArguments{Cursor: &cursor, Size: &size})
+		req2, res2 := invokeBlobList(t, ctx, alice, uploadService, space, &cmdblob.ListArguments{Cursor: &cursor, Size: &size})
 		require.NoError(t, handler.Handler(req2, res2))
 
 		o2, x := res2.Receipt().Out().Unpack()
 		require.Nil(t, x)
-		var ok2 blobcaps.ListOK
+		var ok2 cmdblob.ListOK
 		require.NoError(t, ok2.UnmarshalCBOR(bytes.NewReader(o2)))
 		require.Len(t, ok2.Results, 1)
 		require.NotEqual(t, ok1.Results[0].Blob.Digest.HexString(), ok2.Results[0].Blob.Digest.HexString())
@@ -185,17 +185,17 @@ func TestBlobListHandler(t *testing.T) {
 
 		require.NoError(t, blobReg.Register(
 			ctx, space1.DID(),
-			blobcaps.Blob{Digest: testutil.RandomMultihash(t), Size: 100},
+			cmdblob.Blob{Digest: testutil.RandomMultihash(t), Size: 100},
 			testutil.RandomCID(t),
 		))
 
 		// Query space2 — should be empty.
-		req, res := invokeBlobList(t, ctx, alice, uploadService, space2, &blobcaps.ListArguments{})
+		req, res := invokeBlobList(t, ctx, alice, uploadService, space2, &cmdblob.ListArguments{})
 		require.NoError(t, handler.Handler(req, res))
 
 		o, x := res.Receipt().Out().Unpack()
 		require.Nil(t, x)
-		var ok blobcaps.ListOK
+		var ok cmdblob.ListOK
 		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
 		require.Empty(t, ok.Results)
 	})
