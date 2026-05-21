@@ -5,7 +5,7 @@ import (
 	"context"
 	"testing"
 
-	uploadcaps "github.com/fil-forge/libforge/commands/upload"
+	uploadcmds "github.com/fil-forge/libforge/commands/upload"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/service/handlers"
 	upload_store "github.com/fil-forge/sprue/pkg/store/upload/memory"
@@ -25,10 +25,10 @@ func invokeUploadList(
 	agent principal.Signer,
 	uploadService principal.Signer,
 	space principal.Signer,
-	args *uploadcaps.ListArguments,
+	args *uploadcmds.ListArguments,
 ) (execution.Request, *execution.ExecResponse) {
 	t.Helper()
-	inv, err := uploadcaps.List.Invoke(
+	inv, err := uploadcmds.List.Invoke(
 		agent,
 		space.DID(),
 		args,
@@ -53,7 +53,7 @@ func TestUploadListHandler(t *testing.T) {
 		handler := handlers.NewUploadListHandler(store, logger)
 
 		space := testutil.RandomSigner(t)
-		req, res := invokeUploadList(t, ctx, alice, uploadService, space, &uploadcaps.ListArguments{})
+		req, res := invokeUploadList(t, ctx, alice, uploadService, space, &uploadcmds.ListArguments{})
 
 		err := handler.Handler(req, res)
 		require.NoError(t, err)
@@ -62,7 +62,7 @@ func TestUploadListHandler(t *testing.T) {
 		require.Nil(t, x)
 		require.NotNil(t, o)
 
-		var ok uploadcaps.ListOK
+		var ok uploadcmds.ListOK
 		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
 		require.Empty(t, ok.Results)
 		require.Nil(t, ok.Cursor)
@@ -79,14 +79,14 @@ func TestUploadListHandler(t *testing.T) {
 		require.NoError(t, store.Upsert(ctx, space.DID(), root1, nil, nil, testutil.RandomCID(t)))
 		require.NoError(t, store.Upsert(ctx, space.DID(), root2, nil, nil, testutil.RandomCID(t)))
 
-		req, res := invokeUploadList(t, ctx, alice, uploadService, space, &uploadcaps.ListArguments{})
+		req, res := invokeUploadList(t, ctx, alice, uploadService, space, &uploadcmds.ListArguments{})
 
 		err := handler.Handler(req, res)
 		require.NoError(t, err)
 
 		o, x := res.Receipt().Out().Unpack()
 		require.Nil(t, x)
-		var ok uploadcaps.ListOK
+		var ok uploadcmds.ListOK
 		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
 		require.Len(t, ok.Results, 2)
 
@@ -108,14 +108,14 @@ func TestUploadListHandler(t *testing.T) {
 		}
 
 		size := uint64(2)
-		req, res := invokeUploadList(t, ctx, alice, uploadService, space, &uploadcaps.ListArguments{Size: &size})
+		req, res := invokeUploadList(t, ctx, alice, uploadService, space, &uploadcmds.ListArguments{Size: &size})
 
 		err := handler.Handler(req, res)
 		require.NoError(t, err)
 
 		o, x := res.Receipt().Out().Unpack()
 		require.Nil(t, x)
-		var ok uploadcaps.ListOK
+		var ok uploadcmds.ListOK
 		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
 		require.Len(t, ok.Results, 2)
 		require.NotNil(t, ok.Cursor)
@@ -131,24 +131,24 @@ func TestUploadListHandler(t *testing.T) {
 		}
 
 		size := uint64(1)
-		req1, res1 := invokeUploadList(t, ctx, alice, uploadService, space, &uploadcaps.ListArguments{Size: &size})
+		req1, res1 := invokeUploadList(t, ctx, alice, uploadService, space, &uploadcmds.ListArguments{Size: &size})
 		require.NoError(t, handler.Handler(req1, res1))
 
 		o1, x := res1.Receipt().Out().Unpack()
 		require.Nil(t, x)
-		var ok1 uploadcaps.ListOK
+		var ok1 uploadcmds.ListOK
 		require.NoError(t, ok1.UnmarshalCBOR(bytes.NewReader(o1)))
 		require.Len(t, ok1.Results, 1)
 		require.NotNil(t, ok1.Cursor)
 
 		// Second page using cursor.
 		cursor := *ok1.Cursor
-		req2, res2 := invokeUploadList(t, ctx, alice, uploadService, space, &uploadcaps.ListArguments{Cursor: &cursor, Size: &size})
+		req2, res2 := invokeUploadList(t, ctx, alice, uploadService, space, &uploadcmds.ListArguments{Cursor: &cursor, Size: &size})
 		require.NoError(t, handler.Handler(req2, res2))
 
 		o2, x := res2.Receipt().Out().Unpack()
 		require.Nil(t, x)
-		var ok2 uploadcaps.ListOK
+		var ok2 uploadcmds.ListOK
 		require.NoError(t, ok2.UnmarshalCBOR(bytes.NewReader(o2)))
 		require.Len(t, ok2.Results, 1)
 		require.NotEqual(t, ok1.Results[0].Root.String(), ok2.Results[0].Root.String())
@@ -164,12 +164,12 @@ func TestUploadListHandler(t *testing.T) {
 		require.NoError(t, store.Upsert(ctx, space1.DID(), testutil.RandomCID(t), nil, nil, testutil.RandomCID(t)))
 
 		// Query space2 — should be empty.
-		req, res := invokeUploadList(t, ctx, alice, uploadService, space2, &uploadcaps.ListArguments{})
+		req, res := invokeUploadList(t, ctx, alice, uploadService, space2, &uploadcmds.ListArguments{})
 		require.NoError(t, handler.Handler(req, res))
 
 		o, x := res.Receipt().Out().Unpack()
 		require.Nil(t, x)
-		var ok uploadcaps.ListOK
+		var ok uploadcmds.ListOK
 		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
 		require.Empty(t, ok.Results)
 	})
@@ -183,13 +183,13 @@ func TestUploadListHandler(t *testing.T) {
 		index := testutil.RandomCID(t)
 		require.NoError(t, store.Upsert(ctx, space.DID(), root, &index, nil, testutil.RandomCID(t)))
 
-		req, res := invokeUploadList(t, ctx, alice, uploadService, space, &uploadcaps.ListArguments{})
+		req, res := invokeUploadList(t, ctx, alice, uploadService, space, &uploadcmds.ListArguments{})
 
 		require.NoError(t, handler.Handler(req, res))
 
 		o, x := res.Receipt().Out().Unpack()
 		require.Nil(t, x)
-		var ok uploadcaps.ListOK
+		var ok uploadcmds.ListOK
 		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
 		require.Len(t, ok.Results, 1)
 		require.NotNil(t, ok.Results[0].Index)

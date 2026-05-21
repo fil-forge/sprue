@@ -3,7 +3,7 @@ package handlers
 import (
 	"fmt"
 
-	providercaps "github.com/fil-forge/libforge/commands/provider"
+	providercmds "github.com/fil-forge/libforge/commands/provider"
 	"github.com/fil-forge/libforge/didmailto"
 	"github.com/fil-forge/sprue/internal/config"
 	"github.com/fil-forge/sprue/pkg/billing"
@@ -15,18 +15,18 @@ import (
 )
 
 func NewProviderAddHandler(deploymentCfg config.DeploymentConfig, provisioningSvc *provisioning.Service, billingSvc *billing.Service, logger *zap.Logger) Handler {
-	log := logger.With(zap.Stringer("handler", providercaps.Add))
+	log := logger.With(zap.Stringer("handler", providercmds.Add))
 	return Handler{
-		Command: providercaps.Add.Command,
+		Command: providercmds.Add.Command,
 		Handler: bindexec.NewHandler(func(
-			req *bindexec.Request[*providercaps.AddArguments],
-			res *bindexec.Response[*providercaps.AddOK],
+			req *bindexec.Request[*providercmds.AddArguments],
+			res *bindexec.Response[*providercmds.AddOK],
 		) error {
 			args := req.Task().Arguments()
 			account, err := didmailto.Parse(req.Invocation().Subject().String())
 			if err != nil {
 				log.Warn("invalid account", zap.Stringer("account", req.Invocation().Subject()))
-				return res.SetFailure(errors.New(providercaps.InvalidAccountErrorName, "invalid account DID: %v", err))
+				return res.SetFailure(errors.New(providercmds.InvalidAccountErrorName, "invalid account DID: %v", err))
 			}
 			serviceProvider := args.Provider
 			space := args.Consumer
@@ -46,7 +46,7 @@ func NewProviderAddHandler(deploymentCfg config.DeploymentConfig, provisioningSv
 				if err != nil {
 					if errors.Is(err, billing.ErrMissingPaymentPlan) {
 						log.Warn("account does not have an active payment plan")
-						return res.SetFailure(providercaps.ErrAccountPlanMissing)
+						return res.SetFailure(providercmds.ErrAccountPlanMissing)
 					}
 					log.Error("failed to check payment plan", zap.Error(err))
 					return fmt.Errorf("checking payment plan: %w", err)
@@ -69,7 +69,7 @@ func NewProviderAddHandler(deploymentCfg config.DeploymentConfig, provisioningSv
 			}
 
 			log.Debug("service provisioned successfully", zap.String("subscription", sub))
-			return res.SetSuccess(&providercaps.AddOK{ID: sub})
+			return res.SetSuccess(&providercmds.AddOK{ID: sub})
 		}),
 	}
 }

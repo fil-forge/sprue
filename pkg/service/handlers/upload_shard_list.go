@@ -3,7 +3,7 @@ package handlers
 import (
 	"fmt"
 
-	shardcaps "github.com/fil-forge/libforge/commands/upload/shard"
+	shardcmds "github.com/fil-forge/libforge/commands/upload/shard"
 	upload_store "github.com/fil-forge/sprue/pkg/store/upload"
 	"github.com/fil-forge/ucantone/execution/bindexec"
 	"go.uber.org/zap"
@@ -11,12 +11,12 @@ import (
 
 // This handler lists the shards of an upload.
 func NewUploadShardListHandler(uploadStore upload_store.Store, logger *zap.Logger) Handler {
-	log := logger.With(zap.Stringer("handler", shardcaps.List))
+	log := logger.With(zap.Stringer("handler", shardcmds.List))
 	return Handler{
-		Command: shardcaps.List.Command,
+		Command: shardcmds.List.Command,
 		Handler: bindexec.NewHandler(func(
-			req *bindexec.Request[*shardcaps.ListArguments],
-			res *bindexec.Response[*shardcaps.ListOK],
+			req *bindexec.Request[*shardcmds.ListArguments],
+			res *bindexec.Response[*shardcmds.ListOK],
 		) error {
 			args := req.Task().Arguments()
 			space := req.Invocation().Subject()
@@ -40,7 +40,7 @@ func NewUploadShardListHandler(uploadStore upload_store.Store, logger *zap.Logge
 				return fmt.Errorf("listing upload shards: %w", err)
 			}
 
-			return res.SetSuccess(&shardcaps.ListOK{
+			return res.SetSuccess(&shardcmds.ListOK{
 				Results: page.Results,
 				Cursor:  page.Cursor,
 			})

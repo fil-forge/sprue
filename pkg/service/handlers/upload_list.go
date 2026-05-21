@@ -3,19 +3,19 @@ package handlers
 import (
 	"fmt"
 
-	uploadcaps "github.com/fil-forge/libforge/commands/upload"
+	uploadcmds "github.com/fil-forge/libforge/commands/upload"
 	upload_store "github.com/fil-forge/sprue/pkg/store/upload"
 	"github.com/fil-forge/ucantone/execution/bindexec"
 	"go.uber.org/zap"
 )
 
 func NewUploadListHandler(uploadStore upload_store.Store, logger *zap.Logger) Handler {
-	log := logger.With(zap.Stringer("handler", uploadcaps.List))
+	log := logger.With(zap.Stringer("handler", uploadcmds.List))
 	return Handler{
-		Command: uploadcaps.List.Command,
+		Command: uploadcmds.List.Command,
 		Handler: bindexec.NewHandler(func(
-			req *bindexec.Request[*uploadcaps.ListArguments],
-			res *bindexec.Response[*uploadcaps.ListOK],
+			req *bindexec.Request[*uploadcmds.ListArguments],
+			res *bindexec.Response[*uploadcmds.ListOK],
 		) error {
 			args := req.Task().Arguments()
 			space := req.Invocation().Subject()
@@ -38,15 +38,15 @@ func NewUploadListHandler(uploadStore upload_store.Store, logger *zap.Logger) Ha
 				return fmt.Errorf("listing uploads: %w", err)
 			}
 
-			results := make([]uploadcaps.ListUploadItem, 0, len(page.Results))
+			results := make([]uploadcmds.ListUploadItem, 0, len(page.Results))
 			for _, r := range page.Results {
-				results = append(results, uploadcaps.ListUploadItem{
+				results = append(results, uploadcmds.ListUploadItem{
 					Root:  r.Root,
 					Index: r.Index,
 				})
 			}
 
-			return res.SetSuccess(&uploadcaps.ListOK{
+			return res.SetSuccess(&uploadcmds.ListOK{
 				Results: results,
 				Cursor:  page.Cursor,
 			})

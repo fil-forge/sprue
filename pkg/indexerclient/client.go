@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"net/url"
 
-	assertcaps "github.com/fil-forge/libforge/commands/assert"
-	contentcaps "github.com/fil-forge/libforge/commands/content"
+	assertcmds "github.com/fil-forge/libforge/commands/assert"
+	contentcmds "github.com/fil-forge/libforge/commands/content"
 	ucanlib "github.com/fil-forge/libforge/ucan"
 	"github.com/fil-forge/sprue/pkg/lib/ucan_client"
 	"github.com/fil-forge/ucantone/client"
@@ -48,7 +48,7 @@ func New(endpoint *url.URL, indexerDID did.DID, signer ucan.Signer, logger *zap.
 // The proofStore parameter is used to build the delegation chain authorizing
 // the upload service to retrieve the index blob via `/content/retrieve` command.
 func (c *Client) PublishIndexClaim(ctx context.Context, space did.DID, index cid.Cid, proofStore ucanlib.ProofStore, options ...invocation.Option) (ucan.Receipt, error) {
-	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.signer.DID(), contentcaps.Retrieve.Command, space)
+	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.signer.DID(), contentcmds.Retrieve.Command, space)
 	if err != nil {
 		return nil, fmt.Errorf("building proof chain: %w", err)
 	}
@@ -57,15 +57,15 @@ func (c *Client) PublishIndexClaim(ctx context.Context, space did.DID, index cid
 		return nil, fmt.Errorf("building attestations: %w", err)
 	}
 	// Create a content retrieval delegation from upload service to indexer
-	indexerDelegation, err := contentcaps.Retrieve.Delegate(c.signer, c.indexerDID, space)
+	indexerDelegation, err := contentcmds.Retrieve.Delegate(c.signer, c.indexerDID, space)
 	if err != nil {
 		return nil, fmt.Errorf("creating indexer delegation: %w", err)
 	}
 
-	inv, err := assertcaps.Index.Invoke(
+	inv, err := assertcmds.Index.Invoke(
 		c.signer,
 		c.signer.DID(),
-		&assertcaps.IndexArguments{Index: index},
+		&assertcmds.IndexArguments{Index: index},
 		invocation.WithAudience(c.indexerDID),
 		invocation.WithMetadata(
 			datamodel.Map{"retrievalAuth": append(prfLinks, indexerDelegation.Link())},
@@ -75,7 +75,7 @@ func (c *Client) PublishIndexClaim(ctx context.Context, space did.DID, index cid
 		return nil, fmt.Errorf("creating invocation: %w", err)
 	}
 
-	_, rcpt, _, err := ucan_client.Execute[*assertcaps.IndexOK](
+	_, rcpt, _, err := ucan_client.Execute[*assertcmds.IndexOK](
 		ctx,
 		c.client,
 		c.logger,

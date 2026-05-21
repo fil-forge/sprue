@@ -5,7 +5,7 @@ package handlers_test
 // 	"testing"
 
 // 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
-// 	replicacaps "github.com/storacha/go-libstoracha/capabilities/blob/replica"
+// 	replicacmds "github.com/storacha/go-libstoracha/capabilities/blob/replica"
 // 	"github.com/storacha/go-libstoracha/capabilities/types"
 // 	"github.com/storacha/go-ucanto/core/car"
 // 	"github.com/storacha/go-ucanto/core/delegation"

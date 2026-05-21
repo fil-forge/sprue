@@ -8,11 +8,11 @@ import (
 	"net/url"
 	"testing"
 
-	accesscaps "github.com/fil-forge/libforge/commands/access"
-	assertcaps "github.com/fil-forge/libforge/commands/assert"
-	blobcaps "github.com/fil-forge/libforge/commands/blob"
-	contentcaps "github.com/fil-forge/libforge/commands/content"
-	indexcaps "github.com/fil-forge/libforge/commands/index"
+	accesscmds "github.com/fil-forge/libforge/commands/access"
+	assertcmds "github.com/fil-forge/libforge/commands/assert"
+	blobcmds "github.com/fil-forge/libforge/commands/blob"
+	contentcmds "github.com/fil-forge/libforge/commands/content"
+	indexcmds "github.com/fil-forge/libforge/commands/index"
 	"github.com/fil-forge/libforge/didmailto"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/identity"
@@ -45,7 +45,7 @@ func newMockIndexerServer(
 	t *testing.T,
 	indexerSigner principal.Signer,
 	uploadService principal.Signer,
-	indexOK *assertcaps.IndexOK,
+	indexOK *assertcmds.IndexOK,
 ) *httptest.Server {
 	t.Helper()
 
@@ -63,9 +63,9 @@ func newMockIndexerServer(
 		server.WithValidationOptions(validator.WithDIDVerifierResolver(resolveDIDKey)),
 	)
 
-	srv.Handle(assertcaps.Index.Command, bindexec.NewHandler(func(
-		req *bindexec.Request[*assertcaps.IndexArguments],
-		res *bindexec.Response[*assertcaps.IndexOK],
+	srv.Handle(assertcmds.Index.Command, bindexec.NewHandler(func(
+		req *bindexec.Request[*assertcmds.IndexArguments],
+		res *bindexec.Response[*assertcmds.IndexOK],
 	) error {
 		return res.SetSuccess(indexOK)
 	}))
@@ -87,10 +87,10 @@ func invokeIndexAdd(
 	reqOpts ...execution.RequestOption,
 ) (execution.Request, *execution.ExecResponse) {
 	t.Helper()
-	inv, err := indexcaps.Add.Invoke(
+	inv, err := indexcmds.Add.Invoke(
 		agent,
 		space.DID(),
-		&indexcaps.AddArguments{Index: index},
+		&indexcmds.AddArguments{Index: index},
 		invocation.WithAudience(uploadService.DID()),
 	)
 	require.NoError(t, err)
@@ -129,7 +129,7 @@ func TestIndexAddHandler(t *testing.T) {
 
 		var model edm.ErrorModel
 		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
-		require.Equal(t, accesscaps.InsufficientStorageErrorName, model.Name())
+		require.Equal(t, accesscmds.InsufficientStorageErrorName, model.Name())
 	})
 
 	t.Run("index not found in space", func(t *testing.T) {
@@ -157,7 +157,7 @@ func TestIndexAddHandler(t *testing.T) {
 
 		var model edm.ErrorModel
 		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
-		require.Equal(t, indexcaps.IndexNotFoundErrorName, model.Name())
+		require.Equal(t, indexcmds.IndexNotFoundErrorName, model.Name())
 	})
 
 	t.Run("retrieval auth supplied publishes index claim", func(t *testing.T) {
@@ -173,12 +173,12 @@ func TestIndexAddHandler(t *testing.T) {
 		require.NoError(t, consumerStore.Add(ctx, uploadService.DID(), space.DID(), aliceAccount, "sub-1", testutil.RandomCID(t)))
 
 		indexCID := testutil.RandomCID(t)
-		indexBlob := blobcaps.Blob{Digest: indexCID.Hash(), Size: 512}
+		indexBlob := blobcmds.Blob{Digest: indexCID.Hash(), Size: 512}
 		require.NoError(t, blobReg.Register(ctx, space.DID(), indexBlob, testutil.RandomCID(t)))
 
 		// Stand up a mock indexer that returns success on /assert/index.
 		indexerSigner := testutil.RandomSigner(t)
-		indexerSrv := newMockIndexerServer(t, indexerSigner, uploadService, &assertcaps.IndexOK{})
+		indexerSrv := newMockIndexerServer(t, indexerSigner, uploadService, &assertcmds.IndexOK{})
 		indexerURL := testutil.Must(url.Parse(indexerSrv.URL))(t)
 		indexerCli, err := indexerclient.New(indexerURL, indexerSigner.DID(), uploadService, logger)
 		require.NoError(t, err)
@@ -188,7 +188,7 @@ func TestIndexAddHandler(t *testing.T) {
 		// /content/retrieve delegation from space → upload service so the
 		// handler can build a proof chain that authorizes the indexer to
 		// retrieve the index blob.
-		retrievalAuth, err := contentcaps.Retrieve.Delegate(space, uploadService.DID(), space.DID())
+		retrievalAuth, err := contentcmds.Retrieve.Delegate(space, uploadService.DID(), space.DID())
 		require.NoError(t, err)
 
 		req, res := invokeIndexAdd(t, ctx, alice, uploadService, space, indexCID,
@@ -214,11 +214,11 @@ func TestIndexAddHandler(t *testing.T) {
 		require.NoError(t, consumerStore.Add(ctx, uploadService.DID(), space.DID(), aliceAccount, "sub-1", testutil.RandomCID(t)))
 
 		indexCID := testutil.RandomCID(t)
-		indexBlob := blobcaps.Blob{Digest: indexCID.Hash(), Size: 512}
+		indexBlob := blobcmds.Blob{Digest: indexCID.Hash(), Size: 512}
 		require.NoError(t, blobReg.Register(ctx, space.DID(), indexBlob, testutil.RandomCID(t)))
 
 		indexerSigner := testutil.RandomSigner(t)
-		indexerSrv := newMockIndexerServer(t, indexerSigner, uploadService, &assertcaps.IndexOK{})
+		indexerSrv := newMockIndexerServer(t, indexerSigner, uploadService, &assertcmds.IndexOK{})
 		indexerURL := testutil.Must(url.Parse(indexerSrv.URL))(t)
 		indexerCli, err := indexerclient.New(indexerURL, indexerSigner.DID(), uploadService, logger)
 		require.NoError(t, err)

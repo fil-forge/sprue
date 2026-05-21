@@ -6,7 +6,7 @@ import (
 	"maps"
 	"slices"
 
-	ucancaps "github.com/fil-forge/libforge/commands/ucan"
+	ucancmds "github.com/fil-forge/libforge/commands/ucan"
 	"github.com/fil-forge/sprue/pkg/identity"
 	"github.com/fil-forge/sprue/pkg/store/agent"
 	"github.com/fil-forge/ucantone/errors"
@@ -32,13 +32,13 @@ type ConclusionHandler struct {
 // When it receives an /http/put receipt, it calls /blob/accept on piri
 // and stores the accept receipt for later retrieval.
 func NewUCANConcludeHandler(id *identity.Identity, agentStore agent.Store, handlers map[ucan.Command]ConclusionHandlerFunc, logger *zap.Logger) Handler {
-	log := logger.With(zap.Stringer("handler", ucancaps.Conclude))
+	log := logger.With(zap.Stringer("handler", ucancmds.Conclude))
 	log.Info("registered conclude handlers", zap.Stringers("commands", slices.Collect(maps.Keys(handlers))))
 	return Handler{
-		Command: ucancaps.Conclude.Command,
+		Command: ucancmds.Conclude.Command,
 		Handler: bindexec.NewHandler(func(
-			req *bindexec.Request[*ucancaps.ConcludeArguments],
-			res *bindexec.Response[*ucancaps.ConcludeOK],
+			req *bindexec.Request[*ucancmds.ConcludeArguments],
+			res *bindexec.Response[*ucancmds.ConcludeOK],
 		) error {
 			args := req.Task().Arguments()
 			rcptRoot := args.Receipt
@@ -57,7 +57,7 @@ func NewUCANConcludeHandler(id *identity.Identity, agentStore agent.Store, handl
 			}
 			if rcpt == nil {
 				log.Warn("receipt not found in invocation metadata")
-				return res.SetFailure(ucancaps.ErrConclusionReceiptNotFound)
+				return res.SetFailure(ucancmds.ErrConclusionReceiptNotFound)
 			}
 			log = log.With(zap.Stringer("task", rcpt.Ran()))
 
@@ -76,7 +76,7 @@ func NewUCANConcludeHandler(id *identity.Identity, agentStore agent.Store, handl
 					// here, if it was a receipt for something we care about we would have
 					// an invocation recorded.
 					if errors.Is(err, agent.ErrInvocationNotFound) {
-						return res.SetSuccess(&ucancaps.ConcludeOK{})
+						return res.SetSuccess(&ucancmds.ConcludeOK{})
 					}
 					log.Error("failed to get invocation from agent store", zap.Error(err))
 					return fmt.Errorf("getting invocation: %w", err)
@@ -95,7 +95,7 @@ func NewUCANConcludeHandler(id *identity.Identity, agentStore agent.Store, handl
 				}
 			}
 
-			return res.SetSuccess(&ucancaps.ConcludeOK{})
+			return res.SetSuccess(&ucancmds.ConcludeOK{})
 		}),
 	}
 }

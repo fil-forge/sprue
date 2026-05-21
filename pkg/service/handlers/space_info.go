@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	spacecaps "github.com/fil-forge/libforge/commands/space"
+	spacecmds "github.com/fil-forge/libforge/commands/space"
 	"github.com/fil-forge/sprue/pkg/provisioning"
 	"github.com/fil-forge/ucantone/errors"
 	"github.com/fil-forge/ucantone/execution/bindexec"
@@ -13,12 +13,12 @@ import (
 
 // This handler returns info about a space, including its providers.
 func NewSpaceInfoHandler(provisioningSvc *provisioning.Service, logger *zap.Logger) Handler {
-	log := logger.With(zap.Stringer("handler", spacecaps.Info))
+	log := logger.With(zap.Stringer("handler", spacecmds.Info))
 	return Handler{
-		Command: spacecaps.Info.Command,
+		Command: spacecmds.Info.Command,
 		Handler: bindexec.NewHandler(func(
-			req *bindexec.Request[*spacecaps.InfoArguments],
-			res *bindexec.Response[*spacecaps.InfoOK],
+			req *bindexec.Request[*spacecmds.InfoArguments],
+			res *bindexec.Response[*spacecmds.InfoOK],
 		) error {
 			space := req.Invocation().Subject()
 			log := log.With(zap.Stringer("space", space))
@@ -26,7 +26,7 @@ func NewSpaceInfoHandler(provisioningSvc *provisioning.Service, logger *zap.Logg
 
 			if !strings.HasPrefix(space.String(), "did:key:") {
 				log.Warn("non-did:key space info requested")
-				return res.SetFailure(errors.New(spacecaps.UnknownSpaceErrorName, "can only get info for did:key spaces"))
+				return res.SetFailure(errors.New(spacecmds.UnknownSpaceErrorName, "can only get info for did:key spaces"))
 			}
 
 			providers, err := provisioningSvc.ListServiceProviders(req.Context(), space)
@@ -35,7 +35,7 @@ func NewSpaceInfoHandler(provisioningSvc *provisioning.Service, logger *zap.Logg
 				return fmt.Errorf("listing service providers: %w", err)
 			}
 
-			return res.SetSuccess(&spacecaps.InfoOK{Providers: providers})
+			return res.SetSuccess(&spacecmds.InfoOK{Providers: providers})
 		}),
 	}
 }

@@ -6,8 +6,8 @@ package handlers
 // 	"fmt"
 
 // 	"github.com/fil-forge/ucantone/errors"
-// 	replicacaps "github.com/storacha/go-libstoracha/capabilities/blob/replica"
-// 	ucancaps "github.com/storacha/go-libstoracha/capabilities/ucan"
+// 	replicacmds "github.com/storacha/go-libstoracha/capabilities/blob/replica"
+// 	ucancmds "github.com/storacha/go-libstoracha/capabilities/ucan"
 // 	"github.com/storacha/go-libstoracha/digestutil"
 // 	"github.com/storacha/go-ucanto/core/delegation"
 // 	"github.com/storacha/go-ucanto/core/invocation"

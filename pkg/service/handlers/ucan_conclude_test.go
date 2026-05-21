@@ -5,7 +5,7 @@ import (
 	"context"
 	"testing"
 
-	ucancaps "github.com/fil-forge/libforge/commands/ucan"
+	ucancmds "github.com/fil-forge/libforge/commands/ucan"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/identity"
 	"github.com/fil-forge/sprue/pkg/service/handlers"
@@ -52,10 +52,10 @@ func TestUCANConcludeHandler(t *testing.T) {
 
 		_, rcpt := newTaskAndReceipt(t, "/test/thing")
 
-		concludeInv, err := ucancaps.Conclude.Invoke(
+		concludeInv, err := ucancmds.Conclude.Invoke(
 			uploadService,
 			uploadService.DID(),
-			&ucancaps.ConcludeArguments{Receipt: rcpt.Link()},
+			&ucancmds.ConcludeArguments{Receipt: rcpt.Link()},
 			invocation.WithAudience(uploadService.DID()),
 		)
 		require.NoError(t, err)
@@ -74,7 +74,7 @@ func TestUCANConcludeHandler(t *testing.T) {
 
 		var model edm.ErrorModel
 		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
-		require.Equal(t, ucancaps.ConclusionReceiptNotFoundErrorName, model.Name())
+		require.Equal(t, ucancmds.ConclusionReceiptNotFoundErrorName, model.Name())
 	})
 
 	t.Run("unknown invocation returns success", func(t *testing.T) {
@@ -89,10 +89,10 @@ func TestUCANConcludeHandler(t *testing.T) {
 		// metadata nor in the agent store — the handler treats this as a no-op.
 		_, rcpt := newTaskAndReceipt(t, "/test/thing")
 
-		concludeInv, err := ucancaps.Conclude.Invoke(
+		concludeInv, err := ucancmds.Conclude.Invoke(
 			uploadService,
 			uploadService.DID(),
-			&ucancaps.ConcludeArguments{Receipt: rcpt.Link()},
+			&ucancmds.ConcludeArguments{Receipt: rcpt.Link()},
 			invocation.WithAudience(uploadService.DID()),
 		)
 		require.NoError(t, err)
@@ -138,10 +138,10 @@ func TestUCANConcludeHandler(t *testing.T) {
 		)
 		require.NoError(t, agentStore.Write(ctx, msg, agent.Index(msg)))
 
-		concludeInv, err := ucancaps.Conclude.Invoke(
+		concludeInv, err := ucancmds.Conclude.Invoke(
 			uploadService,
 			uploadService.DID(),
-			&ucancaps.ConcludeArguments{Receipt: rcpt.Link()},
+			&ucancmds.ConcludeArguments{Receipt: rcpt.Link()},
 			invocation.WithAudience(uploadService.DID()),
 		)
 		require.NoError(t, err)
@@ -177,10 +177,10 @@ func TestUCANConcludeHandler(t *testing.T) {
 		)
 		require.NoError(t, agentStore.Write(ctx, msg, agent.Index(msg)))
 
-		concludeInv, err := ucancaps.Conclude.Invoke(
+		concludeInv, err := ucancmds.Conclude.Invoke(
 			uploadService,
 			uploadService.DID(),
-			&ucancaps.ConcludeArguments{Receipt: rcpt.Link()},
+			&ucancmds.ConcludeArguments{Receipt: rcpt.Link()},
 			invocation.WithAudience(uploadService.DID()),
 		)
 		require.NoError(t, err)
@@ -214,10 +214,10 @@ func TestUCANConcludeHandler(t *testing.T) {
 
 		// The ran invocation is supplied directly in the request metadata —
 		// no agent-store lookup required.
-		concludeInv, err := ucancaps.Conclude.Invoke(
+		concludeInv, err := ucancmds.Conclude.Invoke(
 			uploadService,
 			uploadService.DID(),
-			&ucancaps.ConcludeArguments{Receipt: rcpt.Link()},
+			&ucancmds.ConcludeArguments{Receipt: rcpt.Link()},
 			invocation.WithAudience(uploadService.DID()),
 		)
 		require.NoError(t, err)

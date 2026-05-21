@@ -5,9 +5,9 @@ import (
 	"context"
 	"fmt"
 
-	blobcaps "github.com/fil-forge/libforge/commands/blob"
-	httpcaps "github.com/fil-forge/libforge/commands/http"
-	ucancaps "github.com/fil-forge/libforge/commands/ucan"
+	blobcmds "github.com/fil-forge/libforge/commands/blob"
+	httpcmds "github.com/fil-forge/libforge/commands/http"
+	ucancmds "github.com/fil-forge/libforge/commands/ucan"
 	"github.com/fil-forge/libforge/digestutil"
 	ucanlib "github.com/fil-forge/libforge/ucan"
 	"github.com/fil-forge/sprue/pkg/piriclient"
@@ -28,16 +28,16 @@ func NewHTTPPutConcludeHandler(
 	logger *zap.Logger,
 ) ConclusionHandler {
 	log := logger.With(
-		zap.Stringer("handler", ucancaps.Conclude),
-		zap.Stringer("conclude", httpcaps.Put),
+		zap.Stringer("handler", ucancmds.Conclude),
+		zap.Stringer("conclude", httpcmds.Put),
 	)
 	return ConclusionHandler{
-		Command: httpcaps.Put.Command,
+		Command: httpcmds.Put.Command,
 		Handler: func(ctx context.Context, putInv ucan.Invocation, putRcpt ucan.Receipt, meta ucan.Container) error {
 			log := log.With(zap.Stringer("ran", putRcpt.Ran()))
 			log.Debug("handling conclude")
 
-			var putArgs httpcaps.PutArguments
+			var putArgs httpcmds.PutArguments
 			if err := putArgs.UnmarshalCBOR(bytes.NewReader(putInv.ArgumentsBytes())); err != nil {
 				log.Error("failed to unmarshal HTTP PUT arguments", zap.Error(err))
 				return fmt.Errorf("unmarshaling HTTP PUT arguments: %w", err)
@@ -64,7 +64,7 @@ func NewHTTPPutConcludeHandler(
 				zap.Stringer("provider", provider),
 			)
 
-			var allocArgs blobcaps.AllocateArguments
+			var allocArgs blobcmds.AllocateArguments
 			if err := allocArgs.UnmarshalCBOR(bytes.NewReader(allocInv.ArgumentsBytes())); err != nil {
 				log.Error("failed to unmarshal allocate arguments", zap.Error(err))
 				return fmt.Errorf("unmarshaling allocate arguments: %w", err)
