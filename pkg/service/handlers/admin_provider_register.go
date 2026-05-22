@@ -19,8 +19,7 @@ var (
 
 func NewAdminProviderRegisterHandler(id *identity.Identity, providerStore storageprovider.Store, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", provider.Register))
-	return server.NewRoute(
-		provider.Register,
+	return provider.Register.Route(
 		func(req *binding.Request[*provider.RegisterArguments], res *binding.Response[*provider.RegisterOK]) error {
 			args := req.Task().Arguments()
 			if req.Invocation().Issuer() != id.Signer.DID() {

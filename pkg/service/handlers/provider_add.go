@@ -17,8 +17,7 @@ import (
 
 func NewProviderAddHandler(deploymentCfg config.DeploymentConfig, provisioningSvc *provisioning.Service, billingSvc *billing.Service, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", providercmds.Add))
-	return server.NewRoute(
-		providercmds.Add,
+	return providercmds.Add.Route(
 		func(req *binding.Request[*providercmds.AddArguments], res *binding.Response[*providercmds.AddOK]) error {
 			args := req.Task().Arguments()
 			account, err := didmailto.Parse(req.Invocation().Subject().String())

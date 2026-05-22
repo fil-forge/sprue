@@ -15,8 +15,7 @@ import (
 // This handler returns info about a space, including its providers.
 func NewSpaceInfoHandler(provisioningSvc *provisioning.Service, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", spacecmds.Info))
-	return server.NewRoute(
-		spacecmds.Info,
+	return spacecmds.Info.Route(
 		func(req *binding.Request[*spacecmds.InfoArguments], res *binding.Response[*spacecmds.InfoOK]) error {
 			space := req.Invocation().Subject()
 			log := log.With(zap.Stringer("space", space))

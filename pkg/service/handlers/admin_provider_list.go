@@ -16,8 +16,7 @@ import (
 
 func NewAdminProviderListHandler(id *identity.Identity, providerStore storageprovider.Store, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", provider.List))
-	return server.NewRoute(
-		provider.List,
+	return provider.List.Route(
 		func(req *binding.Request[*provider.ListArguments], res *binding.Response[*provider.ListOK]) error {
 			if req.Invocation().Issuer() != id.Signer.DID() {
 				log.Warn("Unauthorized access attempt", zap.Stringer("issuer", req.Invocation().Issuer()))

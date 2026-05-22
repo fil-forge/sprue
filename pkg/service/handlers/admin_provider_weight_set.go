@@ -13,8 +13,7 @@ import (
 
 func NewAdminProviderWeightSetHandler(id *identity.Identity, providerStore storageprovider.Store, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", weight.Set))
-	return server.NewRoute(
-		weight.Set,
+	return weight.Set.Route(
 		func(req *binding.Request[*weight.SetArguments], res *binding.Response[*weight.SetOK]) error {
 			args := req.Task().Arguments()
 			if req.Invocation().Issuer() != id.Signer.DID() {

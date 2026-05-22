@@ -12,8 +12,7 @@ import (
 
 func NewAdminProviderDeregisterHandler(id *identity.Identity, providerStore storageprovider.Store, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", provider.Deregister))
-	return server.NewRoute(
-		provider.Deregister,
+	return provider.Deregister.Route(
 		func(req *binding.Request[*provider.DeregisterArguments], res *binding.Response[*provider.DeregisterOK]) error {
 			args := req.Task().Arguments()
 

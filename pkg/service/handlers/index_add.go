@@ -19,8 +19,7 @@ import (
 
 func NewIndexAddHandler(id *identity.Identity, provisioningSvc *provisioning.Service, blobRegistry blobregistry.Store, indexerClient *indexerclient.Client, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", indexcmds.Add))
-	return server.NewRoute(
-		indexcmds.Add,
+	return indexcmds.Add.Route(
 		func(req *binding.Request[*indexcmds.AddArguments], res *binding.Response[*indexcmds.AddOK]) error {
 			args := req.Task().Arguments()
 			space := req.Invocation().Subject()

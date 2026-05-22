@@ -12,8 +12,7 @@ import (
 
 func NewUploadListHandler(uploadStore upload_store.Store, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", uploadcmds.List))
-	return server.NewRoute(
-		uploadcmds.List,
+	return uploadcmds.List.Route(
 		func(req *binding.Request[*uploadcmds.ListArguments], res *binding.Response[*uploadcmds.ListOK]) error {
 			args := req.Task().Arguments()
 			space := req.Invocation().Subject()

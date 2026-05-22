@@ -16,8 +16,7 @@ import (
 
 func NewAccessClaimHandler(id *identity.Identity, delegationStore delegation_store.Store, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", access.Claim))
-	return server.NewRoute(
-		access.Claim,
+	return access.Claim.Route(
 		func(req *binding.Request[*access.ClaimArguments], res *binding.Response[*access.ClaimOK]) error {
 			agent := req.Invocation().Issuer()
 			audience := req.Invocation().Subject()

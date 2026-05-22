@@ -35,8 +35,7 @@ type ConclusionHandler struct {
 func NewUCANConcludeHandler(id *identity.Identity, agentStore agent.Store, handlers map[ucan.Command]ConclusionHandlerFunc, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", ucancmds.Conclude))
 	log.Info("registered conclude handlers", zap.Stringers("commands", slices.Collect(maps.Keys(handlers))))
-	return server.NewRoute(
-		ucancmds.Conclude,
+	return ucancmds.Conclude.Route(
 		func(req *binding.Request[*ucancmds.ConcludeArguments], res *binding.Response[*ucancmds.ConcludeOK]) error {
 			args := req.Task().Arguments()
 			rcptRoot := args.Receipt
