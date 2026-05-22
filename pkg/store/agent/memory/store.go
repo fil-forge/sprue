@@ -114,12 +114,9 @@ func (s *Store) List(ctx context.Context, task cid.Cid, options ...agent.ListOpt
 	}
 
 	var msgLinks []cid.Cid
-	for _, l := range s.index[fmt.Sprintf("/%s/invocation/", task)] {
-		msgLinks = append(msgLinks, l)
-	}
-	for _, l := range s.index[fmt.Sprintf("/%s/receipt/", task)] {
-		msgLinks = append(msgLinks, l)
-	}
+	msgLinks = append(msgLinks, s.index[fmt.Sprintf("/%s/invocation/", task)]...)
+	msgLinks = append(msgLinks, s.index[fmt.Sprintf("/%s/receipt/", task)]...)
+
 	slices.SortFunc(msgLinks, func(a, b cid.Cid) int {
 		return bytes.Compare(a.Bytes(), b.Bytes())
 	})
