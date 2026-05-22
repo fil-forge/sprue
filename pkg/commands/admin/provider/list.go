@@ -2,8 +2,12 @@
 
 package provider
 
-import "github.com/fil-forge/libforge/commands"
+import (
+	"github.com/fil-forge/libforge/commands"
+	"github.com/fil-forge/ucantone/binding"
+	"github.com/fil-forge/ucantone/ucan/command"
+)
 
 type ListArguments = commands.Unit
 
-var List = commands.MustParse[*ListArguments]("/admin/provider/list")
+var List = binding.Bind[*ListArguments, *ListOK](command.MustParse("/admin/provider/list"))

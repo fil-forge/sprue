@@ -21,10 +21,10 @@ import (
 	"github.com/fil-forge/sprue/pkg/service/handlers"
 	consumer_store "github.com/fil-forge/sprue/pkg/store/consumer/memory"
 	subscription_store "github.com/fil-forge/sprue/pkg/store/subscription/memory"
+	"github.com/fil-forge/ucantone/binding"
 	"github.com/fil-forge/ucantone/did"
 	edm "github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
-	"github.com/fil-forge/ucantone/execution/bindexec"
 	"github.com/fil-forge/ucantone/principal"
 	"github.com/fil-forge/ucantone/principal/signer"
 	"github.com/fil-forge/ucantone/principal/verifier"
@@ -63,9 +63,9 @@ func newMockIndexerServer(
 		server.WithValidationOptions(validator.WithDIDVerifierResolver(resolveDIDKey)),
 	)
 
-	srv.Handle(assertcmds.Index.Command, bindexec.NewHandler(func(
-		req *bindexec.Request[*assertcmds.IndexArguments],
-		res *bindexec.Response[*assertcmds.IndexOK],
+	srv.Handle(assertcmds.Index.Command, assertcmds.Index.Handler(func(
+		req *binding.Request[*assertcmds.IndexArguments],
+		res *binding.Response[*assertcmds.IndexOK],
 	) error {
 		return res.SetSuccess(indexOK)
 	}))

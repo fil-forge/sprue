@@ -9,18 +9,16 @@ import (
 	"github.com/fil-forge/sprue/pkg/identity"
 	"github.com/fil-forge/sprue/pkg/store"
 	storageprovider "github.com/fil-forge/sprue/pkg/store/storage_provider"
+	"github.com/fil-forge/ucantone/binding"
 	"github.com/fil-forge/ucantone/errors"
-	"github.com/fil-forge/ucantone/execution/bindexec"
+	"github.com/fil-forge/ucantone/server"
 )
 
-func NewAdminProviderListHandler(id *identity.Identity, providerStore storageprovider.Store, logger *zap.Logger) Handler {
+func NewAdminProviderListHandler(id *identity.Identity, providerStore storageprovider.Store, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", provider.List))
-	return Handler{
-		Command: provider.List.Command,
-		Handler: bindexec.NewHandler(func(
-			req *bindexec.Request[*provider.ListArguments],
-			res *bindexec.Response[*provider.ListOK],
-		) error {
+	return server.NewRoute(
+		provider.List,
+		func(req *binding.Request[*provider.ListArguments], res *binding.Response[*provider.ListOK]) error {
 			if req.Invocation().Issuer() != id.Signer.DID() {
 				log.Warn("Unauthorized access attempt", zap.Stringer("issuer", req.Invocation().Issuer()))
 				return res.SetFailure(errors.New("Unauthorized", "only the service identity can list providers"))
@@ -53,6 +51,6 @@ func NewAdminProviderListHandler(id *identity.Identity, providerStore storagepro
 			}
 
 			return res.SetSuccess(&provider.ListOK{Providers: providers})
-		}),
-	}
+		},
+	)
 }

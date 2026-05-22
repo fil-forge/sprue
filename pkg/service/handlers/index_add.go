@@ -12,18 +12,16 @@ import (
 	"github.com/fil-forge/sprue/pkg/indexerclient"
 	"github.com/fil-forge/sprue/pkg/provisioning"
 	blobregistry "github.com/fil-forge/sprue/pkg/store/blob_registry"
+	"github.com/fil-forge/ucantone/binding"
 	"github.com/fil-forge/ucantone/errors"
-	"github.com/fil-forge/ucantone/execution/bindexec"
+	"github.com/fil-forge/ucantone/server"
 )
 
-func NewIndexAddHandler(id *identity.Identity, provisioningSvc *provisioning.Service, blobRegistry blobregistry.Store, indexerClient *indexerclient.Client, logger *zap.Logger) Handler {
+func NewIndexAddHandler(id *identity.Identity, provisioningSvc *provisioning.Service, blobRegistry blobregistry.Store, indexerClient *indexerclient.Client, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", indexcmds.Add))
-	return Handler{
-		Command: indexcmds.Add.Command,
-		Handler: bindexec.NewHandler(func(
-			req *bindexec.Request[*indexcmds.AddArguments],
-			res *bindexec.Response[*indexcmds.AddOK],
-		) error {
+	return server.NewRoute(
+		indexcmds.Add,
+		func(req *binding.Request[*indexcmds.AddArguments], res *binding.Response[*indexcmds.AddOK]) error {
 			args := req.Task().Arguments()
 			space := req.Invocation().Subject()
 			index := args.Index
@@ -66,6 +64,6 @@ func NewIndexAddHandler(id *identity.Identity, provisioningSvc *provisioning.Ser
 			}
 
 			return res.SetSuccess(&indexcmds.AddOK{})
-		}),
-	}
+		},
+	)
 }

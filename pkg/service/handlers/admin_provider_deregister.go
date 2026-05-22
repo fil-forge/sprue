@@ -4,19 +4,17 @@ import (
 	"github.com/fil-forge/sprue/pkg/commands/admin/provider"
 	"github.com/fil-forge/sprue/pkg/identity"
 	storageprovider "github.com/fil-forge/sprue/pkg/store/storage_provider"
+	"github.com/fil-forge/ucantone/binding"
 	"github.com/fil-forge/ucantone/errors"
-	"github.com/fil-forge/ucantone/execution/bindexec"
+	"github.com/fil-forge/ucantone/server"
 	"go.uber.org/zap"
 )
 
-func NewAdminProviderDeregisterHandler(id *identity.Identity, providerStore storageprovider.Store, logger *zap.Logger) Handler {
+func NewAdminProviderDeregisterHandler(id *identity.Identity, providerStore storageprovider.Store, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", provider.Deregister))
-	return Handler{
-		Command: provider.Deregister.Command,
-		Handler: bindexec.NewHandler(func(
-			req *bindexec.Request[*provider.DeregisterArguments],
-			res *bindexec.Response[*provider.DeregisterOK],
-		) error {
+	return server.NewRoute(
+		provider.Deregister,
+		func(req *binding.Request[*provider.DeregisterArguments], res *binding.Response[*provider.DeregisterOK]) error {
 			args := req.Task().Arguments()
 
 			if req.Invocation().Issuer() != id.Signer.DID() {
@@ -34,6 +32,6 @@ func NewAdminProviderDeregisterHandler(id *identity.Identity, providerStore stor
 				return err
 			}
 			return res.SetSuccess(&provider.DeregisterOK{})
-		}),
-	}
+		},
+	)
 }

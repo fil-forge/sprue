@@ -10,7 +10,6 @@ import (
 	"github.com/fil-forge/libforge/didresolver"
 	"github.com/fil-forge/sprue/pkg/identity"
 	"github.com/fil-forge/sprue/pkg/lib/ucan_server"
-	"github.com/fil-forge/sprue/pkg/service/handlers"
 	"github.com/fil-forge/sprue/pkg/service/ui"
 	"github.com/fil-forge/sprue/pkg/store/agent"
 	delegation_store "github.com/fil-forge/sprue/pkg/store/delegation"
@@ -35,7 +34,7 @@ type Service struct {
 }
 
 // New creates a new Service instance.
-func New(id *identity.Identity, agentStore agent.Store, delegationStore delegation_store.Store, handlers []handlers.Handler, logger *zap.Logger, options ...server.HTTPOption) (*Service, error) {
+func New(id *identity.Identity, agentStore agent.Store, delegationStore delegation_store.Store, handlers []server.Route, logger *zap.Logger, options ...server.HTTPOption) (*Service, error) {
 	server, err := createUCANServer(id.Signer, agentStore, handlers, logger, options...)
 	if err != nil {
 		return nil, err
@@ -50,7 +49,7 @@ func New(id *identity.Identity, agentStore agent.Store, delegationStore delegati
 }
 
 // createUCANServer creates the UCAN RPC server with registered handlers.
-func createUCANServer(id principal.Signer, agentStore agent.Store, handlers []handlers.Handler, logger *zap.Logger, options ...server.HTTPOption) (*server.HTTPServer, error) {
+func createUCANServer(id principal.Signer, agentStore agent.Store, handlers []server.Route, logger *zap.Logger, options ...server.HTTPOption) (*server.HTTPServer, error) {
 	httpResolver, err := didresolver.NewHTTPResolver()
 	if err != nil {
 		return nil, err
@@ -63,8 +62,8 @@ func createUCANServer(id principal.Signer, agentStore agent.Store, handlers []ha
 	options = append(
 		slices.Clone(options),
 		server.WithReceiptTimestamps(true),
-		server.WithEventListener(ucan_server.AgentMessageLogger{Logger: logger, AgentStore: agentStore}),
-		server.WithEventListener(ucan_server.ErrorHandler{Logger: logger}),
+		server.WithEventListener(&ucan_server.AgentMessageLogger{Logger: logger, AgentStore: agentStore}),
+		server.WithEventListener(&ucan_server.ErrorHandler{Logger: logger}),
 		server.WithValidationOptions(
 			validator.WithDIDVerifierResolvers(map[string]validator.DIDVerifierResolverFunc{
 				"key": ucan_server.ResolveDIDKey,

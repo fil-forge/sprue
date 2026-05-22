@@ -6,8 +6,9 @@ import (
 	"github.com/fil-forge/sprue/pkg/commands/admin/provider"
 	"github.com/fil-forge/sprue/pkg/identity"
 	storageprovider "github.com/fil-forge/sprue/pkg/store/storage_provider"
+	"github.com/fil-forge/ucantone/binding"
 	"github.com/fil-forge/ucantone/errors"
-	"github.com/fil-forge/ucantone/execution/bindexec"
+	"github.com/fil-forge/ucantone/server"
 	"go.uber.org/zap"
 )
 
@@ -16,14 +17,11 @@ var (
 	initialReplicationWeight = 0
 )
 
-func NewAdminProviderRegisterHandler(id *identity.Identity, providerStore storageprovider.Store, logger *zap.Logger) Handler {
+func NewAdminProviderRegisterHandler(id *identity.Identity, providerStore storageprovider.Store, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", provider.Register))
-	return Handler{
-		Command: provider.Register.Command,
-		Handler: bindexec.NewHandler(func(
-			req *bindexec.Request[*provider.RegisterArguments],
-			res *bindexec.Response[*provider.RegisterOK],
-		) error {
+	return server.NewRoute(
+		provider.Register,
+		func(req *binding.Request[*provider.RegisterArguments], res *binding.Response[*provider.RegisterOK]) error {
 			args := req.Task().Arguments()
 			if req.Invocation().Issuer() != id.Signer.DID() {
 				log.Warn("Unauthorized access attempt", zap.Stringer("issuer", req.Invocation().Issuer()))
@@ -53,6 +51,6 @@ func NewAdminProviderRegisterHandler(id *identity.Identity, providerStore storag
 				return err
 			}
 			return res.SetSuccess(&provider.RegisterOK{})
-		}),
-	}
+		},
+	)
 }

@@ -5,19 +5,17 @@ import (
 
 	shardcmds "github.com/fil-forge/libforge/commands/upload/shard"
 	upload_store "github.com/fil-forge/sprue/pkg/store/upload"
-	"github.com/fil-forge/ucantone/execution/bindexec"
+	"github.com/fil-forge/ucantone/binding"
+	"github.com/fil-forge/ucantone/server"
 	"go.uber.org/zap"
 )
 
 // This handler lists the shards of an upload.
-func NewUploadShardListHandler(uploadStore upload_store.Store, logger *zap.Logger) Handler {
+func NewUploadShardListHandler(uploadStore upload_store.Store, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", shardcmds.List))
-	return Handler{
-		Command: shardcmds.List.Command,
-		Handler: bindexec.NewHandler(func(
-			req *bindexec.Request[*shardcmds.ListArguments],
-			res *bindexec.Response[*shardcmds.ListOK],
-		) error {
+	return server.NewRoute(
+		shardcmds.List,
+		func(req *binding.Request[*shardcmds.ListArguments], res *binding.Response[*shardcmds.ListOK]) error {
 			args := req.Task().Arguments()
 			space := req.Invocation().Subject()
 			root := args.Root
@@ -44,6 +42,6 @@ func NewUploadShardListHandler(uploadStore upload_store.Store, logger *zap.Logge
 				Results: page.Results,
 				Cursor:  page.Cursor,
 			})
-		}),
-	}
+		},
+	)
 }

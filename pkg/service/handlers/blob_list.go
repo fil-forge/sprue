@@ -5,18 +5,16 @@ import (
 
 	blobcmds "github.com/fil-forge/libforge/commands/blob"
 	blobregistry "github.com/fil-forge/sprue/pkg/store/blob_registry"
-	"github.com/fil-forge/ucantone/execution/bindexec"
+	"github.com/fil-forge/ucantone/binding"
+	"github.com/fil-forge/ucantone/server"
 	"go.uber.org/zap"
 )
 
-func NewBlobListHandler(blobRegistry blobregistry.Store, logger *zap.Logger) Handler {
+func NewBlobListHandler(blobRegistry blobregistry.Store, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", blobcmds.List))
-	return Handler{
-		Command: blobcmds.List.Command,
-		Handler: bindexec.NewHandler(func(
-			req *bindexec.Request[*blobcmds.ListArguments],
-			res *bindexec.Response[*blobcmds.ListOK],
-		) error {
+	return server.NewRoute(
+		blobcmds.List,
+		func(req *binding.Request[*blobcmds.ListArguments], res *binding.Response[*blobcmds.ListOK]) error {
 			args := req.Task().Arguments()
 			space := req.Invocation().Subject()
 			log := log.With(zap.Stringer("space", space))
@@ -50,6 +48,6 @@ func NewBlobListHandler(blobRegistry blobregistry.Store, logger *zap.Logger) Han
 				Cursor:  page.Cursor,
 				Results: results,
 			})
-		}),
-	}
+		},
+	)
 }

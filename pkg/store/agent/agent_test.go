@@ -13,6 +13,7 @@ import (
 	agentpostgres "github.com/fil-forge/sprue/pkg/store/agent/postgres"
 	"github.com/fil-forge/ucantone/ipld/datamodel"
 	"github.com/fil-forge/ucantone/ucan"
+	"github.com/fil-forge/ucantone/ucan/command"
 	"github.com/fil-forge/ucantone/ucan/container"
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/fil-forge/ucantone/ucan/receipt"
@@ -99,7 +100,7 @@ func makeInvocation(t *testing.T) ucan.Invocation {
 	inv, err := invocation.Invoke(
 		testutil.Alice,
 		testutil.Alice.DID(),
-		"/test/invoke",
+		command.MustParse("/test/invoke"),
 		datamodel.Map{},
 		invocation.WithAudience(testutil.Bob.DID()),
 	)

@@ -6,18 +6,16 @@ import (
 	"github.com/fil-forge/sprue/pkg/commands/admin/provider/weight"
 	"github.com/fil-forge/sprue/pkg/identity"
 	storageprovider "github.com/fil-forge/sprue/pkg/store/storage_provider"
+	"github.com/fil-forge/ucantone/binding"
 	"github.com/fil-forge/ucantone/errors"
-	"github.com/fil-forge/ucantone/execution/bindexec"
+	"github.com/fil-forge/ucantone/server"
 )
 
-func NewAdminProviderWeightSetHandler(id *identity.Identity, providerStore storageprovider.Store, logger *zap.Logger) Handler {
+func NewAdminProviderWeightSetHandler(id *identity.Identity, providerStore storageprovider.Store, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", weight.Set))
-	return Handler{
-		Command: weight.Set.Command,
-		Handler: bindexec.NewHandler(func(
-			req *bindexec.Request[*weight.SetArguments],
-			res *bindexec.Response[*weight.SetOK],
-		) error {
+	return server.NewRoute(
+		weight.Set,
+		func(req *binding.Request[*weight.SetArguments], res *binding.Response[*weight.SetOK]) error {
 			args := req.Task().Arguments()
 			if req.Invocation().Issuer() != id.Signer.DID() {
 				log.Warn("Unauthorized access attempt", zap.Stringer("issuer", req.Invocation().Issuer()))
@@ -41,6 +39,6 @@ func NewAdminProviderWeightSetHandler(id *identity.Identity, providerStore stora
 				return err
 			}
 			return res.SetSuccess(&weight.SetOK{})
-		}),
-	}
+		},
+	)
 }

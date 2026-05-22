@@ -29,10 +29,10 @@ import (
 	spacediff_store "github.com/fil-forge/sprue/pkg/store/space_diff/memory"
 	storage_provider_store "github.com/fil-forge/sprue/pkg/store/storage_provider/memory"
 	subscription_store "github.com/fil-forge/sprue/pkg/store/subscription/memory"
+	"github.com/fil-forge/ucantone/binding"
 	"github.com/fil-forge/ucantone/did"
 	edm "github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
-	"github.com/fil-forge/ucantone/execution/bindexec"
 	"github.com/fil-forge/ucantone/principal"
 	ed25519signer "github.com/fil-forge/ucantone/principal/ed25519"
 	"github.com/fil-forge/ucantone/principal/signer"
@@ -52,7 +52,7 @@ import (
 )
 
 type blobAddTestDeps struct {
-	handler           handlers.Handler
+	handler           server.Route
 	consumerStore     *consumer_store.Store
 	subscriptionStore *subscription_store.Store
 	spStore           *storage_provider_store.Store
@@ -136,16 +136,16 @@ func newMockPiriServer(
 		server.WithValidationOptions(validator.WithDIDVerifierResolver(resolveDIDKey)),
 	)
 
-	srv.Handle(blobcmds.Allocate.Command, bindexec.NewHandler(func(
-		req *bindexec.Request[*blobcmds.AllocateArguments],
-		res *bindexec.Response[*blobcmds.AllocateOK],
+	srv.Handle(blobcmds.Allocate.Command, blobcmds.Allocate.Handler(func(
+		req *binding.Request[*blobcmds.AllocateArguments],
+		res *binding.Response[*blobcmds.AllocateOK],
 	) error {
 		return res.SetSuccess(allocateOK)
 	}))
 
-	srv.Handle(blobcmds.Accept.Command, bindexec.NewHandler(func(
-		req *bindexec.Request[*blobcmds.AcceptArguments],
-		res *bindexec.Response[*blobcmds.AcceptOK],
+	srv.Handle(blobcmds.Accept.Command, blobcmds.Accept.Handler(func(
+		req *binding.Request[*blobcmds.AcceptArguments],
+		res *binding.Response[*blobcmds.AcceptOK],
 	) error {
 		return res.SetSuccess(acceptOK)
 	}))

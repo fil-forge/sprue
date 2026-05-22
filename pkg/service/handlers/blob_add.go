@@ -17,12 +17,13 @@ import (
 	"github.com/fil-forge/sprue/pkg/routing"
 	"github.com/fil-forge/sprue/pkg/store/agent"
 	blobregistry "github.com/fil-forge/sprue/pkg/store/blob_registry"
+	"github.com/fil-forge/ucantone/binding"
 	"github.com/fil-forge/ucantone/did"
 	"github.com/fil-forge/ucantone/errors"
-	"github.com/fil-forge/ucantone/execution/bindexec"
 	"github.com/fil-forge/ucantone/ipld/datamodel"
 	"github.com/fil-forge/ucantone/principal"
 	ed25519signer "github.com/fil-forge/ucantone/principal/ed25519"
+	"github.com/fil-forge/ucantone/server"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/container"
 	"github.com/fil-forge/ucantone/ucan/invocation"
@@ -33,14 +34,11 @@ import (
 	"go.uber.org/zap"
 )
 
-func NewBlobAddHandler(id *identity.Identity, provisioningSvc *provisioning.Service, router *routing.Service, nodeProvider piriclient.Provider, agentStore agent.Store, blobRegistry blobregistry.Store, logger *zap.Logger) Handler {
+func NewBlobAddHandler(id *identity.Identity, provisioningSvc *provisioning.Service, router *routing.Service, nodeProvider piriclient.Provider, agentStore agent.Store, blobRegistry blobregistry.Store, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", blobcmds.Add))
-	return Handler{
-		Command: blobcmds.Add.Command,
-		Handler: bindexec.NewHandler(func(
-			req *bindexec.Request[*blobcmds.AddArguments],
-			res *bindexec.Response[*blobcmds.AddOK],
-		) error {
+	return server.NewRoute(
+		blobcmds.Add,
+		func(req *binding.Request[*blobcmds.AddArguments], res *binding.Response[*blobcmds.AddOK]) error {
 			args := req.Task().Arguments()
 			blob := args.Blob
 			space := req.Invocation().Subject()
@@ -192,8 +190,8 @@ func NewBlobAddHandler(id *identity.Identity, provisioningSvc *provisioning.Serv
 					Task: accInv.Task().Link(),
 				},
 			})
-		}),
-	}
+		},
+	)
 }
 
 func doAllocate(

@@ -20,7 +20,11 @@ type ErrorHandler struct {
 
 var _ server.ResponseEncodeListener = (*ErrorHandler)(nil)
 
-func (l ErrorHandler) OnResponseEncode(ctx context.Context, ct ucan.Container) error {
+func (l *ErrorHandler) OnRequestDecode(ctx context.Context, container ucan.Container) error {
+	return nil
+}
+
+func (l *ErrorHandler) OnResponseEncode(ctx context.Context, ct ucan.Container) error {
 	for _, inv := range ct.Invocations() {
 		r, ok := ct.Receipt(inv.Task().Link())
 		if !ok || !r.Out().IsErr() {

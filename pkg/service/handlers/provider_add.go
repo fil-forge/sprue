@@ -9,19 +9,17 @@ import (
 	"github.com/fil-forge/sprue/pkg/billing"
 	"github.com/fil-forge/sprue/pkg/provisioning"
 	"github.com/fil-forge/sprue/pkg/store/consumer"
+	"github.com/fil-forge/ucantone/binding"
 	"github.com/fil-forge/ucantone/errors"
-	"github.com/fil-forge/ucantone/execution/bindexec"
+	"github.com/fil-forge/ucantone/server"
 	"go.uber.org/zap"
 )
 
-func NewProviderAddHandler(deploymentCfg config.DeploymentConfig, provisioningSvc *provisioning.Service, billingSvc *billing.Service, logger *zap.Logger) Handler {
+func NewProviderAddHandler(deploymentCfg config.DeploymentConfig, provisioningSvc *provisioning.Service, billingSvc *billing.Service, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", providercmds.Add))
-	return Handler{
-		Command: providercmds.Add.Command,
-		Handler: bindexec.NewHandler(func(
-			req *bindexec.Request[*providercmds.AddArguments],
-			res *bindexec.Response[*providercmds.AddOK],
-		) error {
+	return server.NewRoute(
+		providercmds.Add,
+		func(req *binding.Request[*providercmds.AddArguments], res *binding.Response[*providercmds.AddOK]) error {
 			args := req.Task().Arguments()
 			account, err := didmailto.Parse(req.Invocation().Subject().String())
 			if err != nil {
@@ -70,6 +68,6 @@ func NewProviderAddHandler(deploymentCfg config.DeploymentConfig, provisioningSv
 
 			log.Debug("service provisioned successfully", zap.String("subscription", sub))
 			return res.SetSuccess(&providercmds.AddOK{ID: sub})
-		}),
-	}
+		},
+	)
 }

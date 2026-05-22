@@ -9,8 +9,9 @@ import (
 	ucancmds "github.com/fil-forge/libforge/commands/ucan"
 	"github.com/fil-forge/sprue/pkg/identity"
 	"github.com/fil-forge/sprue/pkg/store/agent"
+	"github.com/fil-forge/ucantone/binding"
 	"github.com/fil-forge/ucantone/errors"
-	"github.com/fil-forge/ucantone/execution/bindexec"
+	"github.com/fil-forge/ucantone/server"
 	"github.com/fil-forge/ucantone/ucan"
 	"go.uber.org/zap"
 )
@@ -31,15 +32,12 @@ type ConclusionHandler struct {
 // This handler processes receipt conclusions from clients.
 // When it receives an /http/put receipt, it calls /blob/accept on piri
 // and stores the accept receipt for later retrieval.
-func NewUCANConcludeHandler(id *identity.Identity, agentStore agent.Store, handlers map[ucan.Command]ConclusionHandlerFunc, logger *zap.Logger) Handler {
+func NewUCANConcludeHandler(id *identity.Identity, agentStore agent.Store, handlers map[ucan.Command]ConclusionHandlerFunc, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", ucancmds.Conclude))
 	log.Info("registered conclude handlers", zap.Stringers("commands", slices.Collect(maps.Keys(handlers))))
-	return Handler{
-		Command: ucancmds.Conclude.Command,
-		Handler: bindexec.NewHandler(func(
-			req *bindexec.Request[*ucancmds.ConcludeArguments],
-			res *bindexec.Response[*ucancmds.ConcludeOK],
-		) error {
+	return server.NewRoute(
+		ucancmds.Conclude,
+		func(req *binding.Request[*ucancmds.ConcludeArguments], res *binding.Response[*ucancmds.ConcludeOK]) error {
 			args := req.Task().Arguments()
 			rcptRoot := args.Receipt
 
@@ -96,6 +94,6 @@ func NewUCANConcludeHandler(id *identity.Identity, agentStore agent.Store, handl
 			}
 
 			return res.SetSuccess(&ucancmds.ConcludeOK{})
-		}),
-	}
+		},
+	)
 }

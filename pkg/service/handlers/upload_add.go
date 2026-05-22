@@ -7,20 +7,18 @@ import (
 	uploadcmds "github.com/fil-forge/libforge/commands/upload"
 	"github.com/fil-forge/sprue/pkg/provisioning"
 	upload_store "github.com/fil-forge/sprue/pkg/store/upload"
+	"github.com/fil-forge/ucantone/binding"
 	"github.com/fil-forge/ucantone/errors"
-	"github.com/fil-forge/ucantone/execution/bindexec"
+	"github.com/fil-forge/ucantone/server"
 	"go.uber.org/zap"
 )
 
 // This handler registers an upload (root CID + shards mapping).
-func NewUploadAddHandler(provisioningSvc *provisioning.Service, uploadStore upload_store.Store, logger *zap.Logger) Handler {
+func NewUploadAddHandler(provisioningSvc *provisioning.Service, uploadStore upload_store.Store, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", uploadcmds.Add))
-	return Handler{
-		Command: uploadcmds.Add.Command,
-		Handler: bindexec.NewHandler(func(
-			req *bindexec.Request[*uploadcmds.AddArguments],
-			res *bindexec.Response[*uploadcmds.AddOK],
-		) error {
+	return server.NewRoute(
+		uploadcmds.Add,
+		func(req *binding.Request[*uploadcmds.AddArguments], res *binding.Response[*uploadcmds.AddOK]) error {
 			args := req.Task().Arguments()
 			space := req.Invocation().Subject()
 			cause := req.Invocation().Task().Link()
@@ -50,6 +48,6 @@ func NewUploadAddHandler(provisioningSvc *provisioning.Service, uploadStore uplo
 			}
 
 			return res.SetSuccess(&uploadcmds.AddOK{})
-		}),
-	}
+		},
+	)
 }

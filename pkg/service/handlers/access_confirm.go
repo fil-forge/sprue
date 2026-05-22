@@ -8,11 +8,12 @@ import (
 	"github.com/fil-forge/libforge/didmailto"
 	"github.com/fil-forge/sprue/pkg/identity"
 	delegation_store "github.com/fil-forge/sprue/pkg/store/delegation"
+	"github.com/fil-forge/ucantone/binding"
 	"github.com/fil-forge/ucantone/did"
-	"github.com/fil-forge/ucantone/execution/bindexec"
 	"github.com/fil-forge/ucantone/ipld"
 	"github.com/fil-forge/ucantone/ipld/datamodel"
 	"github.com/fil-forge/ucantone/principal/absentee"
+	"github.com/fil-forge/ucantone/server"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/container"
 	"github.com/fil-forge/ucantone/ucan/delegation"
@@ -21,14 +22,11 @@ import (
 	"go.uber.org/zap"
 )
 
-func NewAccessConfirmHandler(id *identity.Identity, delegationStore delegation_store.Store, logger *zap.Logger) Handler {
+func NewAccessConfirmHandler(id *identity.Identity, delegationStore delegation_store.Store, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", access.Confirm))
-	return Handler{
-		Command: access.Confirm.Command,
-		Handler: bindexec.NewHandler(func(
-			req *bindexec.Request[*access.ConfirmArguments],
-			res *bindexec.Response[*access.ConfirmOK],
-		) error {
+	return server.NewRoute(
+		access.Confirm,
+		func(req *binding.Request[*access.ConfirmArguments], res *binding.Response[*access.ConfirmOK]) error {
 			args := req.Task().Arguments()
 			if req.Invocation().Subject() != id.Signer.DID() {
 				log.Warn("not a valid invocation", zap.Stringer("subject", req.Invocation().Subject()))
@@ -102,8 +100,8 @@ func NewAccessConfirmHandler(id *identity.Identity, delegationStore delegation_s
 			))
 
 			return res.SetSuccess(&access.ConfirmOK{Delegations: links})
-		}),
-	}
+		},
+	)
 }
 
 // createSessionProofs creates delegations from the account to the agent, and

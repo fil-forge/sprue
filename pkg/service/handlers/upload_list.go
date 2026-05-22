@@ -5,18 +5,16 @@ import (
 
 	uploadcmds "github.com/fil-forge/libforge/commands/upload"
 	upload_store "github.com/fil-forge/sprue/pkg/store/upload"
-	"github.com/fil-forge/ucantone/execution/bindexec"
+	"github.com/fil-forge/ucantone/binding"
+	"github.com/fil-forge/ucantone/server"
 	"go.uber.org/zap"
 )
 
-func NewUploadListHandler(uploadStore upload_store.Store, logger *zap.Logger) Handler {
+func NewUploadListHandler(uploadStore upload_store.Store, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", uploadcmds.List))
-	return Handler{
-		Command: uploadcmds.List.Command,
-		Handler: bindexec.NewHandler(func(
-			req *bindexec.Request[*uploadcmds.ListArguments],
-			res *bindexec.Response[*uploadcmds.ListOK],
-		) error {
+	return server.NewRoute(
+		uploadcmds.List,
+		func(req *binding.Request[*uploadcmds.ListArguments], res *binding.Response[*uploadcmds.ListOK]) error {
 			args := req.Task().Arguments()
 			space := req.Invocation().Subject()
 			log := log.With(zap.Stringer("space", space))
@@ -50,6 +48,6 @@ func NewUploadListHandler(uploadStore upload_store.Store, logger *zap.Logger) Ha
 				Results: results,
 				Cursor:  page.Cursor,
 			})
-		}),
-	}
+		},
+	)
 }

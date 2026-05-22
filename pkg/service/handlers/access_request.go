@@ -13,9 +13,10 @@ import (
 	"github.com/fil-forge/sprue/internal/config"
 	"github.com/fil-forge/sprue/pkg/identity"
 	"github.com/fil-forge/sprue/pkg/mailer"
+	"github.com/fil-forge/ucantone/binding"
 	"github.com/fil-forge/ucantone/errors"
-	"github.com/fil-forge/ucantone/execution/bindexec"
 	"github.com/fil-forge/ucantone/ipld/datamodel"
+	"github.com/fil-forge/ucantone/server"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/container"
 	"github.com/fil-forge/ucantone/ucan/invocation"
@@ -32,14 +33,11 @@ var (
 	ErrInvalidAuthorizationAudience = errors.New(access.InvalidAuthorizationAudienceErrorName, "invalid authorization audience DID")
 )
 
-func NewAccessRequestHandler(serverCfg config.ServerConfig, id *identity.Identity, mailer mailer.Mailer, logger *zap.Logger) Handler {
+func NewAccessRequestHandler(serverCfg config.ServerConfig, id *identity.Identity, mailer mailer.Mailer, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", access.Request))
-	return Handler{
-		Command: access.Request.Command,
-		Handler: bindexec.NewHandler(func(
-			req *bindexec.Request[*access.RequestArguments],
-			res *bindexec.Response[*access.RequestOK],
-		) error {
+	return server.NewRoute(
+		access.Request,
+		func(req *binding.Request[*access.RequestArguments], res *binding.Response[*access.RequestOK]) error {
 			args := req.Task().Arguments()
 			account, err := didmailto.Parse(args.Issuer.String())
 			if err != nil {
@@ -149,6 +147,6 @@ func NewAccessRequestHandler(serverCfg config.ServerConfig, id *identity.Identit
 				// let client know when the confirmation will expire
 				Expiration: int64(exp),
 			})
-		}),
-	}
+		},
+	)
 }

@@ -2,8 +2,12 @@
 
 package weight
 
-import "github.com/fil-forge/libforge/commands"
+import (
+	"github.com/fil-forge/libforge/commands"
+	"github.com/fil-forge/ucantone/binding"
+	"github.com/fil-forge/ucantone/ucan/command"
+)
 
 type SetOK = commands.Unit
 
-var Set = commands.MustParse[*SetArguments]("/provider/weight/set")
+var Set = binding.Bind[*SetArguments, *SetOK](command.MustParse("/provider/weight/set"))

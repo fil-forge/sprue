@@ -18,6 +18,7 @@ import (
 	edm "github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
 	"github.com/fil-forge/ucantone/principal"
+	"github.com/fil-forge/ucantone/server"
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/ipfs/go-cid"
 	"github.com/stretchr/testify/require"
@@ -26,7 +27,7 @@ import (
 )
 
 type uploadAddDeps struct {
-	handler       handlers.Handler
+	route         server.Route
 	store         *upload_store.Store
 	consumerStore *consumer_store.Store
 }
@@ -40,8 +41,8 @@ func newUploadAddDeps(t *testing.T, uploadService principal.Signer, logger *zap.
 		subscription_store.New(),
 	)
 	store := upload_store.New()
-	handler := handlers.NewUploadAddHandler(provisioningSvc, store, logger)
-	return &uploadAddDeps{handler: handler, store: store, consumerStore: consumerStore}
+	route := handlers.NewUploadAddHandler(provisioningSvc, store, logger)
+	return &uploadAddDeps{route: route, store: store, consumerStore: consumerStore}
 }
 
 // invokeUploadAdd builds an /upload/add invocation with the given args and a
@@ -97,7 +98,7 @@ func TestUploadAddHandler(t *testing.T) {
 		root := testutil.RandomCID(t)
 		req, res := invokeUploadAdd(t, ctx, alice, uploadService, space, &uploadcmds.AddArguments{Root: root})
 
-		err := deps.handler.Handler(req, res)
+		err := deps.route.Handler(req, res)
 		require.NoError(t, err)
 
 		_, x := res.Receipt().Out().Unpack()
@@ -122,7 +123,7 @@ func TestUploadAddHandler(t *testing.T) {
 		root := testutil.RandomCID(t)
 		req, res := invokeUploadAdd(t, ctx, alice, uploadService, space, &uploadcmds.AddArguments{Root: root})
 
-		err := deps.handler.Handler(req, res)
+		err := deps.route.Handler(req, res)
 		require.NoError(t, err)
 
 		require.False(t, res.Receipt().Out().IsErr())
@@ -153,7 +154,7 @@ func TestUploadAddHandler(t *testing.T) {
 			Shards: []cid.Cid{shard1, shard2},
 		})
 
-		err := deps.handler.Handler(req, res)
+		err := deps.route.Handler(req, res)
 		require.NoError(t, err)
 
 		require.False(t, res.Receipt().Out().IsErr())
@@ -177,7 +178,7 @@ func TestUploadAddHandler(t *testing.T) {
 			Index: &index,
 		})
 
-		err := deps.handler.Handler(req, res)
+		err := deps.route.Handler(req, res)
 		require.NoError(t, err)
 
 		require.False(t, res.Receipt().Out().IsErr())
@@ -200,7 +201,7 @@ func TestUploadAddHandler(t *testing.T) {
 			Root:   root,
 			Shards: []cid.Cid{shard1},
 		})
-		require.NoError(t, deps.handler.Handler(req1, res1))
+		require.NoError(t, deps.route.Handler(req1, res1))
 		require.False(t, res1.Receipt().Out().IsErr())
 
 		// Add again with a new shard.
@@ -209,7 +210,7 @@ func TestUploadAddHandler(t *testing.T) {
 			Root:   root,
 			Shards: []cid.Cid{shard2},
 		})
-		require.NoError(t, deps.handler.Handler(req2, res2))
+		require.NoError(t, deps.route.Handler(req2, res2))
 		require.False(t, res2.Receipt().Out().IsErr())
 
 		// Upload should still exist.

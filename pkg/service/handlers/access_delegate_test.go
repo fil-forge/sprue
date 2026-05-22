@@ -13,6 +13,7 @@ import (
 	subscriptionmemory "github.com/fil-forge/sprue/pkg/store/subscription/memory"
 	"github.com/fil-forge/ucantone/did"
 	"github.com/fil-forge/ucantone/execution"
+	"github.com/fil-forge/ucantone/ucan/command"
 	"github.com/fil-forge/ucantone/ucan/delegation"
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/ipfs/go-cid"
@@ -92,7 +93,7 @@ func TestAccessDelegateHandler(t *testing.T) {
 		agent := testutil.RandomSigner(t)
 
 		// Create a delegation from the space to the agent for some capability.
-		dlg, err := delegation.Delegate(space, agent.DID(), space.DID(), "/space/blob/add")
+		dlg, err := delegation.Delegate(space, agent.DID(), space.DID(), command.MustParse("/blob/add"))
 		require.NoError(t, err)
 
 		args := access.DelegateArguments{
@@ -165,10 +166,10 @@ func TestAccessDelegateHandler(t *testing.T) {
 
 		// Reference a delegation by CID, but don't include it in the request metadata.
 		// We still need at least one delegation in the request so req.Metadata() is non-nil.
-		other, err := delegation.Delegate(space, agent.DID(), space.DID(), "/other")
+		other, err := delegation.Delegate(space, agent.DID(), space.DID(), command.MustParse("/other"))
 		require.NoError(t, err)
 
-		missing, err := delegation.Delegate(space, agent.DID(), space.DID(), "/space/blob/add")
+		missing, err := delegation.Delegate(space, agent.DID(), space.DID(), command.MustParse("/blob/add"))
 		require.NoError(t, err)
 
 		args := access.DelegateArguments{

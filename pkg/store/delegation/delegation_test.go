@@ -13,6 +13,7 @@ import (
 	delegationpostgres "github.com/fil-forge/sprue/pkg/store/delegation/postgres"
 	"github.com/fil-forge/ucantone/did"
 	"github.com/fil-forge/ucantone/ucan"
+	"github.com/fil-forge/ucantone/ucan/command"
 	"github.com/fil-forge/ucantone/ucan/delegation"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
@@ -90,7 +91,7 @@ func makeDelegation(t *testing.T, audience did.DID) ucan.Delegation {
 		testutil.Alice,
 		audience,
 		testutil.Alice.DID(),
-		"/test/delegate",
+		command.MustParse("/test/delegate"),
 	)
 	require.NoError(t, err)
 	return dlg

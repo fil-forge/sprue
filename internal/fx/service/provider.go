@@ -3,7 +3,6 @@ package service
 import (
 	"github.com/fil-forge/sprue/pkg/identity"
 	"github.com/fil-forge/sprue/pkg/service"
-	"github.com/fil-forge/sprue/pkg/service/handlers"
 	"github.com/fil-forge/sprue/pkg/store/agent"
 	"github.com/fil-forge/sprue/pkg/store/delegation"
 	"github.com/fil-forge/ucantone/server"
@@ -24,7 +23,7 @@ type ServiceParams struct {
 	AgentStore      agent.Store
 	DelegationStore delegation.Store
 	Logger          *zap.Logger
-	Handlers        []handlers.Handler  `group:"ucan_handlers"`
+	Handlers        []server.Route      `group:"ucan_handlers"`
 	Options         []server.HTTPOption `group:"ucan_options"`
 }
 

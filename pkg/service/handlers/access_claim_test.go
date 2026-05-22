@@ -9,6 +9,7 @@ import (
 	dlgmemory "github.com/fil-forge/sprue/pkg/store/delegation/memory"
 	"github.com/fil-forge/ucantone/execution"
 	"github.com/fil-forge/ucantone/ucan"
+	"github.com/fil-forge/ucantone/ucan/command"
 	"github.com/fil-forge/ucantone/ucan/delegation"
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/ipfs/go-cid"
@@ -58,7 +59,7 @@ func TestAccessClaimHandler(t *testing.T) {
 
 		agent := testutil.RandomSigner(t)
 
-		dlg, err := delegation.Delegate(testutil.Alice, agent.DID(), testutil.Alice.DID(), "/test/thing")
+		dlg, err := delegation.Delegate(testutil.Alice, agent.DID(), testutil.Alice.DID(), command.MustParse("/test/thing"))
 		require.NoError(t, err)
 
 		err = store.PutMany(t.Context(), []ucan.Token{dlg}, testutil.RandomCID(t))
@@ -96,10 +97,10 @@ func TestAccessClaimHandler(t *testing.T) {
 
 		agent := testutil.RandomSigner(t)
 
-		dlg1, err := delegation.Delegate(testutil.Alice, agent.DID(), testutil.Alice.DID(), "/test/one")
+		dlg1, err := delegation.Delegate(testutil.Alice, agent.DID(), testutil.Alice.DID(), command.MustParse("/test/one"))
 		require.NoError(t, err)
 
-		dlg2, err := delegation.Delegate(testutil.Bob, agent.DID(), testutil.Bob.DID(), "/test/two")
+		dlg2, err := delegation.Delegate(testutil.Bob, agent.DID(), testutil.Bob.DID(), command.MustParse("/test/two"))
 		require.NoError(t, err)
 
 		err = store.PutMany(t.Context(), []ucan.Token{dlg1, dlg2}, testutil.RandomCID(t))
@@ -140,7 +141,7 @@ func TestAccessClaimHandler(t *testing.T) {
 		otherAgent := testutil.RandomSigner(t)
 
 		// Delegation is for otherAgent, not agent.
-		dlg, err := delegation.Delegate(testutil.Alice, otherAgent.DID(), testutil.Alice.DID(), "/test/thing")
+		dlg, err := delegation.Delegate(testutil.Alice, otherAgent.DID(), testutil.Alice.DID(), command.MustParse("/test/thing"))
 		require.NoError(t, err)
 
 		err = store.PutMany(t.Context(), []ucan.Token{dlg}, testutil.RandomCID(t))

@@ -6,20 +6,18 @@ import (
 
 	spacecmds "github.com/fil-forge/libforge/commands/space"
 	"github.com/fil-forge/sprue/pkg/provisioning"
+	"github.com/fil-forge/ucantone/binding"
 	"github.com/fil-forge/ucantone/errors"
-	"github.com/fil-forge/ucantone/execution/bindexec"
+	"github.com/fil-forge/ucantone/server"
 	"go.uber.org/zap"
 )
 
 // This handler returns info about a space, including its providers.
-func NewSpaceInfoHandler(provisioningSvc *provisioning.Service, logger *zap.Logger) Handler {
+func NewSpaceInfoHandler(provisioningSvc *provisioning.Service, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", spacecmds.Info))
-	return Handler{
-		Command: spacecmds.Info.Command,
-		Handler: bindexec.NewHandler(func(
-			req *bindexec.Request[*spacecmds.InfoArguments],
-			res *bindexec.Response[*spacecmds.InfoOK],
-		) error {
+	return server.NewRoute(
+		spacecmds.Info,
+		func(req *binding.Request[*spacecmds.InfoArguments], res *binding.Response[*spacecmds.InfoOK]) error {
 			space := req.Invocation().Subject()
 			log := log.With(zap.Stringer("space", space))
 			log.Debug("getting space info")
@@ -36,6 +34,6 @@ func NewSpaceInfoHandler(provisioningSvc *provisioning.Service, logger *zap.Logg
 			}
 
 			return res.SetSuccess(&spacecmds.InfoOK{Providers: providers})
-		}),
-	}
+		},
+	)
 }

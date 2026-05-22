@@ -15,6 +15,7 @@ import (
 	"github.com/fil-forge/ucantone/execution"
 	"github.com/fil-forge/ucantone/ipld/datamodel"
 	"github.com/fil-forge/ucantone/ucan"
+	"github.com/fil-forge/ucantone/ucan/command"
 	"github.com/fil-forge/ucantone/ucan/container"
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/fil-forge/ucantone/ucan/receipt"
@@ -50,7 +51,7 @@ func TestUCANConcludeHandler(t *testing.T) {
 			&identity.Identity{Signer: uploadService}, agentStore, handlerMap, logger,
 		)
 
-		_, rcpt := newTaskAndReceipt(t, "/test/thing")
+		_, rcpt := newTaskAndReceipt(t, command.MustParse("/test/thing"))
 
 		concludeInv, err := ucancmds.Conclude.Invoke(
 			uploadService,
@@ -87,7 +88,7 @@ func TestUCANConcludeHandler(t *testing.T) {
 
 		// Receipt is supplied but the ran invocation is neither in the request
 		// metadata nor in the agent store — the handler treats this as a no-op.
-		_, rcpt := newTaskAndReceipt(t, "/test/thing")
+		_, rcpt := newTaskAndReceipt(t, command.MustParse("/test/thing"))
 
 		concludeInv, err := ucancmds.Conclude.Invoke(
 			uploadService,
@@ -116,7 +117,7 @@ func TestUCANConcludeHandler(t *testing.T) {
 			gotRcpt ucan.Receipt
 		)
 		handlerMap := map[ucan.Command]handlers.ConclusionHandlerFunc{
-			"/test/thing": func(_ context.Context, inv ucan.Invocation, rcpt ucan.Receipt, _ ucan.Container) error {
+			command.MustParse("/test/thing"): func(_ context.Context, inv ucan.Invocation, rcpt ucan.Receipt, _ ucan.Container) error {
 				called = true
 				gotInv = inv
 				gotRcpt = rcpt
@@ -128,7 +129,7 @@ func TestUCANConcludeHandler(t *testing.T) {
 			&identity.Identity{Signer: uploadService}, agentStore, handlerMap, logger,
 		)
 
-		taskInv, rcpt := newTaskAndReceipt(t, "/test/thing")
+		taskInv, rcpt := newTaskAndReceipt(t, command.MustParse("/test/thing"))
 
 		// Persist the task invocation in the agent store so the handler can
 		// look it up by the receipt's ran CID.
@@ -169,7 +170,7 @@ func TestUCANConcludeHandler(t *testing.T) {
 			&identity.Identity{Signer: uploadService}, agentStore, handlerMap, logger,
 		)
 
-		taskInv, rcpt := newTaskAndReceipt(t, "/test/unhandled")
+		taskInv, rcpt := newTaskAndReceipt(t, command.MustParse("/test/unhandled"))
 
 		msg := container.New(
 			container.WithInvocations(taskInv),
@@ -200,7 +201,7 @@ func TestUCANConcludeHandler(t *testing.T) {
 
 		var called bool
 		handlerMap := map[ucan.Command]handlers.ConclusionHandlerFunc{
-			"/test/thing": func(_ context.Context, _ ucan.Invocation, _ ucan.Receipt, _ ucan.Container) error {
+			command.MustParse("/test/thing"): func(_ context.Context, _ ucan.Invocation, _ ucan.Receipt, _ ucan.Container) error {
 				called = true
 				return nil
 			},
@@ -210,7 +211,7 @@ func TestUCANConcludeHandler(t *testing.T) {
 			&identity.Identity{Signer: uploadService}, agentStore, handlerMap, logger,
 		)
 
-		taskInv, rcpt := newTaskAndReceipt(t, "/test/thing")
+		taskInv, rcpt := newTaskAndReceipt(t, command.MustParse("/test/thing"))
 
 		// The ran invocation is supplied directly in the request metadata —
 		// no agent-store lookup required.

@@ -9,6 +9,7 @@ import (
 	"github.com/fil-forge/ucantone/ipld/datamodel"
 	"github.com/fil-forge/ucantone/principal/absentee"
 	"github.com/fil-forge/ucantone/principal/ed25519"
+	"github.com/fil-forge/ucantone/ucan/command"
 	"github.com/fil-forge/ucantone/ucan/container"
 	"github.com/fil-forge/ucantone/ucan/delegation"
 	"github.com/fil-forge/ucantone/ucan/invocation"
@@ -23,13 +24,13 @@ func TestNewAttestationVerifier(t *testing.T) {
 
 	account := absentee.From(testutil.Must(did.Parse("did:mailto:web.mail:alice"))(t))
 
-	dlg, err := delegation.Delegate(account, agent.DID(), space.DID(), "/blob/add")
+	dlg, err := delegation.Delegate(account, agent.DID(), space.DID(), command.MustParse("/blob/add"))
 	require.NoError(t, err)
 
 	verify := NewAttestationVerifier(authority.Verifier())
 
 	t.Run("token is not a delegation", func(t *testing.T) {
-		inv, err := invocation.Invoke(agent, space.DID(), "/blob/add", datamodel.Map{})
+		inv, err := invocation.Invoke(agent, space.DID(), command.MustParse("/blob/add"), datamodel.Map{})
 		require.NoError(t, err)
 
 		err = verify(t.Context(), inv, container.New())
@@ -44,7 +45,7 @@ func TestNewAttestationVerifier(t *testing.T) {
 	})
 
 	t.Run("invocation with non-attest command is ignored", func(t *testing.T) {
-		inv, err := invocation.Invoke(authority, authority.DID(), "/some/other", datamodel.Map{})
+		inv, err := invocation.Invoke(authority, authority.DID(), command.MustParse("/some/other"), datamodel.Map{})
 		require.NoError(t, err)
 
 		err = verify(t.Context(), dlg, container.New(container.WithInvocations(inv)))
@@ -71,7 +72,7 @@ func TestNewAttestationVerifier(t *testing.T) {
 	})
 
 	t.Run("attestation proof for a different delegation is ignored", func(t *testing.T) {
-		otherDlg, err := delegation.Delegate(account, agent.DID(), space.DID(), "/blob/list")
+		otherDlg, err := delegation.Delegate(account, agent.DID(), space.DID(), command.MustParse("/blob/list"))
 		require.NoError(t, err)
 
 		inv, err := attest.Proof.Invoke(authority, authority.DID(), &attest.ProofArguments{Proof: otherDlg.Link()})
@@ -107,7 +108,7 @@ func TestNewAttestationVerifier(t *testing.T) {
 	t.Run("valid attestation found among invalid ones", func(t *testing.T) {
 		untrusted, err := attest.Proof.Invoke(other, other.DID(), &attest.ProofArguments{Proof: dlg.Link()})
 		require.NoError(t, err)
-		wrongCmd, err := invocation.Invoke(authority, authority.DID(), "/some/other", datamodel.Map{})
+		wrongCmd, err := invocation.Invoke(authority, authority.DID(), command.MustParse("/some/other"), datamodel.Map{})
 		require.NoError(t, err)
 		valid, err := attest.Proof.Invoke(authority, authority.DID(), &attest.ProofArguments{Proof: dlg.Link()})
 		require.NoError(t, err)

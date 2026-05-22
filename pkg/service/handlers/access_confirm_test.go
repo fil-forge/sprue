@@ -10,6 +10,7 @@ import (
 	dlgmemory "github.com/fil-forge/sprue/pkg/store/delegation/memory"
 	edm "github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
+	"github.com/fil-forge/ucantone/ucan/command"
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
@@ -32,7 +33,7 @@ func TestAccessConfirmHandler(t *testing.T) {
 			Issuer:   account,
 			Audience: agent.DID(),
 			Attenuations: []access.CapabilityRequest{
-				{Command: "/"},
+				{Command: command.Top()},
 			},
 		}
 
@@ -75,7 +76,7 @@ func TestAccessConfirmHandler(t *testing.T) {
 			Issuer:   nonMailto.DID(),
 			Audience: agent.DID(),
 			Attenuations: []access.CapabilityRequest{
-				{Command: "/"},
+				{Command: command.Top()},
 			},
 		}
 
@@ -116,7 +117,7 @@ func TestAccessConfirmHandler(t *testing.T) {
 			Issuer:   account,
 			Audience: agent.DID(),
 			Attenuations: []access.CapabilityRequest{
-				{Command: "/"},
+				{Command: command.Top()},
 			},
 		}
 
@@ -163,8 +164,8 @@ func TestAccessConfirmHandler(t *testing.T) {
 			Issuer:   account,
 			Audience: agent.DID(),
 			Attenuations: []access.CapabilityRequest{
-				{Command: "/space/blob/add"},
-				{Command: "/upload/add"},
+				{Command: command.MustParse("/blob/add")},
+				{Command: command.MustParse("/upload/add")},
 			},
 		}
 

@@ -14,6 +14,7 @@ import (
 	"github.com/fil-forge/sprue/pkg/identity"
 	edm "github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
+	"github.com/fil-forge/ucantone/ucan/command"
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
@@ -57,7 +58,7 @@ func TestAccessRequestHandler(t *testing.T) {
 		args := access.RequestArguments{
 			Issuer: account,
 			Attenuations: []access.CapabilityRequest{
-				{Command: "/"},
+				{Command: command.Top()},
 			},
 		}
 
@@ -102,7 +103,7 @@ func TestAccessRequestHandler(t *testing.T) {
 		args := access.RequestArguments{
 			Issuer: nonMailtoSigner.DID(),
 			Attenuations: []access.CapabilityRequest{
-				{Command: "/"},
+				{Command: command.Top()},
 			},
 		}
 
@@ -142,7 +143,7 @@ func TestAccessRequestHandler(t *testing.T) {
 		args := access.RequestArguments{
 			Issuer: account,
 			Attenuations: []access.CapabilityRequest{
-				{Command: "/"},
+				{Command: command.Top()},
 			},
 		}
 
@@ -180,7 +181,7 @@ func TestAccessRequestHandler(t *testing.T) {
 		args := access.RequestArguments{
 			Issuer: account,
 			Attenuations: []access.CapabilityRequest{
-				{Command: "/"},
+				{Command: command.Top()},
 			},
 		}
 

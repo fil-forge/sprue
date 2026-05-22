@@ -6,21 +6,19 @@ import (
 	"github.com/fil-forge/libforge/commands/access"
 	"github.com/fil-forge/sprue/pkg/provisioning"
 	delegation_store "github.com/fil-forge/sprue/pkg/store/delegation"
+	"github.com/fil-forge/ucantone/binding"
 	"github.com/fil-forge/ucantone/errors"
-	"github.com/fil-forge/ucantone/execution/bindexec"
+	"github.com/fil-forge/ucantone/server"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/ipfs/go-cid"
 	"go.uber.org/zap"
 )
 
-func NewAccessDelegateHandler(delegationStore delegation_store.Store, provisioningSvc *provisioning.Service, logger *zap.Logger) Handler {
+func NewAccessDelegateHandler(delegationStore delegation_store.Store, provisioningSvc *provisioning.Service, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", access.Delegate))
-	return Handler{
-		Command: access.Delegate.Command,
-		Handler: bindexec.NewHandler(func(
-			req *bindexec.Request[*access.DelegateArguments],
-			res *bindexec.Response[*access.DelegateOK],
-		) error {
+	return server.NewRoute(
+		access.Delegate,
+		func(req *binding.Request[*access.DelegateArguments], res *binding.Response[*access.DelegateOK]) error {
 			args := req.Task().Arguments()
 			agent := req.Invocation().Issuer()
 			space := req.Invocation().Subject()
@@ -53,8 +51,8 @@ func NewAccessDelegateHandler(delegationStore delegation_store.Store, provisioni
 			}
 
 			return res.SetSuccess(&access.DelegateOK{})
-		}),
-	}
+		},
+	)
 }
 
 func extractDelegations(args *access.DelegateArguments, meta ucan.Container) ([]ucan.Token, error) {

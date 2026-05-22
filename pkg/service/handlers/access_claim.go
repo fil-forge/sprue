@@ -6,21 +6,19 @@ import (
 	"github.com/fil-forge/libforge/commands/access"
 	"github.com/fil-forge/sprue/pkg/identity"
 	delegation_store "github.com/fil-forge/sprue/pkg/store/delegation"
-	"github.com/fil-forge/ucantone/execution/bindexec"
+	"github.com/fil-forge/ucantone/binding"
+	"github.com/fil-forge/ucantone/server"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/container"
 	"github.com/ipfs/go-cid"
 	"go.uber.org/zap"
 )
 
-func NewAccessClaimHandler(id *identity.Identity, delegationStore delegation_store.Store, logger *zap.Logger) Handler {
+func NewAccessClaimHandler(id *identity.Identity, delegationStore delegation_store.Store, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", access.Claim))
-	return Handler{
-		Command: access.Claim.Command,
-		Handler: bindexec.NewHandler(func(
-			req *bindexec.Request[*access.ClaimArguments],
-			res *bindexec.Response[*access.ClaimOK],
-		) error {
+	return server.NewRoute(
+		access.Claim,
+		func(req *binding.Request[*access.ClaimArguments], res *binding.Response[*access.ClaimOK]) error {
 			agent := req.Invocation().Issuer()
 			audience := req.Invocation().Subject()
 
@@ -65,6 +63,6 @@ func NewAccessClaimHandler(id *identity.Identity, delegationStore delegation_sto
 			))
 
 			return res.SetSuccess(&access.ClaimOK{Delegations: links})
-		}),
-	}
+		},
+	)
 }
