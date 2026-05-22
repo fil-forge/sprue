@@ -1,7 +1,6 @@
 package handlers_test
 
 import (
-	"bytes"
 	"context"
 	"testing"
 
@@ -63,12 +62,8 @@ func TestUploadShardListHandler(t *testing.T) {
 		err := handler.Handler(req, res)
 		require.NoError(t, err)
 
-		o, x := res.Receipt().Out().Unpack()
-		require.Nil(t, x)
-		require.NotNil(t, o)
-
-		var ok shardcmds.ListOK
-		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
+		ok, err := shardcmds.List.Unpack(res.Receipt())
+		require.NoError(t, err)
 		require.Empty(t, ok.Results)
 	})
 
@@ -88,10 +83,8 @@ func TestUploadShardListHandler(t *testing.T) {
 		err := handler.Handler(req, res)
 		require.NoError(t, err)
 
-		o, x := res.Receipt().Out().Unpack()
-		require.Nil(t, x)
-		var ok shardcmds.ListOK
-		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
+		ok, err := shardcmds.List.Unpack(res.Receipt())
+		require.NoError(t, err)
 		require.Len(t, ok.Results, 2)
 
 		got := map[string]bool{}
@@ -119,10 +112,8 @@ func TestUploadShardListHandler(t *testing.T) {
 		err := handler.Handler(req, res)
 		require.NoError(t, err)
 
-		o, x := res.Receipt().Out().Unpack()
-		require.Nil(t, x)
-		var ok shardcmds.ListOK
-		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
+		ok, err := shardcmds.List.Unpack(res.Receipt())
+		require.NoError(t, err)
 		require.Len(t, ok.Results, 2)
 		require.NotNil(t, ok.Cursor)
 	})
@@ -142,10 +133,8 @@ func TestUploadShardListHandler(t *testing.T) {
 		req1, res1 := invokeUploadShardList(t, ctx, alice, uploadService, space, &shardcmds.ListArguments{Root: root, Size: &size})
 		require.NoError(t, handler.Handler(req1, res1))
 
-		o1, x := res1.Receipt().Out().Unpack()
-		require.Nil(t, x)
-		var ok1 shardcmds.ListOK
-		require.NoError(t, ok1.UnmarshalCBOR(bytes.NewReader(o1)))
+		ok1, err := shardcmds.List.Unpack(res1.Receipt())
+		require.NoError(t, err)
 		require.Len(t, ok1.Results, 1)
 		require.NotNil(t, ok1.Cursor)
 
@@ -154,10 +143,8 @@ func TestUploadShardListHandler(t *testing.T) {
 		req2, res2 := invokeUploadShardList(t, ctx, alice, uploadService, space, &shardcmds.ListArguments{Root: root, Cursor: &cursor, Size: &size})
 		require.NoError(t, handler.Handler(req2, res2))
 
-		o2, x := res2.Receipt().Out().Unpack()
-		require.Nil(t, x)
-		var ok2 shardcmds.ListOK
-		require.NoError(t, ok2.UnmarshalCBOR(bytes.NewReader(o2)))
+		ok2, err := shardcmds.List.Unpack(res2.Receipt())
+		require.NoError(t, err)
 		require.Len(t, ok2.Results, 1)
 		require.NotEqual(t, ok1.Results[0].String(), ok2.Results[0].String())
 	})

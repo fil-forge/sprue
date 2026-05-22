@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"net/url"
@@ -12,7 +11,7 @@ import (
 	"github.com/fil-forge/sprue/internal/config"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/identity"
-	edm "github.com/fil-forge/ucantone/errors/datamodel"
+	"github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
 	"github.com/fil-forge/ucantone/ucan/command"
 	"github.com/fil-forge/ucantone/ucan/invocation"
@@ -79,12 +78,8 @@ func TestAccessRequestHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		o, x := res.Receipt().Out().Unpack()
-		require.Nil(t, x)
-		require.NotNil(t, o)
-
-		var ok access.RequestOK
-		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
+		ok, err := access.Request.Unpack(res.Receipt())
+		require.NoError(t, err)
 		require.Equal(t, inv.Link(), ok.Request)
 		require.NotZero(t, ok.Expiration)
 
@@ -124,12 +119,10 @@ func TestAccessRequestHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		_, x := res.Receipt().Out().Unpack()
-		require.NotNil(t, x)
-
-		var model edm.ErrorModel
-		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
-		require.Equal(t, access.InvalidAuthorizationAccountErrorName, model.Name())
+		_, err = access.Request.Unpack(res.Receipt())
+		var errModel datamodel.ErrorModel
+		require.ErrorAs(t, err, &errModel)
+		require.Equal(t, access.InvalidAuthorizationAccountErrorName, errModel.Name())
 	})
 
 	t.Run("mailer error", func(t *testing.T) {

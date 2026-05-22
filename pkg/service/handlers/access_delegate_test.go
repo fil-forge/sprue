@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/fil-forge/libforge/commands/access"
+	accesscmds "github.com/fil-forge/libforge/commands/access"
+	blobcmds "github.com/fil-forge/libforge/commands/blob"
 	"github.com/fil-forge/libforge/didmailto"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/provisioning"
@@ -12,6 +14,7 @@ import (
 	dlgmemory "github.com/fil-forge/sprue/pkg/store/delegation/memory"
 	subscriptionmemory "github.com/fil-forge/sprue/pkg/store/subscription/memory"
 	"github.com/fil-forge/ucantone/did"
+	"github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
 	"github.com/fil-forge/ucantone/ucan/command"
 	"github.com/fil-forge/ucantone/ucan/delegation"
@@ -78,7 +81,11 @@ func TestAccessDelegateHandler(t *testing.T) {
 
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
-		require.True(t, res.Receipt().Out().IsErr())
+
+		_, err = blobcmds.Allocate.Unpack(res.Receipt())
+		var errModel datamodel.ErrorModel
+		require.ErrorAs(t, err, &errModel)
+		require.Equal(t, accesscmds.InsufficientStorageErrorName, errModel.Name())
 	})
 
 	t.Run("success with delegation", func(t *testing.T) {
@@ -115,7 +122,8 @@ func TestAccessDelegateHandler(t *testing.T) {
 
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
-		require.False(t, res.Receipt().Out().IsErr())
+		_, err = blobcmds.Allocate.Unpack(res.Receipt())
+		require.NoError(t, err)
 
 		// Verify the delegation was stored.
 		page, err := dlgStore.ListByAudience(t.Context(), agent.DID())
@@ -150,7 +158,8 @@ func TestAccessDelegateHandler(t *testing.T) {
 
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
-		require.False(t, res.Receipt().Out().IsErr())
+		_, err = blobcmds.Allocate.Unpack(res.Receipt())
+		require.NoError(t, err)
 	})
 
 	t.Run("delegation not found in metadata", func(t *testing.T) {

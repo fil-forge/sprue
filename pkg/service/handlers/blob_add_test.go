@@ -1,7 +1,6 @@
 package handlers_test
 
 import (
-	"bytes"
 	"context"
 	"crypto/ed25519"
 	"fmt"
@@ -31,7 +30,7 @@ import (
 	subscription_store "github.com/fil-forge/sprue/pkg/store/subscription/memory"
 	"github.com/fil-forge/ucantone/binding"
 	"github.com/fil-forge/ucantone/did"
-	edm "github.com/fil-forge/ucantone/errors/datamodel"
+	"github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
 	"github.com/fil-forge/ucantone/principal"
 	ed25519signer "github.com/fil-forge/ucantone/principal/ed25519"
@@ -184,12 +183,10 @@ func TestBlobAddHandler(t *testing.T) {
 		err = deps.handler.Handler(req, res)
 		require.NoError(t, err)
 
-		_, x := res.Receipt().Out().Unpack()
-		require.NotNil(t, x)
-
-		var model edm.ErrorModel
-		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
-		require.Equal(t, accesscmds.InsufficientStorageErrorName, model.Name())
+		_, err = blobcmds.Add.Unpack(res.Receipt())
+		var errModel datamodel.ErrorModel
+		require.ErrorAs(t, err, &errModel)
+		require.Equal(t, accesscmds.InsufficientStorageErrorName, errModel.Name())
 	})
 
 	t.Run("no candidates available", func(t *testing.T) {
@@ -218,12 +215,8 @@ func TestBlobAddHandler(t *testing.T) {
 		err = deps.handler.Handler(req, res)
 		require.NoError(t, err)
 
-		_, x := res.Receipt().Out().Unpack()
-		require.NotNil(t, x)
-
-		var model edm.ErrorModel
-		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
-		require.Equal(t, routing.CandidateUnavailableErrorName, model.Name())
+		_, err = blobcmds.Add.Unpack(res.Receipt())
+		require.ErrorIs(t, err, routing.ErrCandidateUnavailable)
 	})
 
 	t.Run("zero weight providers returns candidate unavailable", func(t *testing.T) {
@@ -257,12 +250,8 @@ func TestBlobAddHandler(t *testing.T) {
 		err = deps.handler.Handler(req, res)
 		require.NoError(t, err)
 
-		_, x := res.Receipt().Out().Unpack()
-		require.NotNil(t, x)
-
-		var model edm.ErrorModel
-		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
-		require.Equal(t, routing.CandidateUnavailableErrorName, model.Name())
+		_, err = blobcmds.Add.Unpack(res.Receipt())
+		require.ErrorIs(t, err, routing.ErrCandidateUnavailable)
 	})
 
 	t.Run("successful allocation with address", func(t *testing.T) {
@@ -316,7 +305,8 @@ func TestBlobAddHandler(t *testing.T) {
 		err = deps.handler.Handler(req, res)
 		require.NoError(t, err)
 
-		require.False(t, res.Receipt().Out().IsErr())
+		_, err = blobcmds.Allocate.Unpack(res.Receipt())
+		require.NoError(t, err)
 
 		// Response metadata should carry the allocate, put, and accept invocations.
 		require.NotNil(t, res.Metadata())
@@ -363,7 +353,8 @@ func TestBlobAddHandler(t *testing.T) {
 		err = deps.handler.Handler(req, res)
 		require.NoError(t, err)
 
-		require.False(t, res.Receipt().Out().IsErr())
+				_, err = blobcmds.Allocate.Unpack(res.Receipt())
+		require.NoError(t, err)
 
 		// Both invocations and receipts should be in the metadata since accept ran.
 		require.NotNil(t, res.Metadata())
@@ -472,13 +463,10 @@ func TestBlobAddHandler(t *testing.T) {
 		err = deps.handler.Handler(req, res)
 		require.NoError(t, err)
 
-		o, x := res.Receipt().Out().Unpack()
-		require.Nil(t, x)
-		require.NotNil(t, o)
+		gotAddOK, err := blobcmds.Add.Unpack(res.Receipt())
+		require.NoError(t, err)
 
 		// The returned AddOK should match the one from the prior receipt.
-		var gotAddOK blobcmds.AddOK
-		require.NoError(t, gotAddOK.UnmarshalCBOR(bytes.NewReader(o)))
 		require.Equal(t, accInv.Task().Link(), gotAddOK.Site.Task)
 
 		// Response metadata should carry all three invocations and all three

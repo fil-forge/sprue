@@ -1,10 +1,10 @@
 package handlers_test
 
 import (
-	"bytes"
 	"net/url"
 	"testing"
 
+	blobcmds "github.com/fil-forge/libforge/commands/blob"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/commands/admin/provider"
 	"github.com/fil-forge/sprue/pkg/identity"
@@ -12,7 +12,7 @@ import (
 	storageprovider "github.com/fil-forge/sprue/pkg/store/storage_provider"
 	storage_provider_store "github.com/fil-forge/sprue/pkg/store/storage_provider/memory"
 	"github.com/fil-forge/ucantone/did"
-	edm "github.com/fil-forge/ucantone/errors/datamodel"
+	"github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/invocation"
@@ -72,12 +72,10 @@ func TestAdminProviderDeregisterHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		_, x := res.Receipt().Out().Unpack()
-		require.NotNil(t, x)
-
-		var model edm.ErrorModel
-		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
-		require.Equal(t, "Unauthorized", model.Name())
+		_, err = provider.Deregister.Unpack(res.Receipt())
+		var errModel datamodel.ErrorModel
+		require.ErrorAs(t, err, &errModel)
+		require.Equal(t, "Unauthorized", errModel.Name())
 
 		// Record should still be present.
 		_, err = spStore.Get(ctx, storageProvider.DID())
@@ -108,7 +106,8 @@ func TestAdminProviderDeregisterHandler(t *testing.T) {
 
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
-		require.False(t, res.Receipt().Out().IsErr())
+				_, err = blobcmds.Allocate.Unpack(res.Receipt())
+		require.NoError(t, err)
 
 		_, err = spStore.Get(ctx, storageProvider.DID())
 		require.ErrorIs(t, err, storageprovider.ErrStorageProviderNotFound)
@@ -134,11 +133,7 @@ func TestAdminProviderDeregisterHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		_, x := res.Receipt().Out().Unpack()
-		require.NotNil(t, x)
-
-		var model edm.ErrorModel
-		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
-		require.Equal(t, storageprovider.StorageProviderNotFoundErrorName, model.Name())
+		_, err = provider.Deregister.Unpack(res.Receipt())
+		require.ErrorIs(t, err, storageprovider.ErrStorageProviderNotFound)
 	})
 }
