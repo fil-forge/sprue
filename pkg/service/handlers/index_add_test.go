@@ -25,7 +25,6 @@ import (
 	"github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
 	"github.com/fil-forge/ucantone/principal"
-	"github.com/fil-forge/ucantone/principal/signer"
 	"github.com/fil-forge/ucantone/principal/verifier"
 	"github.com/fil-forge/ucantone/server"
 	"github.com/fil-forge/ucantone/ucan"
@@ -49,10 +48,14 @@ func newMockIndexerServer(
 	t.Helper()
 
 	resolveDIDKey := func(ctx context.Context, d did.DID) (ucan.Verifier, error) {
+		if d == indexerSigner.DID() {
+			return indexerSigner.Verifier(), nil
+		}
 		if d == uploadService.DID() {
-			if w, ok := uploadService.(signer.Unwrapper); ok {
-				return verifier.FromDIDKey(w.Unwrap().DID())
-			}
+			return uploadService.Verifier(), nil
+		}
+		if d.Method() == "key" {
+			verifier.FromDIDKey(d)
 		}
 		return nil, errors.NewDIDKeyResolutionError(d, fmt.Errorf("unexpected DID to resolve"))
 	}
@@ -191,7 +194,7 @@ func TestIndexAddHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-				_, err = blobcmds.Allocate.Unpack(res.Receipt())
+		_, err = blobcmds.Allocate.Unpack(res.Receipt())
 		require.NoError(t, err)
 	})
 
@@ -232,7 +235,7 @@ func TestIndexAddHandler(t *testing.T) {
 		// Currently the indexer client publishes even without retrieval auth
 		// because the proof chain is empty (not erroring). Document that
 		// behavior.
-				_, err = blobcmds.Allocate.Unpack(res.Receipt())
+		_, err = blobcmds.Allocate.Unpack(res.Receipt())
 		require.NoError(t, err)
 	})
 }

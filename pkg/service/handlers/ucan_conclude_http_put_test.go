@@ -156,7 +156,10 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 		// Stand up a mock piri server. The handler under test only calls
 		// /blob/accept; the allocate handler is irrelevant but the helper
 		// requires both.
-		acceptOK := &blobcmds.AcceptOK{Site: testutil.RandomCID(t)}
+		acceptOK := &blobcmds.AcceptOK{
+			Site: testutil.RandomCID(t),
+			PDP:  promise.AwaitOK{Task: testutil.RandomCID(t)},
+		}
 		piriSrv := newMockPiriServer(
 			t, storageProvider, uploadService,
 			&blobcmds.AllocateOK{Size: blob.Size},

@@ -34,7 +34,6 @@ import (
 	"github.com/fil-forge/ucantone/execution"
 	"github.com/fil-forge/ucantone/principal"
 	ed25519signer "github.com/fil-forge/ucantone/principal/ed25519"
-	"github.com/fil-forge/ucantone/principal/signer"
 	"github.com/fil-forge/ucantone/principal/verifier"
 	"github.com/fil-forge/ucantone/server"
 	"github.com/fil-forge/ucantone/ucan"
@@ -123,9 +122,10 @@ func newMockPiriServer(
 
 	resolveDIDKey := func(ctx context.Context, d did.DID) (ucan.Verifier, error) {
 		if d == uploadService.DID() {
-			if w, ok := uploadService.(signer.Unwrapper); ok {
-				return verifier.FromDIDKey(w.Unwrap().DID())
-			}
+			return uploadService.Verifier(), nil
+		}
+		if d.Method() == "key" {
+			return verifier.FromDIDKey(d)
 		}
 		return nil, errors.NewDIDKeyResolutionError(d, fmt.Errorf("unexpected DID to resolve"))
 	}
@@ -272,7 +272,10 @@ func TestBlobAddHandler(t *testing.T) {
 		}
 		// Accept handler is registered but should not be invoked when an Address is
 		// returned — the put receipt isn't issued, so maybeAccept skips Accept.
-		acceptOK := &blobcmds.AcceptOK{Site: testutil.RandomCID(t)}
+		acceptOK := &blobcmds.AcceptOK{
+			Site: testutil.RandomCID(t),
+			PDP:  promise.AwaitOK{Task: testutil.RandomCID(t)},
+		}
 
 		piriSrv := newMockPiriServer(t, storageProvider, uploadService, allocateOK, acceptOK)
 		piriURL := testutil.Must(url.Parse(piriSrv.URL))(t)
@@ -292,13 +295,15 @@ func TestBlobAddHandler(t *testing.T) {
 		)
 		require.NoError(t, err)
 
+		addProof := testutil.Must(blobcmds.Add.Delegate(space, testutil.Alice.DID(), space.DID()))(t)
+
 		// Authorize the upload service to invoke /blob/allocate and /blob/accept
 		// on the space. This is the proof chain the upload service forwards to the
 		// storage provider.
 		allocProof := testutil.Must(blobcmds.Allocate.Delegate(space, uploadService.DID(), space.DID()))(t)
 		acceptProof := testutil.Must(blobcmds.Accept.Delegate(space, uploadService.DID(), space.DID()))(t)
 
-		req := execution.NewRequest(ctx, inv, execution.WithDelegations(allocProof, acceptProof))
+		req := execution.NewRequest(ctx, inv, execution.WithDelegations(addProof, allocProof, acceptProof))
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
 		require.NoError(t, err)
 
@@ -323,7 +328,10 @@ func TestBlobAddHandler(t *testing.T) {
 		// No address signals the blob is already on the provider — the handler
 		// then issues the put receipt itself and proceeds to Accept on piri.
 		allocateOK := &blobcmds.AllocateOK{Size: 1024, Address: nil}
-		acceptOK := &blobcmds.AcceptOK{Site: testutil.RandomCID(t)}
+		acceptOK := &blobcmds.AcceptOK{
+			Site: testutil.RandomCID(t),
+			PDP:  promise.AwaitOK{Task: testutil.RandomCID(t)},
+		}
 
 		piriSrv := newMockPiriServer(t, storageProvider, uploadService, allocateOK, acceptOK)
 		piriURL := testutil.Must(url.Parse(piriSrv.URL))(t)
@@ -353,7 +361,7 @@ func TestBlobAddHandler(t *testing.T) {
 		err = deps.handler.Handler(req, res)
 		require.NoError(t, err)
 
-				_, err = blobcmds.Allocate.Unpack(res.Receipt())
+		_, err = blobcmds.Allocate.Unpack(res.Receipt())
 		require.NoError(t, err)
 
 		// Both invocations and receipts should be in the metadata since accept ran.
@@ -418,7 +426,10 @@ func TestBlobAddHandler(t *testing.T) {
 		accRcpt := testutil.Must(receipt.IssueOK(
 			storageProvider,
 			accInv.Task().Link(),
-			&blobcmds.AcceptOK{Site: testutil.RandomCID(t)},
+			&blobcmds.AcceptOK{
+				Site: testutil.RandomCID(t),
+				PDP:  promise.AwaitOK{Task: testutil.RandomCID(t)},
+			},
 		))(t)
 
 		// The original /space/blob/add invocation and receipt — its receipt's
