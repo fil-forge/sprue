@@ -124,7 +124,7 @@ func TestUploadAddHandler(t *testing.T) {
 		err := deps.route.Handler(req, res)
 		require.NoError(t, err)
 
-				_, err = blobcmds.Allocate.Unpack(res.Receipt())
+		_, err = blobcmds.Allocate.Unpack(res.Receipt())
 		require.NoError(t, err)
 
 		// Upload should be persisted.
@@ -156,7 +156,7 @@ func TestUploadAddHandler(t *testing.T) {
 		err := deps.route.Handler(req, res)
 		require.NoError(t, err)
 
-				_, err = blobcmds.Allocate.Unpack(res.Receipt())
+		_, err = blobcmds.Allocate.Unpack(res.Receipt())
 		require.NoError(t, err)
 
 		exists, err := deps.store.Exists(ctx, space.DID(), root)
@@ -181,7 +181,7 @@ func TestUploadAddHandler(t *testing.T) {
 		err := deps.route.Handler(req, res)
 		require.NoError(t, err)
 
-				_, err = blobcmds.Allocate.Unpack(res.Receipt())
+		_, err = blobcmds.Allocate.Unpack(res.Receipt())
 		require.NoError(t, err)
 
 		exists, err := deps.store.Exists(ctx, space.DID(), root)

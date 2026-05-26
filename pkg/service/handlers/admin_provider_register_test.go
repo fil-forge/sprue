@@ -94,7 +94,7 @@ func TestAdminProviderRegisterHandler(t *testing.T) {
 
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
-				_, err = blobcmds.Allocate.Unpack(res.Receipt())
+		_, err = blobcmds.Allocate.Unpack(res.Receipt())
 		require.NoError(t, err)
 
 		// Second registration should fail
@@ -132,7 +132,7 @@ func TestAdminProviderRegisterHandler(t *testing.T) {
 
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
-				_, err = blobcmds.Allocate.Unpack(res.Receipt())
+		_, err = blobcmds.Allocate.Unpack(res.Receipt())
 		require.NoError(t, err)
 
 		// Verify provider was stored

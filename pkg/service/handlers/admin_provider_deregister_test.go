@@ -106,7 +106,7 @@ func TestAdminProviderDeregisterHandler(t *testing.T) {
 
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
-				_, err = blobcmds.Allocate.Unpack(res.Receipt())
+		_, err = blobcmds.Allocate.Unpack(res.Receipt())
 		require.NoError(t, err)
 
 		_, err = spStore.Get(ctx, storageProvider.DID())

@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/fil-forge/libforge/commands/access"
 	accesscmds "github.com/fil-forge/libforge/commands/access"
 	blobcmds "github.com/fil-forge/libforge/commands/blob"
 	"github.com/fil-forge/libforge/didmailto"
@@ -65,9 +64,9 @@ func TestAccessDelegateHandler(t *testing.T) {
 		agent := testutil.RandomSigner(t)
 		space := testutil.RandomSigner(t)
 
-		args := access.DelegateArguments{Delegations: []cid.Cid{}}
+		args := accesscmds.DelegateArguments{Delegations: []cid.Cid{}}
 
-		inv, err := access.Delegate.Invoke(
+		inv, err := accesscmds.Delegate.Invoke(
 			agent,
 			space.DID(),
 			&args,
@@ -103,11 +102,11 @@ func TestAccessDelegateHandler(t *testing.T) {
 		dlg, err := delegation.Delegate(space, agent.DID(), space.DID(), command.MustParse("/blob/add"))
 		require.NoError(t, err)
 
-		args := access.DelegateArguments{
+		args := accesscmds.DelegateArguments{
 			Delegations: []cid.Cid{dlg.Link()},
 		}
 
-		inv, err := access.Delegate.Invoke(
+		inv, err := accesscmds.Delegate.Invoke(
 			agent,
 			space.DID(),
 			&args,
@@ -142,9 +141,9 @@ func TestAccessDelegateHandler(t *testing.T) {
 
 		agent := testutil.RandomSigner(t)
 
-		args := access.DelegateArguments{Delegations: []cid.Cid{}}
+		args := accesscmds.DelegateArguments{Delegations: []cid.Cid{}}
 
-		inv, err := access.Delegate.Invoke(
+		inv, err := accesscmds.Delegate.Invoke(
 			agent,
 			space.DID(),
 			&args,
@@ -181,11 +180,11 @@ func TestAccessDelegateHandler(t *testing.T) {
 		missing, err := delegation.Delegate(space, agent.DID(), space.DID(), command.MustParse("/blob/add"))
 		require.NoError(t, err)
 
-		args := access.DelegateArguments{
+		args := accesscmds.DelegateArguments{
 			Delegations: []cid.Cid{missing.Link()},
 		}
 
-		inv, err := access.Delegate.Invoke(
+		inv, err := accesscmds.Delegate.Invoke(
 			agent,
 			space.DID(),
 			&args,
