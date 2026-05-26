@@ -1,11 +1,11 @@
 package handlers_test
 
 import (
-	"bytes"
 	"context"
 	"testing"
 
 	accesscmds "github.com/fil-forge/libforge/commands/access"
+	blobcmds "github.com/fil-forge/libforge/commands/blob"
 	uploadcmds "github.com/fil-forge/libforge/commands/upload"
 	"github.com/fil-forge/libforge/didmailto"
 	"github.com/fil-forge/sprue/internal/testutil"
@@ -15,7 +15,7 @@ import (
 	subscription_store "github.com/fil-forge/sprue/pkg/store/subscription/memory"
 	upload_store "github.com/fil-forge/sprue/pkg/store/upload/memory"
 	"github.com/fil-forge/ucantone/did"
-	edm "github.com/fil-forge/ucantone/errors/datamodel"
+	"github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
 	"github.com/fil-forge/ucantone/principal"
 	"github.com/fil-forge/ucantone/server"
@@ -101,12 +101,10 @@ func TestUploadAddHandler(t *testing.T) {
 		err := deps.route.Handler(req, res)
 		require.NoError(t, err)
 
-		_, x := res.Receipt().Out().Unpack()
-		require.NotNil(t, x)
-
-		var model edm.ErrorModel
-		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
-		require.Equal(t, accesscmds.InsufficientStorageErrorName, model.Name())
+		_, err = uploadcmds.Add.Unpack(res.Receipt())
+		var errModel datamodel.ErrorModel
+		require.ErrorAs(t, err, &errModel)
+		require.Equal(t, accesscmds.InsufficientStorageErrorName, errModel.Name())
 
 		// Nothing should have been persisted.
 		exists, err := deps.store.Exists(ctx, space.DID(), root)
@@ -126,7 +124,8 @@ func TestUploadAddHandler(t *testing.T) {
 		err := deps.route.Handler(req, res)
 		require.NoError(t, err)
 
-		require.False(t, res.Receipt().Out().IsErr())
+				_, err = blobcmds.Allocate.Unpack(res.Receipt())
+		require.NoError(t, err)
 
 		// Upload should be persisted.
 		exists, err := deps.store.Exists(ctx, space.DID(), root)
@@ -157,7 +156,8 @@ func TestUploadAddHandler(t *testing.T) {
 		err := deps.route.Handler(req, res)
 		require.NoError(t, err)
 
-		require.False(t, res.Receipt().Out().IsErr())
+				_, err = blobcmds.Allocate.Unpack(res.Receipt())
+		require.NoError(t, err)
 
 		exists, err := deps.store.Exists(ctx, space.DID(), root)
 		require.NoError(t, err)
@@ -181,7 +181,8 @@ func TestUploadAddHandler(t *testing.T) {
 		err := deps.route.Handler(req, res)
 		require.NoError(t, err)
 
-		require.False(t, res.Receipt().Out().IsErr())
+				_, err = blobcmds.Allocate.Unpack(res.Receipt())
+		require.NoError(t, err)
 
 		exists, err := deps.store.Exists(ctx, space.DID(), root)
 		require.NoError(t, err)

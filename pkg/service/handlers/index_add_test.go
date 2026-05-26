@@ -1,7 +1,6 @@
 package handlers_test
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"net/http/httptest"
@@ -23,7 +22,7 @@ import (
 	subscription_store "github.com/fil-forge/sprue/pkg/store/subscription/memory"
 	"github.com/fil-forge/ucantone/binding"
 	"github.com/fil-forge/ucantone/did"
-	edm "github.com/fil-forge/ucantone/errors/datamodel"
+	"github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
 	"github.com/fil-forge/ucantone/principal"
 	"github.com/fil-forge/ucantone/principal/signer"
@@ -124,12 +123,10 @@ func TestIndexAddHandler(t *testing.T) {
 		err := handler.Handler(req, res)
 		require.NoError(t, err)
 
-		_, x := res.Receipt().Out().Unpack()
-		require.NotNil(t, x)
-
-		var model edm.ErrorModel
-		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
-		require.Equal(t, accesscmds.InsufficientStorageErrorName, model.Name())
+		_, err = indexcmds.Add.Unpack(res.Receipt())
+		var errModel datamodel.ErrorModel
+		require.ErrorAs(t, err, &errModel)
+		require.Equal(t, accesscmds.InsufficientStorageErrorName, errModel.Name())
 	})
 
 	t.Run("index not found in space", func(t *testing.T) {
@@ -152,12 +149,8 @@ func TestIndexAddHandler(t *testing.T) {
 		err := handler.Handler(req, res)
 		require.NoError(t, err)
 
-		_, x := res.Receipt().Out().Unpack()
-		require.NotNil(t, x)
-
-		var model edm.ErrorModel
-		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
-		require.Equal(t, indexcmds.IndexNotFoundErrorName, model.Name())
+		_, err = indexcmds.Add.Unpack(res.Receipt())
+		require.ErrorIs(t, err, indexcmds.ErrIndexNotFound)
 	})
 
 	t.Run("retrieval auth supplied publishes index claim", func(t *testing.T) {
@@ -198,7 +191,8 @@ func TestIndexAddHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		require.False(t, res.Receipt().Out().IsErr())
+				_, err = blobcmds.Allocate.Unpack(res.Receipt())
+		require.NoError(t, err)
 	})
 
 	t.Run("missing retrieval auth fails to build proof chain", func(t *testing.T) {
@@ -238,6 +232,7 @@ func TestIndexAddHandler(t *testing.T) {
 		// Currently the indexer client publishes even without retrieval auth
 		// because the proof chain is empty (not erroring). Document that
 		// behavior.
-		require.False(t, res.Receipt().Out().IsErr())
+				_, err = blobcmds.Allocate.Unpack(res.Receipt())
+		require.NoError(t, err)
 	})
 }

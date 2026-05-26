@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"bytes"
 	"testing"
 
 	"github.com/fil-forge/libforge/commands/access"
@@ -43,12 +42,8 @@ func TestAccessClaimHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		o, x := res.Receipt().Out().Unpack()
-		require.Nil(t, x)
-		require.NotNil(t, o)
-
-		var ok access.ClaimOK
-		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
+		ok, err := access.Claim.Unpack(res.Receipt())
+		require.NoError(t, err)
 		require.Empty(t, ok.Delegations)
 	})
 
@@ -81,12 +76,8 @@ func TestAccessClaimHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		o, x := res.Receipt().Out().Unpack()
-		require.Nil(t, x)
-		require.NotNil(t, o)
-
-		var ok access.ClaimOK
-		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
+		ok, err := access.Claim.Unpack(res.Receipt())
+		require.NoError(t, err)
 		require.Equal(t, []cid.Cid{dlg.Link()}, ok.Delegations)
 	})
 
@@ -122,12 +113,8 @@ func TestAccessClaimHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		o, x := res.Receipt().Out().Unpack()
-		require.Nil(t, x)
-		require.NotNil(t, o)
-
-		var ok access.ClaimOK
-		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
+		ok, err := access.Claim.Unpack(res.Receipt())
+		require.NoError(t, err)
 		require.Len(t, ok.Delegations, 2)
 		require.ElementsMatch(t, []cid.Cid{dlg1.Link(), dlg2.Link()}, ok.Delegations)
 	})
@@ -163,12 +150,8 @@ func TestAccessClaimHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		o, x := res.Receipt().Out().Unpack()
-		require.Nil(t, x)
-		require.NotNil(t, o)
-
-		var ok access.ClaimOK
-		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
+		ok, err := access.Claim.Unpack(res.Receipt())
+		require.NoError(t, err)
 		require.Empty(t, ok.Delegations)
 	})
 }

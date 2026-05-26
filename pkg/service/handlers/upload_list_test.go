@@ -1,7 +1,6 @@
 package handlers_test
 
 import (
-	"bytes"
 	"context"
 	"testing"
 
@@ -58,12 +57,8 @@ func TestUploadListHandler(t *testing.T) {
 		err := handler.Handler(req, res)
 		require.NoError(t, err)
 
-		o, x := res.Receipt().Out().Unpack()
-		require.Nil(t, x)
-		require.NotNil(t, o)
-
-		var ok uploadcmds.ListOK
-		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
+		ok, err := uploadcmds.List.Unpack(res.Receipt())
+		require.NoError(t, err)
 		require.Empty(t, ok.Results)
 		require.Nil(t, ok.Cursor)
 	})
@@ -84,10 +79,8 @@ func TestUploadListHandler(t *testing.T) {
 		err := handler.Handler(req, res)
 		require.NoError(t, err)
 
-		o, x := res.Receipt().Out().Unpack()
-		require.Nil(t, x)
-		var ok uploadcmds.ListOK
-		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
+		ok, err := uploadcmds.List.Unpack(res.Receipt())
+		require.NoError(t, err)
 		require.Len(t, ok.Results, 2)
 
 		roots := map[string]bool{}
@@ -113,10 +106,8 @@ func TestUploadListHandler(t *testing.T) {
 		err := handler.Handler(req, res)
 		require.NoError(t, err)
 
-		o, x := res.Receipt().Out().Unpack()
-		require.Nil(t, x)
-		var ok uploadcmds.ListOK
-		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
+		ok, err := uploadcmds.List.Unpack(res.Receipt())
+		require.NoError(t, err)
 		require.Len(t, ok.Results, 2)
 		require.NotNil(t, ok.Cursor)
 	})
@@ -134,10 +125,8 @@ func TestUploadListHandler(t *testing.T) {
 		req1, res1 := invokeUploadList(t, ctx, alice, uploadService, space, &uploadcmds.ListArguments{Size: &size})
 		require.NoError(t, handler.Handler(req1, res1))
 
-		o1, x := res1.Receipt().Out().Unpack()
-		require.Nil(t, x)
-		var ok1 uploadcmds.ListOK
-		require.NoError(t, ok1.UnmarshalCBOR(bytes.NewReader(o1)))
+		ok1, err := uploadcmds.List.Unpack(res1.Receipt())
+		require.NoError(t, err)
 		require.Len(t, ok1.Results, 1)
 		require.NotNil(t, ok1.Cursor)
 
@@ -146,10 +135,8 @@ func TestUploadListHandler(t *testing.T) {
 		req2, res2 := invokeUploadList(t, ctx, alice, uploadService, space, &uploadcmds.ListArguments{Cursor: &cursor, Size: &size})
 		require.NoError(t, handler.Handler(req2, res2))
 
-		o2, x := res2.Receipt().Out().Unpack()
-		require.Nil(t, x)
-		var ok2 uploadcmds.ListOK
-		require.NoError(t, ok2.UnmarshalCBOR(bytes.NewReader(o2)))
+		ok2, err := uploadcmds.List.Unpack(res2.Receipt())
+		require.NoError(t, err)
 		require.Len(t, ok2.Results, 1)
 		require.NotEqual(t, ok1.Results[0].Root.String(), ok2.Results[0].Root.String())
 	})
@@ -167,10 +154,8 @@ func TestUploadListHandler(t *testing.T) {
 		req, res := invokeUploadList(t, ctx, alice, uploadService, space2, &uploadcmds.ListArguments{})
 		require.NoError(t, handler.Handler(req, res))
 
-		o, x := res.Receipt().Out().Unpack()
-		require.Nil(t, x)
-		var ok uploadcmds.ListOK
-		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
+		ok, err := uploadcmds.List.Unpack(res.Receipt())
+		require.NoError(t, err)
 		require.Empty(t, ok.Results)
 	})
 
@@ -187,10 +172,8 @@ func TestUploadListHandler(t *testing.T) {
 
 		require.NoError(t, handler.Handler(req, res))
 
-		o, x := res.Receipt().Out().Unpack()
-		require.Nil(t, x)
-		var ok uploadcmds.ListOK
-		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
+		ok, err := uploadcmds.List.Unpack(res.Receipt())
+		require.NoError(t, err)
 		require.Len(t, ok.Results, 1)
 		require.NotNil(t, ok.Results[0].Index)
 		require.Equal(t, cid.Cid(index), *ok.Results[0].Index)

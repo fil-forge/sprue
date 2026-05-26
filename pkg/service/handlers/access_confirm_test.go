@@ -1,14 +1,12 @@
 package handlers
 
 import (
-	"bytes"
 	"testing"
 
 	"github.com/fil-forge/libforge/commands/access"
 	"github.com/fil-forge/libforge/didmailto"
 	"github.com/fil-forge/sprue/internal/testutil"
 	dlgmemory "github.com/fil-forge/sprue/pkg/store/delegation/memory"
-	edm "github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
 	"github.com/fil-forge/ucantone/ucan/command"
 	"github.com/fil-forge/ucantone/ucan/invocation"
@@ -53,13 +51,8 @@ func TestAccessConfirmHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		o, x := res.Receipt().Out().Unpack()
-		require.Nil(t, o)
-		require.NotNil(t, x)
-
-		var model edm.ErrorModel
-		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
-		require.Equal(t, access.InvalidAccessConfirmSubjectErrorName, model.Name())
+		_, err = access.Confirm.Unpack(res.Receipt())
+		require.ErrorIs(t, err, access.ErrInvalidAccessConfirmSubject)
 	})
 
 	t.Run("invalid issuer DID", func(t *testing.T) {
@@ -95,13 +88,8 @@ func TestAccessConfirmHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		o, x := res.Receipt().Out().Unpack()
-		require.Nil(t, o)
-		require.NotNil(t, x)
-
-		var model edm.ErrorModel
-		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
-		require.Equal(t, access.InvalidAccessConfirmIssuerErrorName, model.Name())
+		_, err = access.Confirm.Unpack(res.Receipt())
+		require.ErrorIs(t, err, access.ErrInvalidAccessConfirmIssuer)
 	})
 
 	t.Run("success", func(t *testing.T) {
@@ -136,12 +124,9 @@ func TestAccessConfirmHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		o, x := res.Receipt().Out().Unpack()
-		require.Nil(t, x)
-		require.NotNil(t, o)
+		ok, err := access.Confirm.Unpack(res.Receipt())
+		require.NoError(t, err)
 
-		var ok access.ConfirmOK
-		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
 		// One delegation link per attenuation.
 		require.Len(t, ok.Delegations, 1)
 
@@ -184,12 +169,9 @@ func TestAccessConfirmHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		o, x := res.Receipt().Out().Unpack()
-		require.Nil(t, x)
-		require.NotNil(t, o)
+		ok, err := access.Confirm.Unpack(res.Receipt())
+		require.NoError(t, err)
 
-		var ok access.ConfirmOK
-		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
 		require.Len(t, ok.Delegations, 2)
 
 		// Two attenuations → two delegations and two attestations stored.

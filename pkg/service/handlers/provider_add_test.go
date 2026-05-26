@@ -1,7 +1,6 @@
 package handlers_test
 
 import (
-	"bytes"
 	"context"
 	"testing"
 
@@ -16,7 +15,7 @@ import (
 	customer_store "github.com/fil-forge/sprue/pkg/store/customer/memory"
 	subscription_store "github.com/fil-forge/sprue/pkg/store/subscription/memory"
 	"github.com/fil-forge/ucantone/did"
-	edm "github.com/fil-forge/ucantone/errors/datamodel"
+	"github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
 	"github.com/fil-forge/ucantone/principal"
 	"github.com/fil-forge/ucantone/ucan/invocation"
@@ -101,12 +100,8 @@ func TestProviderAddHandler(t *testing.T) {
 		err := handler.Handler(req, res)
 		require.NoError(t, err)
 
-		o, x := res.Receipt().Out().Unpack()
-		require.Nil(t, x)
-		require.NotNil(t, o)
-
-		var ok providercmds.AddOK
-		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
+		ok, err := providercmds.Add.Unpack(res.Receipt())
+		require.NoError(t, err)
 		require.NotEmpty(t, ok.ID)
 	})
 
@@ -133,10 +128,8 @@ func TestProviderAddHandler(t *testing.T) {
 		err := handler.Handler(req, res)
 		require.NoError(t, err)
 
-		o, x := res.Receipt().Out().Unpack()
-		require.Nil(t, x)
-		var ok providercmds.AddOK
-		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
+		ok, err := providercmds.Add.Unpack(res.Receipt())
+		require.NoError(t, err)
 		require.NotEmpty(t, ok.ID)
 	})
 
@@ -163,12 +156,10 @@ func TestProviderAddHandler(t *testing.T) {
 		err := handler.Handler(req, res)
 		require.NoError(t, err)
 
-		_, x := res.Receipt().Out().Unpack()
-		require.NotNil(t, x)
-
-		var model edm.ErrorModel
-		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
-		require.Equal(t, providercmds.InvalidAccountErrorName, model.Name())
+		_, err = providercmds.Add.Unpack(res.Receipt())
+		var errModel datamodel.ErrorModel
+		require.ErrorAs(t, err, &errModel)
+		require.Equal(t, providercmds.InvalidAccountErrorName, errModel.Name())
 	})
 
 	t.Run("missing payment plan", func(t *testing.T) {
@@ -194,12 +185,8 @@ func TestProviderAddHandler(t *testing.T) {
 		err := handler.Handler(req, res)
 		require.NoError(t, err)
 
-		_, x := res.Receipt().Out().Unpack()
-		require.NotNil(t, x)
-
-		var model edm.ErrorModel
-		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
-		require.Equal(t, providercmds.AccountPlanMissingErrorName, model.Name())
+		_, err = providercmds.Add.Unpack(res.Receipt())
+		require.ErrorIs(t, err, providercmds.ErrAccountPlanMissing)
 	})
 
 	t.Run("provider not allowed", func(t *testing.T) {
@@ -226,11 +213,7 @@ func TestProviderAddHandler(t *testing.T) {
 		err := handler.Handler(req, res)
 		require.NoError(t, err)
 
-		_, x := res.Receipt().Out().Unpack()
-		require.NotNil(t, x)
-
-		var model edm.ErrorModel
-		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
-		require.Equal(t, provisioning.ProviderNotAllowedErrorName, model.Name())
+		_, err = providercmds.Add.Unpack(res.Receipt())
+		require.ErrorIs(t, err, provisioning.ErrProviderNotAllowed)
 	})
 }

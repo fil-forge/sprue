@@ -1,7 +1,6 @@
 package handlers_test
 
 import (
-	"bytes"
 	"net/url"
 	"testing"
 
@@ -11,7 +10,7 @@ import (
 	"github.com/fil-forge/sprue/pkg/service/handlers"
 	storage_provider_store "github.com/fil-forge/sprue/pkg/store/storage_provider/memory"
 	"github.com/fil-forge/ucantone/did"
-	edm "github.com/fil-forge/ucantone/errors/datamodel"
+	"github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/invocation"
@@ -60,12 +59,10 @@ func TestAdminProviderListHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		_, x := res.Receipt().Out().Unpack()
-		require.NotNil(t, x)
-
-		var model edm.ErrorModel
-		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
-		require.Equal(t, "Unauthorized", model.Name())
+		_, err = provider.List.Unpack(res.Receipt())
+		var errModel datamodel.ErrorModel
+		require.ErrorAs(t, err, &errModel)
+		require.Equal(t, "Unauthorized", errModel.Name())
 	})
 
 	t.Run("empty list", func(t *testing.T) {
@@ -82,12 +79,8 @@ func TestAdminProviderListHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		o, x := res.Receipt().Out().Unpack()
-		require.Nil(t, x)
-		require.NotNil(t, o)
-
-		var listOK provider.ListOK
-		require.NoError(t, listOK.UnmarshalCBOR(bytes.NewReader(o)))
+		listOK, err := provider.List.Unpack(res.Receipt())
+		require.NoError(t, err)
 		require.Empty(t, listOK.Providers)
 	})
 
@@ -117,12 +110,8 @@ func TestAdminProviderListHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		o, x := res.Receipt().Out().Unpack()
-		require.Nil(t, x)
-		require.NotNil(t, o)
-
-		var listOK provider.ListOK
-		require.NoError(t, listOK.UnmarshalCBOR(bytes.NewReader(o)))
+		listOK, err := provider.List.Unpack(res.Receipt())
+		require.NoError(t, err)
 		require.Len(t, listOK.Providers, 2)
 
 		byDID := map[string]provider.Provider{}

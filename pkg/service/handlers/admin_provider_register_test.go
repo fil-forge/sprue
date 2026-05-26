@@ -1,16 +1,16 @@
 package handlers_test
 
 import (
-	"bytes"
 	"testing"
 
+	blobcmds "github.com/fil-forge/libforge/commands/blob"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/commands/admin/provider"
 	"github.com/fil-forge/sprue/pkg/identity"
 	"github.com/fil-forge/sprue/pkg/service/handlers"
 	storage_provider_store "github.com/fil-forge/sprue/pkg/store/storage_provider/memory"
 	"github.com/fil-forge/ucantone/did"
-	edm "github.com/fil-forge/ucantone/errors/datamodel"
+	"github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/invocation"
@@ -67,12 +67,10 @@ func TestAdminProviderRegisterHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		_, x := res.Receipt().Out().Unpack()
-		require.NotNil(t, x)
-
-		var model edm.ErrorModel
-		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
-		require.Equal(t, "Unauthorized", model.Name())
+		_, err = provider.Register.Unpack(res.Receipt())
+		var errModel datamodel.ErrorModel
+		require.ErrorAs(t, err, &errModel)
+		require.Equal(t, "Unauthorized", errModel.Name())
 	})
 
 	t.Run("provider already registered", func(t *testing.T) {
@@ -96,7 +94,8 @@ func TestAdminProviderRegisterHandler(t *testing.T) {
 
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
-		require.False(t, res.Receipt().Out().IsErr())
+				_, err = blobcmds.Allocate.Unpack(res.Receipt())
+		require.NoError(t, err)
 
 		// Second registration should fail
 		req2 := issueRegisterInvocation(t, uploadService, uploadService.DID(), args)
@@ -107,12 +106,10 @@ func TestAdminProviderRegisterHandler(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, res2.Receipt().Out().IsErr())
 
-		_, x := res2.Receipt().Out().Unpack()
-		require.NotNil(t, x)
-
-		var model edm.ErrorModel
-		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
-		require.Equal(t, "ProviderAlreadyRegistered", model.Name())
+		_, err = provider.Register.Unpack(res2.Receipt())
+		var errModel datamodel.ErrorModel
+		require.ErrorAs(t, err, &errModel)
+		require.Equal(t, "ProviderAlreadyRegistered", errModel.Name())
 	})
 
 	t.Run("service identity can register", func(t *testing.T) {
@@ -135,7 +132,8 @@ func TestAdminProviderRegisterHandler(t *testing.T) {
 
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
-		require.False(t, res.Receipt().Out().IsErr())
+				_, err = blobcmds.Allocate.Unpack(res.Receipt())
+		require.NoError(t, err)
 
 		// Verify provider was stored
 		rec, err := spStore.Get(ctx, storageProvider.DID())

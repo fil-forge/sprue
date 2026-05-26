@@ -1,17 +1,16 @@
 package handlers_test
 
 import (
-	"bytes"
 	"context"
 	"testing"
 
+	blobcmds "github.com/fil-forge/libforge/commands/blob"
 	ucancmds "github.com/fil-forge/libforge/commands/ucan"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/identity"
 	"github.com/fil-forge/sprue/pkg/service/handlers"
 	"github.com/fil-forge/sprue/pkg/store/agent"
 	agent_store "github.com/fil-forge/sprue/pkg/store/agent/memory"
-	edm "github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
 	"github.com/fil-forge/ucantone/ipld/datamodel"
 	"github.com/fil-forge/ucantone/ucan"
@@ -70,12 +69,8 @@ func TestUCANConcludeHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		_, x := res.Receipt().Out().Unpack()
-		require.NotNil(t, x)
-
-		var model edm.ErrorModel
-		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
-		require.Equal(t, ucancmds.ConclusionReceiptNotFoundErrorName, model.Name())
+		_, err = ucancmds.Conclude.Unpack(res.Receipt())
+		require.ErrorIs(t, err, ucancmds.ErrConclusionReceiptNotFound)
 	})
 
 	t.Run("unknown invocation returns success", func(t *testing.T) {
@@ -105,7 +100,8 @@ func TestUCANConcludeHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		require.False(t, res.Receipt().Out().IsErr())
+				_, err = blobcmds.Allocate.Unpack(res.Receipt())
+		require.NoError(t, err)
 	})
 
 	t.Run("dispatches to registered handler", func(t *testing.T) {
@@ -154,7 +150,8 @@ func TestUCANConcludeHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		require.False(t, res.Receipt().Out().IsErr())
+				_, err = blobcmds.Allocate.Unpack(res.Receipt())
+		require.NoError(t, err)
 
 		require.True(t, called)
 		require.Equal(t, taskInv.Task().Link(), gotInv.Task().Link())
@@ -193,7 +190,8 @@ func TestUCANConcludeHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		require.False(t, res.Receipt().Out().IsErr())
+				_, err = blobcmds.Allocate.Unpack(res.Receipt())
+		require.NoError(t, err)
 	})
 
 	t.Run("invocation supplied via metadata", func(t *testing.T) {
@@ -233,7 +231,8 @@ func TestUCANConcludeHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		require.False(t, res.Receipt().Out().IsErr())
+				_, err = blobcmds.Allocate.Unpack(res.Receipt())
+		require.NoError(t, err)
 		require.True(t, called)
 	})
 }

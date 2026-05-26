@@ -1,7 +1,6 @@
 package handlers_test
 
 import (
-	"bytes"
 	"context"
 	"testing"
 
@@ -13,7 +12,7 @@ import (
 	consumer_store "github.com/fil-forge/sprue/pkg/store/consumer/memory"
 	subscription_store "github.com/fil-forge/sprue/pkg/store/subscription/memory"
 	"github.com/fil-forge/ucantone/did"
-	edm "github.com/fil-forge/ucantone/errors/datamodel"
+	"github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
 	"github.com/fil-forge/ucantone/principal"
 	"github.com/fil-forge/ucantone/ucan/invocation"
@@ -72,12 +71,8 @@ func TestSpaceInfoHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		o, x := res.Receipt().Out().Unpack()
-		require.Nil(t, x)
-		require.NotNil(t, o)
-
-		var ok spacecmds.InfoOK
-		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
+		ok, err := spacecmds.Info.Unpack(res.Receipt())
+		require.NoError(t, err)
 		require.Len(t, ok.Providers, 1)
 		require.Equal(t, uploadService.DID(), ok.Providers[0])
 	})
@@ -98,11 +93,8 @@ func TestSpaceInfoHandler(t *testing.T) {
 		err := handler.Handler(req, res)
 		require.NoError(t, err)
 
-		o, x := res.Receipt().Out().Unpack()
-		require.Nil(t, x)
-
-		var ok spacecmds.InfoOK
-		require.NoError(t, ok.UnmarshalCBOR(bytes.NewReader(o)))
+		ok, err := spacecmds.Info.Unpack(res.Receipt())
+		require.NoError(t, err)
 		require.Empty(t, ok.Providers)
 	})
 
@@ -123,11 +115,9 @@ func TestSpaceInfoHandler(t *testing.T) {
 		err := handler.Handler(req, res)
 		require.NoError(t, err)
 
-		_, x := res.Receipt().Out().Unpack()
-		require.NotNil(t, x)
-
-		var model edm.ErrorModel
-		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
-		require.Equal(t, spacecmds.UnknownSpaceErrorName, model.Name())
+		_, err = spacecmds.Info.Unpack(res.Receipt())
+		var errModel datamodel.ErrorModel
+		require.ErrorAs(t, err, &errModel)
+		require.Equal(t, spacecmds.UnknownSpaceErrorName, errModel.Name())
 	})
 }

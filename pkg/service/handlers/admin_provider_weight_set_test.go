@@ -1,17 +1,17 @@
 package handlers_test
 
 import (
-	"bytes"
 	"net/url"
 	"testing"
 
+	blobcmds "github.com/fil-forge/libforge/commands/blob"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/commands/admin/provider/weight"
 	"github.com/fil-forge/sprue/pkg/identity"
 	"github.com/fil-forge/sprue/pkg/service/handlers"
 	storage_provider_store "github.com/fil-forge/sprue/pkg/store/storage_provider/memory"
 	"github.com/fil-forge/ucantone/did"
-	edm "github.com/fil-forge/ucantone/errors/datamodel"
+	"github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/invocation"
@@ -67,12 +67,10 @@ func TestAdminProviderWeightSetHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		_, x := res.Receipt().Out().Unpack()
-		require.NotNil(t, x)
-
-		var model edm.ErrorModel
-		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
-		require.Equal(t, "Unauthorized", model.Name())
+		_, err = weight.Set.Unpack(res.Receipt())
+		var errModel datamodel.ErrorModel
+		require.ErrorAs(t, err, &errModel)
+		require.Equal(t, "Unauthorized", errModel.Name())
 	})
 
 	t.Run("provider not found", func(t *testing.T) {
@@ -97,12 +95,10 @@ func TestAdminProviderWeightSetHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		_, x := res.Receipt().Out().Unpack()
-		require.NotNil(t, x)
-
-		var model edm.ErrorModel
-		require.NoError(t, model.UnmarshalCBOR(bytes.NewReader(x)))
-		require.Equal(t, "Failed to get existing provider", model.Name())
+		_, err = weight.Set.Unpack(res.Receipt())
+		var errModel datamodel.ErrorModel
+		require.ErrorAs(t, err, &errModel)
+		require.Equal(t, "Failed to get existing provider", errModel.Name())
 	})
 
 	t.Run("success updates weights", func(t *testing.T) {
@@ -134,7 +130,8 @@ func TestAdminProviderWeightSetHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		require.False(t, res.Receipt().Out().IsErr())
+				_, err = blobcmds.Allocate.Unpack(res.Receipt())
+		require.NoError(t, err)
 
 		// Verify weights were updated.
 		rec, err := spStore.Get(ctx, storageProvider.DID())
