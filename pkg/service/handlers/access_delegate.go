@@ -16,8 +16,7 @@ import (
 
 func NewAccessDelegateHandler(delegationStore delegation_store.Store, provisioningSvc *provisioning.Service, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", access.Delegate))
-	return server.NewRoute(
-		access.Delegate,
+	return access.Delegate.Route(
 		func(req *binding.Request[*access.DelegateArguments], res *binding.Response[*access.DelegateOK]) error {
 			args := req.Task().Arguments()
 			agent := req.Invocation().Issuer()

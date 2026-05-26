@@ -13,8 +13,7 @@ import (
 // This handler lists the shards of an upload.
 func NewUploadShardListHandler(uploadStore upload_store.Store, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", shardcmds.List))
-	return server.NewRoute(
-		shardcmds.List,
+	return shardcmds.List.Route(
 		func(req *binding.Request[*shardcmds.ListArguments], res *binding.Response[*shardcmds.ListOK]) error {
 			args := req.Task().Arguments()
 			space := req.Invocation().Subject()

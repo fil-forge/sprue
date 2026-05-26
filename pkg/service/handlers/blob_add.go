@@ -36,8 +36,7 @@ import (
 
 func NewBlobAddHandler(id *identity.Identity, provisioningSvc *provisioning.Service, router *routing.Service, nodeProvider piriclient.Provider, agentStore agent.Store, blobRegistry blobregistry.Store, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", blobcmds.Add))
-	return server.NewRoute(
-		blobcmds.Add,
+	return blobcmds.Add.Route(
 		func(req *binding.Request[*blobcmds.AddArguments], res *binding.Response[*blobcmds.AddOK]) error {
 			args := req.Task().Arguments()
 			blob := args.Blob

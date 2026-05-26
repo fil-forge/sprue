@@ -24,8 +24,7 @@ import (
 
 func NewAccessConfirmHandler(id *identity.Identity, delegationStore delegation_store.Store, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", access.Confirm))
-	return server.NewRoute(
-		access.Confirm,
+	return access.Confirm.Route(
 		func(req *binding.Request[*access.ConfirmArguments], res *binding.Response[*access.ConfirmOK]) error {
 			args := req.Task().Arguments()
 			if req.Invocation().Subject() != id.Signer.DID() {

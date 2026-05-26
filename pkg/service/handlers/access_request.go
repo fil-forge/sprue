@@ -35,8 +35,7 @@ var (
 
 func NewAccessRequestHandler(serverCfg config.ServerConfig, id *identity.Identity, mailer mailer.Mailer, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", access.Request))
-	return server.NewRoute(
-		access.Request,
+	return access.Request.Route(
 		func(req *binding.Request[*access.RequestArguments], res *binding.Response[*access.RequestOK]) error {
 			args := req.Task().Arguments()
 			account, err := didmailto.Parse(args.Issuer.String())

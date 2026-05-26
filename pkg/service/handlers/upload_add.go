@@ -16,8 +16,7 @@ import (
 // This handler registers an upload (root CID + shards mapping).
 func NewUploadAddHandler(provisioningSvc *provisioning.Service, uploadStore upload_store.Store, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", uploadcmds.Add))
-	return server.NewRoute(
-		uploadcmds.Add,
+	return uploadcmds.Add.Route(
 		func(req *binding.Request[*uploadcmds.AddArguments], res *binding.Response[*uploadcmds.AddOK]) error {
 			args := req.Task().Arguments()
 			space := req.Invocation().Subject()

@@ -12,8 +12,7 @@ import (
 
 func NewBlobListHandler(blobRegistry blobregistry.Store, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", blobcmds.List))
-	return server.NewRoute(
-		blobcmds.List,
+	return blobcmds.List.Route(
 		func(req *binding.Request[*blobcmds.ListArguments], res *binding.Response[*blobcmds.ListOK]) error {
 			args := req.Task().Arguments()
 			space := req.Invocation().Subject()
