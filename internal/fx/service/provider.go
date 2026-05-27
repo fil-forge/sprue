@@ -21,7 +21,7 @@ type ServiceParams struct {
 	fx.In
 
 	Identity         *identity.Identity
-	DeploymentConfig *config.DeploymentConfig
+	DeploymentConfig config.DeploymentConfig
 	AgentStore       agent.Store
 	DelegationStore  delegation.Store
 	Logger           *zap.Logger
