@@ -92,8 +92,8 @@ github.com/ebitengine/purego v0.10.0 h1:QIw4xfpWT6GWTzaW5XEKy3HXoqrJGx1ijYHzTF0/
 github.com/ebitengine/purego v0.10.0/go.mod h1:iIjxzd6CiRiOG0UyXP+V1+jWqUXVjPKLAI0mRfJZTmQ=
 github.com/felixge/httpsnoop v1.0.4 h1:NFTV2Zj1bL4mc9sqWACXbQFVBBg2W3GPvqp8/ESS2Wg=
 github.com/felixge/httpsnoop v1.0.4/go.mod h1:m8KPJKqk1gH5J9DgRY2ASl2lWCfGKXixSwevea8zH2U=
-github.com/fil-forge/libforge v0.0.0-20260522130153-a38febd34c97 h1:4eMwuafgYFigZ/stThXVlYOehmV1hGUlLKOyBcT7HQQ=
-github.com/fil-forge/libforge v0.0.0-20260522130153-a38febd34c97/go.mod h1:1ytnrneNEeJcskEbsRDtNZY/Jvgo2Yw5szIUI/9EWPk=
+github.com/fil-forge/libforge v0.0.0-20260527182359-ebb22552c348 h1:roYe4llNv0fpQnvXMontrdt/hy9kH5K/cnNsXmhqId4=
+github.com/fil-forge/libforge v0.0.0-20260527182359-ebb22552c348/go.mod h1:1ytnrneNEeJcskEbsRDtNZY/Jvgo2Yw5szIUI/9EWPk=
 github.com/fil-forge/ucantone v0.0.0-20260522152152-eda937bc2684 h1:kWJLKVltJXPXO7tKS1z0GhzA+c59gwhediGyByEXE0o=
 github.com/fil-forge/ucantone v0.0.0-20260522152152-eda937bc2684/go.mod h1:XAVqsZwYoZ9vncjZoRUAJ+mL/ApLMFn9HHX7ipohVdY=
 github.com/filecoin-project/go-state-types v0.18.0 h1:oDcjihXRlf2cM176atZzllp79Zc+kcbiuQM9DPL/1a4=
