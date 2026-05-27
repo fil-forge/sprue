@@ -139,7 +139,7 @@ func NewAccessRequestHandler(serverCfg config.ServerConfig, id *identity.Identit
 
 			return res.SetSuccess(&access.RequestOK{
 				// link to this access request
-				Request: req.Invocation().Link(),
+				Request: req.Invocation().Task().Link(),
 				// link to the authorization confirmation so it could be used to lookup
 				// the delegation by the access request.
 				Confirm: promise.AwaitOK{Task: confirmation.Task().Link()},

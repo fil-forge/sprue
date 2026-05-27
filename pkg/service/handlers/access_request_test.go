@@ -80,7 +80,7 @@ func TestAccessRequestHandler(t *testing.T) {
 
 		ok, err := access.Request.Unpack(res.Receipt())
 		require.NoError(t, err)
-		require.Equal(t, inv.Link(), ok.Request)
+		require.Equal(t, inv.Task().Link(), ok.Request)
 		require.NotZero(t, ok.Expiration)
 
 		require.Equal(t, "alice@example.com", m.lastTo)
