@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/fil-forge/libforge/didresolver"
+	"github.com/fil-forge/sprue/pkg/attested"
 	"github.com/fil-forge/sprue/pkg/identity"
 	"github.com/fil-forge/sprue/pkg/lib/ucan_server"
 	"github.com/fil-forge/sprue/pkg/service/ui"
@@ -103,12 +104,10 @@ func createUCANServer(id principal.Signer, agentStore agent.Store, handlers []se
 		server.WithEventListener(&ucan_server.ErrorHandler{Logger: logger}),
 		server.WithValidationOptions(
 			validator.WithDIDVerifierResolvers(map[string]validator.DIDVerifierResolverFunc{
-				"key": ucan_server.ResolveDIDKey,
-				"web": webResolver.Resolve,
+				"key":    ucan_server.ResolveDIDKey,
+				"web":    webResolver.Resolve,
+				"mailto": attested.NewDIDVerifierResolver(id.Verifier()),
 			}),
-			validator.WithNonStandardSignatureVerifier(
-				ucan_server.NewAttestationVerifier(id.Verifier()),
-			),
 		),
 	)
 

@@ -12,7 +12,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.96.4
 	github.com/docker/docker v28.5.2+incompatible
 	github.com/fil-forge/libforge v0.0.0-20260527182359-ebb22552c348
-	github.com/fil-forge/ucantone v0.0.0-20260522152152-eda937bc2684
+	github.com/fil-forge/ucantone v0.0.0-20260601165358-030d20bf6d53
 	github.com/google/uuid v1.6.0
 	github.com/ipfs/go-cid v0.6.1
 	github.com/jackc/pgx/v5 v5.8.0
@@ -68,7 +68,6 @@ require (
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/ebitengine/purego v0.10.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
-	github.com/filecoin-project/go-state-types v0.18.0 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
