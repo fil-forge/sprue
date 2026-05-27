@@ -36,6 +36,9 @@ type DeploymentConfig struct {
 	// given blob. It includes the original blob that was uploaded, so only values
 	// above 1 will allow users to have multiple copies of their data.
 	MaxReplicas uint `mapstructure:"max_replicas"`
+	// InsecureDIDResolution enables HTTP (instead of HTTPS) for did:web
+	// resolution, which should only be used for development purposes.
+	InsecureDIDResolution bool `mapstructure:"insecure_did_resolution" toml:"insecure_did_resolution,omitempty"`
 }
 
 // ServerConfig holds HTTP server settings.

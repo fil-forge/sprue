@@ -24,6 +24,28 @@ import (
 	"go.uber.org/zap"
 )
 
+type serviceConfig struct {
+	serverOptions         []server.HTTPOption
+	insecureDIDResolution bool
+}
+
+type Option func(*serviceConfig)
+
+// WithServerOptions allows passing custom options to the underlying UCAN server.
+func WithServerOptions(opts ...server.HTTPOption) Option {
+	return func(c *serviceConfig) {
+		c.serverOptions = opts
+	}
+}
+
+// WithInsecureDIDResolution enables HTTP (instead of HTTPS) for did:web
+// resolution, which should only be used for development purposes.
+func WithInsecureDIDResolution(enabled bool) Option {
+	return func(c *serviceConfig) {
+		c.insecureDIDResolution = enabled
+	}
+}
+
 // Service implements the sprue upload service logic.
 type Service struct {
 	identity        *identity.Identity
@@ -34,7 +56,7 @@ type Service struct {
 }
 
 // New creates a new Service instance.
-func New(id *identity.Identity, agentStore agent.Store, delegationStore delegation_store.Store, handlers []server.Route, logger *zap.Logger, options ...server.HTTPOption) (*Service, error) {
+func New(id *identity.Identity, agentStore agent.Store, delegationStore delegation_store.Store, handlers []server.Route, logger *zap.Logger, options ...Option) (*Service, error) {
 	server, err := createUCANServer(id.Signer, agentStore, handlers, logger, options...)
 	if err != nil {
 		return nil, err
@@ -49,8 +71,18 @@ func New(id *identity.Identity, agentStore agent.Store, delegationStore delegati
 }
 
 // createUCANServer creates the UCAN RPC server with registered handlers.
-func createUCANServer(id principal.Signer, agentStore agent.Store, handlers []server.Route, logger *zap.Logger, options ...server.HTTPOption) (*server.HTTPServer, error) {
-	httpResolver, err := didresolver.NewHTTPResolver()
+func createUCANServer(id principal.Signer, agentStore agent.Store, handlers []server.Route, logger *zap.Logger, options ...Option) (*server.HTTPServer, error) {
+	cfg := serviceConfig{}
+	for _, opt := range options {
+		opt(&cfg)
+	}
+
+	httpResolverOpts := []didresolver.Option{}
+	if cfg.insecureDIDResolution {
+		logger.Warn("insecure DID resolution enabled: did:web will be resolved over HTTP instead of HTTPS; this should only be used for development purposes")
+		httpResolverOpts = append(httpResolverOpts, didresolver.InsecureResolution())
+	}
+	httpResolver, err := didresolver.NewHTTPResolver(httpResolverOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -58,16 +90,21 @@ func createUCANServer(id principal.Signer, agentStore agent.Store, handlers []se
 	if err != nil {
 		return nil, err
 	}
+	selfResolver := didresolver.NewSelfResolver(id)
+	webResolver := didresolver.NewTieredResolver(
+		selfResolver.Resolve,
+		cacheResolver.Resolve,
+	)
 
-	options = append(
-		slices.Clone(options),
+	serverOpts := append(
+		slices.Clone(cfg.serverOptions),
 		server.WithReceiptTimestamps(true),
 		server.WithEventListener(&ucan_server.AgentMessageLogger{Logger: logger, AgentStore: agentStore}),
 		server.WithEventListener(&ucan_server.ErrorHandler{Logger: logger}),
 		server.WithValidationOptions(
 			validator.WithDIDVerifierResolvers(map[string]validator.DIDVerifierResolverFunc{
 				"key": ucan_server.ResolveDIDKey,
-				"web": cacheResolver.Resolve,
+				"web": webResolver.Resolve,
 			}),
 			validator.WithNonStandardSignatureVerifier(
 				ucan_server.NewAttestationVerifier(id.Verifier()),
@@ -75,7 +112,7 @@ func createUCANServer(id principal.Signer, agentStore agent.Store, handlers []se
 		),
 	)
 
-	srv := server.NewHTTP(id, options...)
+	srv := server.NewHTTP(id, serverOpts...)
 	for _, h := range handlers {
 		srv.Handle(h.Command, h.Handler)
 	}
