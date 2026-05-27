@@ -10,7 +10,6 @@ import (
 	"github.com/fil-forge/libforge/didmailto"
 	"github.com/fil-forge/ucantone/binding"
 	"github.com/fil-forge/ucantone/did"
-	"github.com/fil-forge/ucantone/ipld"
 	"github.com/fil-forge/ucantone/ipld/datamodel"
 	"github.com/fil-forge/ucantone/server"
 	"github.com/fil-forge/ucantone/ucan"
@@ -33,14 +32,13 @@ func NewAccessConfirmHandler(id *identity.Identity, delegationStore delegation_s
 				return res.SetFailure(access.ErrInvalidAccessConfirmSubject)
 			}
 
-			account, err := didmailto.Parse(args.Issuer.String())
+			accountDID, err := didmailto.Parse(args.Issuer.String())
 			if err != nil {
 				log.Warn("invalid issuer DID", zap.Stringer("issuer", args.Issuer), zap.Error(err))
 				return res.SetFailure(access.ErrInvalidAccessConfirmIssuer)
 			}
 
-			// Create a absentee signer for the account that authorized the delegation
-			// account := absentee.From(accountDID)
+			attestedAccount := attested.NewSigner(accountDID, id.Signer)
 			agent := args.Audience
 
 			cmds := make([]string, 0, len(args.Attenuations))
@@ -50,7 +48,7 @@ func NewAccessConfirmHandler(id *identity.Identity, delegationStore delegation_s
 
 			log := log.With(
 				zap.Stringer("agent", agent),
-				zap.Stringer("account", account),
+				zap.Stringer("account", attestedAccount),
 				zap.Stringer("cause", args.Cause),
 				zap.Strings("commands", cmds),
 			)
@@ -58,8 +56,7 @@ func NewAccessConfirmHandler(id *identity.Identity, delegationStore delegation_s
 
 			// Create session proofs
 			delegations, _, err := createSessionProofs(
-				id.Signer,
-				account,
+				attestedAccount,
 				agent,
 				args.Attenuations,
 				datamodel.Map{
@@ -88,7 +85,7 @@ func NewAccessConfirmHandler(id *identity.Identity, delegationStore delegation_s
 				return fmt.Errorf("storing delegations: %w", err)
 			}
 
-			// Include the delegations and attestations in the response metadata.
+			// Include the delegations in the response metadata.
 			res.SetMetadata(container.New(
 				container.WithDelegations(delegations...),
 			))
@@ -98,14 +95,12 @@ func NewAccessConfirmHandler(id *identity.Identity, delegationStore delegation_s
 	)
 }
 
-// createSessionProofs creates delegations from the account to the agent, and
-// attestations from the service to the agent referencing those delegations.
+// createSessionProofs creates delegations from the account to the agent.
 func createSessionProofs(
-	authority ucan.Signer,
-	account did.DID,
+	account ucan.Signer,
 	agent did.DID,
 	attenuations []access.CapabilityRequest,
-	meta ipld.Map,
+	meta datamodel.Map,
 ) ([]ucan.Delegation, []ucan.Invocation, error) {
 	delegations := make([]ucan.Delegation, 0, len(attenuations))
 	attestations := make([]ucan.Invocation, 0, len(attenuations))
@@ -114,9 +109,9 @@ func createSessionProofs(
 	// This allows the agent to claim delegations that have the account as the
 	// subject and also provision spaces with the account as the owner.
 	accountDlg, err := delegation.Delegate(
-		attested.NewSigner(account, authority),
-		agent,
 		account,
+		agent,
+		account.DID(),
 		command.Top(),
 		delegation.WithMetadata(meta),
 		delegation.WithNoExpiration(),
@@ -128,7 +123,7 @@ func createSessionProofs(
 
 	for _, req := range attenuations {
 		dlg, err := delegation.Delegate(
-			attested.NewSigner(account, authority),
+			account,
 			agent,
 			// TODO: optionally set subject in capability request
 			// no subject (powerline) will apply to all spaces present and future

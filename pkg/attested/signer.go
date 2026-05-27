@@ -26,6 +26,10 @@ func (s Signer) DID() did.DID {
 	return s.did
 }
 
+func (s Signer) String() string {
+	return fmt.Sprintf("%s (attested by %s)", s.did, s.authority.DID())
+}
+
 func (s Signer) Sign(data []byte) []byte {
 	msgDigest, err := mh.Sum(data, mh.SHA2_256, -1)
 	if err != nil {
