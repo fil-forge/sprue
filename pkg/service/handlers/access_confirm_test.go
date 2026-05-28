@@ -127,13 +127,14 @@ func TestAccessConfirmHandler(t *testing.T) {
 		ok, err := access.Confirm.Unpack(res.Receipt())
 		require.NoError(t, err)
 
-		// One delegation link per attenuation.
-		require.Len(t, ok.Delegations, 1)
+		// One delegation link per attenuation + one account delegation
+		require.Len(t, ok.Delegations, 2)
 
-		// Store holds the delegation and its attestation, both keyed by the agent.
+		// Store holds the delegation and its attestation, the account delegation
+		// and it's attestation all keyed by the agent.
 		page, err := store.ListByAudience(t.Context(), agent.DID())
 		require.NoError(t, err)
-		require.Len(t, page.Results, 2)
+		require.Len(t, page.Results, 4)
 	})
 
 	t.Run("multiple capabilities", func(t *testing.T) {
@@ -172,11 +173,13 @@ func TestAccessConfirmHandler(t *testing.T) {
 		ok, err := access.Confirm.Unpack(res.Receipt())
 		require.NoError(t, err)
 
-		require.Len(t, ok.Delegations, 2)
+		// One delegation link per attenuation + one account delegation
+		require.Len(t, ok.Delegations, 3)
 
-		// Two attenuations → two delegations and two attestations stored.
+		// Two attenuations → two delegations and two attestations, plus one account
+		// delegation and its attestation stored.
 		page, err := store.ListByAudience(t.Context(), agent.DID())
 		require.NoError(t, err)
-		require.Len(t, page.Results, 4)
+		require.Len(t, page.Results, 6)
 	})
 }
