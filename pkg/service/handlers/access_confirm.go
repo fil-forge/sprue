@@ -119,9 +119,17 @@ func createSessionProofs(
 		dlg, err := delegation.Delegate(
 			account,
 			agent,
-			// TODO: optionally set subject in capability request
-			// no subject (powerline) will apply to all spaces present and future
-			did.Undef,
+			// The account itself is the resource owner of its did:mailto, so
+			// using account.DID() as the subject yields a self-issued root
+			// delegation (issuer == subject), which the UCAN spec requires
+			// for the FIRST proof in a chain — see
+			// https://github.com/ucan-wg/delegation#powerline and
+			// ucantone/validator/validator.go's "root delegation subject is
+			// null" check. A plain powerline (did.Undef) here cannot be used
+			// as a root, so invocations against the account would be
+			// rejected with InvalidClaim. Powerline can still be introduced
+			// by later hops in the chain.
+			account.DID(),
 			req.Command,
 			delegation.WithMetadata(meta),
 			// default to Infinity is reasonable here because

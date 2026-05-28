@@ -8,11 +8,6 @@ import (
 	"time"
 
 	"github.com/fil-forge/libforge/didresolver"
-	"github.com/fil-forge/sprue/pkg/identity"
-	"github.com/fil-forge/sprue/pkg/lib/ucan_server"
-	"github.com/fil-forge/sprue/pkg/service/ui"
-	"github.com/fil-forge/sprue/pkg/store/agent"
-	delegation_store "github.com/fil-forge/sprue/pkg/store/delegation"
 	"github.com/fil-forge/ucantone/ipld/codec/dagcbor"
 	"github.com/fil-forge/ucantone/principal"
 	"github.com/fil-forge/ucantone/server"
@@ -22,6 +17,12 @@ import (
 	"github.com/ipfs/go-cid"
 	"github.com/labstack/echo/v4"
 	"go.uber.org/zap"
+
+	"github.com/fil-forge/sprue/pkg/identity"
+	"github.com/fil-forge/sprue/pkg/lib/ucan_server"
+	"github.com/fil-forge/sprue/pkg/service/ui"
+	"github.com/fil-forge/sprue/pkg/store/agent"
+	delegation_store "github.com/fil-forge/sprue/pkg/store/delegation"
 )
 
 // Service implements the sprue upload service logic.
@@ -50,7 +51,7 @@ func New(id *identity.Identity, agentStore agent.Store, delegationStore delegati
 
 // createUCANServer creates the UCAN RPC server with registered handlers.
 func createUCANServer(id principal.Signer, agentStore agent.Store, handlers []server.Route, logger *zap.Logger, options ...server.HTTPOption) (*server.HTTPServer, error) {
-	httpResolver, err := didresolver.NewHTTPResolver()
+	httpResolver, err := didresolver.NewHTTPResolver(didresolver.InsecureResolution())
 	if err != nil {
 		return nil, err
 	}
