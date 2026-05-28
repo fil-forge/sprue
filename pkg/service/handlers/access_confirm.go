@@ -15,6 +15,7 @@ import (
 	"github.com/fil-forge/ucantone/principal/absentee"
 	"github.com/fil-forge/ucantone/server"
 	"github.com/fil-forge/ucantone/ucan"
+	"github.com/fil-forge/ucantone/ucan/command"
 	"github.com/fil-forge/ucantone/ucan/container"
 	"github.com/fil-forge/ucantone/ucan/delegation"
 	"github.com/fil-forge/ucantone/ucan/invocation"
@@ -55,8 +56,7 @@ func NewAccessConfirmHandler(id *identity.Identity, delegationStore delegation_s
 			)
 			log.Debug("confirming access")
 
-			// Create session proofs, but containing no Space proofs. We'll store these,
-			// and generate the Space proofs on access/claim.
+			// Create session proofs
 			delegations, attestations, err := createSessionProofs(
 				id.Signer,
 				account,
@@ -114,6 +114,38 @@ func createSessionProofs(
 ) ([]ucan.Delegation, []ucan.Invocation, error) {
 	delegations := make([]ucan.Delegation, 0, len(attenuations))
 	attestations := make([]ucan.Invocation, 0, len(attenuations))
+
+	// Explicitly grant ability to operate as the account (subject = account).
+	// This allows the agent to claim delegations that have the account as the
+	// subject and also provision spaces with the account as the owner.
+	accountDlg, err := delegation.Delegate(
+		account,
+		agent,
+		account.DID(),
+		command.Top(),
+		delegation.WithMetadata(meta),
+		delegation.WithNoExpiration(),
+	)
+	if err != nil {
+		return nil, nil, fmt.Errorf("creating delegation: %w", err)
+	}
+	delegations = append(delegations, accountDlg)
+
+	// Need to attest as mailto DIDs cannot sign.
+	claimAttestation, err := attest.Proof.Invoke(
+		service,
+		service.DID(),
+		&attest.ProofArguments{
+			Proof: accountDlg.Link(),
+		},
+		invocation.WithAudience(agent),
+		invocation.WithMetadata(meta),
+		invocation.WithNoExpiration(),
+	)
+	if err != nil {
+		return nil, nil, fmt.Errorf("creating attestation: %w", err)
+	}
+	attestations = append(attestations, claimAttestation)
 
 	for _, req := range attenuations {
 		dlg, err := delegation.Delegate(

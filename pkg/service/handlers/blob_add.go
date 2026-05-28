@@ -171,7 +171,7 @@ func NewBlobAddHandler(id *identity.Identity, provisioningSvc *provisioning.Serv
 				return fmt.Errorf("generating put invocation: %w", err)
 			}
 
-			accInv, accRcpt, err := maybeAccept(req.Context(), agentStore, blobRegistry, nodeProvider, provider, space, blob, cause, putInv, putRcpt, proofStore, log)
+			accInv, accRcpt, accExtras, err := maybeAccept(req.Context(), agentStore, blobRegistry, nodeProvider, provider, space, blob, cause, putInv, putRcpt, proofStore, log)
 			if err != nil {
 				return err
 			}
@@ -181,6 +181,14 @@ func NewBlobAddHandler(id *identity.Identity, provisioningSvc *provisioning.Serv
 				if rcpt != nil {
 					metaOpts = append(metaOpts, container.WithReceipts(rcpt))
 				}
+			}
+			// Forward piri's extra invocations/receipts (location commitment
+			// + /pdp/accept) into the response so the client can find them.
+			if len(accExtras.invocations) > 0 {
+				metaOpts = append(metaOpts, container.WithInvocations(accExtras.invocations...))
+			}
+			if len(accExtras.receipts) > 0 {
+				metaOpts = append(metaOpts, container.WithReceipts(accExtras.receipts...))
 			}
 			res.SetMetadata(container.New(metaOpts...))
 
@@ -325,6 +333,17 @@ func deriveDID(digest multihash.Multihash) (principal.Signer, error) {
 	return ed25519signer.FromRaw(seed)
 }
 
+// acceptExtras carries the additional invocations / receipts produced by
+// piri's accept handler (notably the /assert/location location commitment
+// and the /pdp/accept invocation) so they can be forwarded to the client.
+// Guppy's blobadd flow looks for /assert/location in the response metadata
+// and fails with "blob accept receipt missing location commitment
+// invocation" if it isn't there.
+type acceptExtras struct {
+	invocations []ucan.Invocation
+	receipts    []ucan.Receipt
+}
+
 // maybeAccept generates and possibly executes a `/blob/accept` invocation if
 // the provided put receipt is non-nil and non-failure.
 func maybeAccept(
@@ -340,37 +359,38 @@ func maybeAccept(
 	putRcpt ucan.Receipt,
 	proofStore ucanlib.ProofStore,
 	logger *zap.Logger,
-) (ucan.Invocation, ucan.Receipt, error) {
+) (ucan.Invocation, ucan.Receipt, acceptExtras, error) {
 	log := logger
 	log.Debug("generating accept invocation")
 
 	c, err := nodeProvider.Client(providerInfo.ID, providerInfo.Endpoint)
 	if err != nil {
 		log.Error("failed to create piri client for accept", zap.Error(err))
-		return nil, nil, err
+		return nil, nil, acceptExtras{}, err
 	}
 
 	accReq := piriclient.AcceptRequest{
 		Space:  space,
 		Digest: blob.Digest,
 		Size:   blob.Size,
-		Put:    putInv.Link(),
+		Put:    putInv.Task().Link(),
 	}
 
 	accInv, _, _, err := c.AcceptInvocation(ctx, &accReq, proofStore, invocation.WithNoNonce())
 	if err != nil {
 		log.Error("failed to create accept invocation", zap.Error(err))
-		return nil, nil, err
+		return nil, nil, acceptExtras{}, err
 	}
 
 	var accRcpt ucan.Receipt
+	var extras acceptExtras
 
 	// If put has already succeeded, we can execute `/blob/accept` right away.
 	if putRcpt != nil && putRcpt.Out().IsOK() {
 		res, inv, rcpt, meta, err := c.Accept(ctx, &accReq, proofStore, invocation.WithNoNonce())
 		if err != nil {
 			log.Error("failed to execute accept on piri", zap.Error(err))
-			return nil, nil, err
+			return nil, nil, acceptExtras{}, err
 		}
 		log.Debug("blob accepted", zap.Stringer("site", res.Site))
 
@@ -379,23 +399,30 @@ func maybeAccept(
 		if meta != nil {
 			invs = append(invs, meta.Invocations()...)
 			rcpts = append(rcpts, meta.Receipts()...)
+			// Capture the piri-side extras (location commitment +
+			// /pdp/accept) so blob_add can include them in the response
+			// metadata sent to the caller. Without this, guppy can't
+			// find the /assert/location invocation it needs.
+			// TODO: pull out the exact things we need
+			extras.invocations = append(extras.invocations, meta.Invocations()...)
+			extras.receipts = append(extras.receipts, meta.Receipts()...)
 		}
 
 		err = writeAgentMessage(ctx, agentStore, invs, rcpts)
 		if err != nil {
 			log.Error("failed to write agent message for accept", zap.Error(err))
-			return nil, nil, err
+			return nil, nil, acceptExtras{}, err
 		}
 
 		err = blobRegistry.Register(ctx, space, blob, cause)
 		if err != nil {
 			log.Error("failed to register blob", zap.Error(err))
-			return nil, nil, err
+			return nil, nil, acceptExtras{}, err
 		}
 
 		accInv = inv
 		accRcpt = rcpt
 	}
 
-	return accInv, accRcpt, nil
+	return accInv, accRcpt, extras, nil
 }

@@ -17,6 +17,7 @@ import (
 	"github.com/fil-forge/ucantone/errors"
 	edm "github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/ucan"
+	"github.com/fil-forge/ucantone/ucan/invocation"
 	"go.uber.org/zap"
 )
 
@@ -84,12 +85,19 @@ func NewHTTPPutConcludeHandler(
 			}
 
 			proofStore := ucanlib.NewContainerProofStore(meta)
+			// Must match the accInv constructed in blob_add.go maybeAccept:
+			// (1) Put = putInv.Task().Link() and
+			// (2) WithNoNonce, so this invocation's CID matches the one whose
+			// task link was returned to the client as AddOK.Site.Task and is
+			// what the client polls the receipts endpoint for. A divergence
+			// here means the receipt is stored under a CID nobody polls for,
+			// producing "receipt not found after N attempts" client-side.
 			res, accInv, accRcpt, meta, err := client.Accept(ctx, &piriclient.AcceptRequest{
 				Space:  space,
 				Digest: allocArgs.Blob.Digest,
 				Size:   allocArgs.Blob.Size,
-				Put:    putInv.Link(),
-			}, proofStore)
+				Put:    putInv.Task().Link(),
+			}, proofStore, invocation.WithNoNonce())
 			if err != nil {
 				log.Error("failed to execute blob accept", zap.Error(err))
 				return fmt.Errorf("executing blob accept: %w", err)
