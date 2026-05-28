@@ -1,26 +1,23 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 
-	"github.com/fil-forge/go-libstoracha/capabilities/blob"
-	"github.com/fil-forge/go-libstoracha/capabilities/http"
-	"github.com/fil-forge/go-libstoracha/capabilities/ucan"
-	"github.com/fil-forge/go-libstoracha/digestutil"
-	"github.com/fil-forge/go-ucanto/core/invocation"
-	"github.com/fil-forge/go-ucanto/core/ipld"
-	"github.com/fil-forge/go-ucanto/core/receipt"
-	"github.com/fil-forge/go-ucanto/core/result"
-	"github.com/fil-forge/go-ucanto/core/result/failure/datamodel"
-	"github.com/fil-forge/go-ucanto/server"
-	"github.com/fil-forge/go-ucanto/validator"
-	"github.com/fil-forge/sprue/pkg/internal/ipldutil"
-	"github.com/fil-forge/sprue/pkg/lib/errors"
+	blobcmds "github.com/fil-forge/libforge/commands/blob"
+	httpcmds "github.com/fil-forge/libforge/commands/http"
+	ucancmds "github.com/fil-forge/libforge/commands/ucan"
+	"github.com/fil-forge/libforge/digestutil"
+	ucanlib "github.com/fil-forge/libforge/ucan"
 	"github.com/fil-forge/sprue/pkg/piriclient"
 	"github.com/fil-forge/sprue/pkg/routing"
 	"github.com/fil-forge/sprue/pkg/store/agent"
 	blobregistry "github.com/fil-forge/sprue/pkg/store/blob_registry"
+	"github.com/fil-forge/ucantone/errors"
+	edm "github.com/fil-forge/ucantone/errors/datamodel"
+	"github.com/fil-forge/ucantone/ucan"
+	"github.com/fil-forge/ucantone/ucan/invocation"
 	"go.uber.org/zap"
 )
 
@@ -32,49 +29,50 @@ func NewHTTPPutConcludeHandler(
 	logger *zap.Logger,
 ) ConclusionHandler {
 	log := logger.With(
-		zap.String("handler", ucan.ConcludeAbility),
-		zap.String("conclude", http.PutAbility),
+		zap.Stringer("handler", ucancmds.Conclude),
+		zap.Stringer("conclude", httpcmds.Put),
 	)
 	return ConclusionHandler{
-		Ability: http.PutAbility,
-		Handler: func(ctx context.Context, putInv invocation.Invocation, putRcpt receipt.AnyReceipt, _ server.InvocationContext) error {
-			log := log.With(zap.Stringer("ran", putRcpt.Ran().Link()))
+		Command: httpcmds.Put.Command,
+		Handler: func(ctx context.Context, putInv ucan.Invocation, putRcpt ucan.Receipt, meta ucan.Container) error {
+			log := log.With(zap.Stringer("ran", putRcpt.Ran()))
 			log.Debug("handling conclude")
 
-			var err error
-			putCap := putInv.Capabilities()[0]
-			putMatch, err := http.Put.Match(validator.NewSource(putCap, putInv))
-			if err != nil {
-				log.Error("failed to match http/put invocation", zap.Error(err))
-				return fmt.Errorf("matching http/put invocation: %w", err)
+			var putArgs httpcmds.PutArguments
+			if err := putArgs.UnmarshalCBOR(bytes.NewReader(putInv.ArgumentsBytes())); err != nil {
+				log.Error("failed to unmarshal HTTP PUT arguments", zap.Error(err))
+				return fmt.Errorf("unmarshaling HTTP PUT arguments: %w", err)
 			}
 
-			allocateTaskLink, err := ipldutil.ToCID(putMatch.Value().Nb().URL.UcanAwait.Link)
-			if err != nil {
-				return err
-			}
-			log = log.With(zap.Stringer("allocation", allocateTaskLink))
+			allocTaskLink := putArgs.Destination.Task
+			log = log.With(zap.Stringer("allocation", allocTaskLink))
 
-			allocTask, err := agentStore.GetInvocation(ctx, allocateTaskLink)
+			allocInv, err := agentStore.GetInvocation(ctx, allocTaskLink)
 			if err != nil {
 				log.Error("failed to get allocation invocation", zap.Error(err))
 				return fmt.Errorf("getting allocation invocation: %w", err)
 			}
-			log = log.With(zap.Stringer("provider", allocTask.Audience().DID()))
 
-			allocMatch, err := blob.Allocate.Match(validator.NewSource(allocTask.Capabilities()[0], allocTask))
-			if err != nil {
-				log.Error("matching blob/allocate invocation", zap.Error(err))
-				return fmt.Errorf("matching blob/allocate invocation: %w", err)
+			provider := allocInv.Audience()
+			if !provider.Defined() {
+				// shouldn't happen, subject should be the space and audience the node
+				provider = allocInv.Subject()
 			}
+			space := allocInv.Subject()
 
-			allocNb := allocMatch.Value().Nb()
 			log = log.With(
-				zap.Stringer("space", allocNb.Space),
-				zap.String("digest", digestutil.Format(allocNb.Blob.Digest)),
+				zap.Stringer("space", space),
+				zap.Stringer("provider", provider),
 			)
 
-			info, err := router.GetProviderInfo(ctx, allocTask.Audience())
+			var allocArgs blobcmds.AllocateArguments
+			if err := allocArgs.UnmarshalCBOR(bytes.NewReader(allocInv.ArgumentsBytes())); err != nil {
+				log.Error("failed to unmarshal allocate arguments", zap.Error(err))
+				return fmt.Errorf("unmarshaling allocate arguments: %w", err)
+			}
+			log = log.With(zap.String("digest", digestutil.Format(allocArgs.Blob.Digest)))
+
+			info, err := router.GetProviderInfo(ctx, provider)
 			if err != nil {
 				log.Error("failed to get storage provider info", zap.Error(err))
 				return fmt.Errorf("getting storage provider info: %w", err)
@@ -86,42 +84,58 @@ func NewHTTPPutConcludeHandler(
 				return fmt.Errorf("creating client: %w", err)
 			}
 
-			res, accTask, accRcpt, err := client.Accept(ctx, &piriclient.AcceptRequest{
-				Space:  allocNb.Space,
-				Digest: allocNb.Blob.Digest,
-				Size:   allocNb.Blob.Size,
-				Put:    putInv.Link(),
-			}, delegationFetcher{info.Proof})
+			proofStore := ucanlib.NewContainerProofStore(meta)
+			// Must match the accInv constructed in blob_add.go maybeAccept:
+			// (1) Put = putInv.Task().Link() and
+			// (2) WithNoNonce, so this invocation's CID matches the one whose
+			// task link was returned to the client as AddOK.Site.Task and is
+			// what the client polls the receipts endpoint for. A divergence
+			// here means the receipt is stored under a CID nobody polls for,
+			// producing "receipt not found after N attempts" client-side.
+			res, accInv, accRcpt, meta, err := client.Accept(ctx, &piriclient.AcceptRequest{
+				Space:  space,
+				Digest: allocArgs.Blob.Digest,
+				Size:   allocArgs.Blob.Size,
+				Put:    putInv.Task().Link(),
+			}, proofStore, invocation.WithNoNonce())
 			if err != nil {
-				log.Error("failed to execute blob/accept", zap.Error(err))
-				return fmt.Errorf("executing blob/accept: %w", err)
+				log.Error("failed to execute blob accept", zap.Error(err))
+				return fmt.Errorf("executing blob accept: %w", err)
 			}
 			log = log.With(zap.Stringer("site", res.Site))
 
-			err = writeAgentMessage(ctx, agentStore, []invocation.Invocation{accTask}, []receipt.AnyReceipt{accRcpt})
+			// accept invocation includes a location commitment (invocation) in response
+			accInvs := []ucan.Invocation{accInv}
+			accRcpts := []ucan.Receipt{accRcpt}
+			if meta != nil {
+				accInvs = append(accInvs, meta.Invocations()...)
+				accRcpts = append(accRcpts, meta.Receipts()...)
+			}
+
+			err = writeAgentMessage(ctx, agentStore, accInvs, accRcpts)
 			if err != nil {
 				log.Error("failed to write agent message", zap.Error(err))
 				return fmt.Errorf("writing agent message: %w", err)
 			}
 
-			// if accept task was not successful do not register the blob in the space
-			return result.MatchResultR1(
-				accRcpt.Out(),
-				func(o ipld.Node) error {
-					log.Debug("accept success")
-					err := blobRegistry.Register(ctx, allocNb.Space, allocNb.Blob, allocateTaskLink)
-					// it's ok if there's already a registration of this blob in this space
-					if err != nil && !errors.Is(err, blobregistry.ErrEntryExists) {
-						return err
-					}
-					return nil
-				},
-				func(x ipld.Node) error {
-					f := datamodel.Bind(x)
-					log.Error("failed blob/accept receipt", zap.Error(f))
-					return f
-				},
-			)
+			if accRcpt.Out().IsErr() {
+				_, x := accRcpt.Out().Unpack()
+				var model edm.ErrorModel
+				if err := model.UnmarshalCBOR(bytes.NewReader(x)); err != nil {
+					log.Error("failed to unmarshal blob accept execution failure", zap.Error(err), zap.Binary("input", x))
+					return fmt.Errorf("executing blob accept: %v", x)
+				}
+				log.Error("failed execution of blob accept", zap.String("name", model.ErrorName), zap.Error(model))
+				return fmt.Errorf("executing blob accept: %w", model)
+			}
+
+			log.Debug("accept success")
+			err = blobRegistry.Register(ctx, space, allocArgs.Blob, allocArgs.Cause)
+			// it's ok if there's already a registration of this blob in this space
+			if err != nil && !errors.Is(err, blobregistry.ErrEntryExists) {
+				return err
+			}
+			return nil
 		},
 	}
 }

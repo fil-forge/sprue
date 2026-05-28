@@ -37,3 +37,6 @@ clean:
 
 docker-build:
 	$(DOCKER) build -t sprue:latest .
+
+gen:
+	go generate ./...

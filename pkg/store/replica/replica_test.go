@@ -7,7 +7,7 @@ import (
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/store/replica"
 	replicaaws "github.com/fil-forge/sprue/pkg/store/replica/aws"
-	"github.com/fil-forge/sprue/pkg/store/replica/memory"
+	replicamemory "github.com/fil-forge/sprue/pkg/store/replica/memory"
 	replicapostgres "github.com/fil-forge/sprue/pkg/store/replica/postgres"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
@@ -26,7 +26,7 @@ var storeKinds = []StoreKind{Memory, AWS, Postgres}
 func makeStore(t *testing.T, k StoreKind) replica.Store {
 	switch k {
 	case Memory:
-		return memory.New()
+		return replicamemory.New()
 	case AWS:
 		return createAWSStore(t)
 	case Postgres:

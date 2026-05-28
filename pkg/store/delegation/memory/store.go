@@ -6,27 +6,27 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/fil-forge/go-ucanto/core/delegation"
-	"github.com/fil-forge/go-ucanto/did"
 	"github.com/fil-forge/sprue/pkg/store"
 	dlgstore "github.com/fil-forge/sprue/pkg/store/delegation"
+	"github.com/fil-forge/ucantone/did"
+	"github.com/fil-forge/ucantone/ucan"
 	cid "github.com/ipfs/go-cid"
 )
 
 type Store struct {
-	mutex       sync.RWMutex
-	delegations map[did.DID][]delegation.Delegation
+	mutex  sync.RWMutex
+	tokens map[did.DID][]ucan.Token
 }
 
 var _ dlgstore.Store = (*Store)(nil)
 
 func New() *Store {
 	return &Store{
-		delegations: map[did.DID][]delegation.Delegation{},
+		tokens: map[did.DID][]ucan.Token{},
 	}
 }
 
-func (s *Store) ListByAudience(ctx context.Context, audience did.DID, options ...dlgstore.ListByAudienceOption) (store.Page[delegation.Delegation], error) {
+func (s *Store) ListByAudience(ctx context.Context, audience did.DID, options ...dlgstore.ListByAudienceOption) (store.Page[ucan.Token], error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
@@ -35,39 +35,45 @@ func (s *Store) ListByAudience(ctx context.Context, audience did.DID, options ..
 	for _, opt := range options {
 		opt(&cfg)
 	}
-	delegations := slices.Clone(s.delegations[audience])
+	tokens := slices.Clone(s.tokens[audience])
 	if cfg.Cursor != nil {
-		for i, d := range delegations {
-			if d.Root().Link().String() == *cfg.Cursor {
-				if i+1 < len(delegations) {
-					delegations = delegations[i+1:]
+		for i, d := range tokens {
+			if d.Link().String() == *cfg.Cursor {
+				if i+1 < len(tokens) {
+					tokens = tokens[i+1:]
 				}
 				break
 			}
 		}
 	}
 	var cursor *string
-	if cfg.Limit != nil && len(delegations) > *cfg.Limit {
-		delegations = delegations[:*cfg.Limit]
-		last := delegations[len(delegations)-1].Root().Link().String()
+	if cfg.Limit != nil && len(tokens) > *cfg.Limit {
+		tokens = tokens[:*cfg.Limit]
+		last := tokens[len(tokens)-1].Link().String()
 		cursor = &last
 	}
-	return store.Page[delegation.Delegation]{
+	return store.Page[ucan.Token]{
 		Cursor:  cursor,
-		Results: delegations,
+		Results: tokens,
 	}, nil
 
 }
 
-func (s *Store) PutMany(ctx context.Context, delegations []delegation.Delegation, cause cid.Cid) error {
+func (s *Store) PutMany(ctx context.Context, tokens []ucan.Token, cause cid.Cid) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	for _, d := range delegations {
-		aud := d.Audience().DID()
-		s.delegations[aud] = append(s.delegations[aud], d)
-		slices.SortFunc(s.delegations[aud], func(a, b delegation.Delegation) int {
-			return bytes.Compare(a.Root().Bytes(), b.Root().Bytes())
+	for _, d := range tokens {
+		var aud did.DID
+		// audience may be undefined if the token is an invocation
+		if d.Audience().Defined() {
+			aud = d.Audience()
+		} else {
+			aud = d.Subject()
+		}
+		s.tokens[aud] = append(s.tokens[aud], d)
+		slices.SortFunc(s.tokens[aud], func(a, b ucan.Token) int {
+			return bytes.Compare(a.Link().Bytes(), b.Link().Bytes())
 		})
 	}
 	return nil

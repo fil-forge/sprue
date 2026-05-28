@@ -3,13 +3,13 @@ package provider
 import (
 	"net/url"
 
-	"github.com/fil-forge/go-ucanto/core/delegation"
 	"github.com/fil-forge/sprue/cmd/client/lib"
+	"github.com/fil-forge/ucantone/did"
 	"github.com/spf13/cobra"
 )
 
 var registerCmd = &cobra.Command{
-	Use:     "register <provider-url> <proof>",
+	Use:     "register <provider-did> <provider-url>",
 	Aliases: []string{"add"},
 	Short:   "Register a storage provider with the service",
 	Args:    cobra.ExactArgs(2),
@@ -17,15 +17,15 @@ var registerCmd = &cobra.Command{
 }
 
 func doRegister(cmd *cobra.Command, args []string) error {
-	c, _, _, id := lib.InitClient(cmd)
+	c, _, _, _ := lib.InitClient(cmd)
 
-	endpoint, err := url.Parse(args[0])
+	id, err := did.Parse(args[0])
 	cobra.CheckErr(err)
 
-	proof, err := delegation.Parse(args[1])
+	endpoint, err := url.Parse(args[1])
 	cobra.CheckErr(err)
 
-	_, err = c.AdminProviderRegister(cmd.Context(), id.Signer, endpoint.String(), proof)
+	_, err = c.AdminProviderRegister(cmd.Context(), id, endpoint.String())
 	cobra.CheckErr(err)
 
 	cmd.Println("Provider registered successfully")

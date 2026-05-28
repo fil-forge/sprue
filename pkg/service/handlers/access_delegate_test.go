@@ -4,18 +4,21 @@ import (
 	"context"
 	"testing"
 
-	"github.com/fil-forge/go-libstoracha/capabilities/access"
-	"github.com/fil-forge/go-ucanto/core/delegation"
-	"github.com/fil-forge/go-ucanto/core/invocation"
-	"github.com/fil-forge/go-ucanto/core/result"
-	"github.com/fil-forge/go-ucanto/did"
-	"github.com/fil-forge/go-ucanto/ucan"
+	accesscmds "github.com/fil-forge/libforge/commands/access"
+	blobcmds "github.com/fil-forge/libforge/commands/blob"
+	"github.com/fil-forge/libforge/didmailto"
 	"github.com/fil-forge/sprue/internal/testutil"
-	"github.com/fil-forge/sprue/pkg/identity"
 	"github.com/fil-forge/sprue/pkg/provisioning"
 	consumermemory "github.com/fil-forge/sprue/pkg/store/consumer/memory"
 	dlgmemory "github.com/fil-forge/sprue/pkg/store/delegation/memory"
 	subscriptionmemory "github.com/fil-forge/sprue/pkg/store/subscription/memory"
+	"github.com/fil-forge/ucantone/did"
+	"github.com/fil-forge/ucantone/errors/datamodel"
+	"github.com/fil-forge/ucantone/execution"
+	"github.com/fil-forge/ucantone/ucan/command"
+	"github.com/fil-forge/ucantone/ucan/delegation"
+	"github.com/fil-forge/ucantone/ucan/invocation"
+	"github.com/ipfs/go-cid"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 )
@@ -34,7 +37,7 @@ func newProvisionedService(t *testing.T, serviceDID did.DID, space did.DID) *pro
 
 	consumerStore := consumermemory.New()
 	subscriptionStore := subscriptionmemory.New()
-	account := mustMailtoDID(t, "test@example.com")
+	account := testutil.Must(didmailto.New("test@example.com"))(t)
 
 	ps := provisioning.NewService(
 		[]did.DID{serviceDID},
@@ -52,117 +55,77 @@ func newProvisionedService(t *testing.T, serviceDID did.DID, space did.DID) *pro
 func TestAccessDelegateHandler(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 
-	t.Run("invalid resource DID", func(t *testing.T) {
-		id := newTestIdentity(t)
-		dlgStore := dlgmemory.New()
-		ps := newTestProvisioningService(t, nil)
-		handler := AccessDelegateHandler(dlgStore, ps, logger)
-
-		agent, err := identity.New("")
-		require.NoError(t, err)
-
-		cap := ucan.NewCapability(
-			access.DelegateAbility,
-			"not-a-did",
-			access.DelegateCaveats{
-				Delegations: access.DelegationLinksModel{
-					Keys:   []string{},
-					Values: map[string]ucan.Link{},
-				},
-			},
-		)
-
-		inv, err := invocation.Invoke(agent.Signer, id.Signer, cap)
-		require.NoError(t, err)
-
-		_, _, err = handler(context.Background(), cap, inv, nil)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "invalid resource")
-	})
-
 	t.Run("no providers for space", func(t *testing.T) {
 		id := newTestIdentity(t)
 		dlgStore := dlgmemory.New()
-		// No providers provisioned
 		ps := newTestProvisioningService(t, nil)
-		handler := AccessDelegateHandler(dlgStore, ps, logger)
+		handler := NewAccessDelegateHandler(dlgStore, ps, logger)
 
-		agent, err := identity.New("")
-		require.NoError(t, err)
+		agent := testutil.RandomSigner(t)
+		space := testutil.RandomSigner(t)
 
-		cap := ucan.NewCapability(
-			access.DelegateAbility,
-			agent.DID(),
-			access.DelegateCaveats{
-				Delegations: access.DelegationLinksModel{
-					Keys:   []string{},
-					Values: map[string]ucan.Link{},
-				},
-			},
+		args := accesscmds.DelegateArguments{Delegations: []cid.Cid{}}
+
+		inv, err := accesscmds.Delegate.Invoke(
+			agent,
+			space.DID(),
+			&args,
+			invocation.WithAudience(id.Signer.DID()),
 		)
-
-		inv, err := invocation.Invoke(agent.Signer, id.Signer, cap)
 		require.NoError(t, err)
 
-		res, _, err := handler(context.Background(), cap, inv, nil)
+		req := execution.NewRequest(t.Context(), inv)
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(id.Signer))
 		require.NoError(t, err)
 
-		_, fail := result.Unwrap(res)
-		require.NotNil(t, fail)
+		err = handler.Handler(req, res)
+		require.NoError(t, err)
+
+		_, err = blobcmds.Allocate.Unpack(res.Receipt())
+		var errModel datamodel.ErrorModel
+		require.ErrorAs(t, err, &errModel)
+		require.Equal(t, accesscmds.InsufficientStorageErrorName, errModel.Name())
 	})
 
 	t.Run("success with delegation", func(t *testing.T) {
 		id := newTestIdentity(t)
 		dlgStore := dlgmemory.New()
 
-		space, err := identity.New("")
+		space := testutil.RandomSigner(t)
+
+		ps := newProvisionedService(t, id.Signer.DID(), space.DID())
+		handler := NewAccessDelegateHandler(dlgStore, ps, logger)
+
+		agent := testutil.RandomSigner(t)
+
+		// Create a delegation from the space to the agent for some capability.
+		dlg, err := delegation.Delegate(space, agent.DID(), space.DID(), command.MustParse("/blob/add"))
 		require.NoError(t, err)
 
-		ps := newProvisionedService(t, id.Signer.DID(), space.Signer.DID())
-		handler := AccessDelegateHandler(dlgStore, ps, logger)
+		args := accesscmds.DelegateArguments{
+			Delegations: []cid.Cid{dlg.Link()},
+		}
 
-		agent, err := identity.New("")
-		require.NoError(t, err)
-
-		// Create a delegation from space to agent
-		dlg, err := delegation.Delegate(
-			space.Signer,
-			agent.Signer,
-			[]ucan.Capability[ucan.NoCaveats]{
-				ucan.NewCapability("space/blob/add", space.DID(), ucan.NoCaveats{}),
-			},
-		)
-		require.NoError(t, err)
-
-		k := dlg.Link().String()
-		cap := ucan.NewCapability(
-			access.DelegateAbility,
+		inv, err := accesscmds.Delegate.Invoke(
+			agent,
 			space.DID(),
-			access.DelegateCaveats{
-				Delegations: access.DelegationLinksModel{
-					Keys:   []string{k},
-					Values: map[string]ucan.Link{k: dlg.Link()},
-				},
-			},
-		)
-
-		// Create invocation and attach delegation blocks so extractDelegations can find them
-		inv, err := invocation.Invoke(
-			agent.Signer,
-			id.Signer,
-			cap,
-			delegation.WithProof(delegation.FromDelegation(dlg)),
+			&args,
+			invocation.WithAudience(id.Signer.DID()),
 		)
 		require.NoError(t, err)
 
-		res, _, err := handler(context.Background(), cap, inv, nil)
+		// Attach the delegation to the request metadata so extractDelegations can find it.
+		req := execution.NewRequest(t.Context(), inv, execution.WithDelegations(dlg))
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(id.Signer))
 		require.NoError(t, err)
 
-		_, fail := result.Unwrap(res)
-		require.Nil(t, fail)
+		err = handler.Handler(req, res)
+		require.NoError(t, err)
+		_, err = blobcmds.Allocate.Unpack(res.Receipt())
+		require.NoError(t, err)
 
-		// Verify the delegation was stored
-		page, err := dlgStore.ListByAudience(context.Background(), agent.Signer.DID())
+		// Verify the delegation was stored.
+		page, err := dlgStore.ListByAudience(t.Context(), agent.DID())
 		require.NoError(t, err)
 		require.Len(t, page.Results, 1)
 	})
@@ -171,33 +134,72 @@ func TestAccessDelegateHandler(t *testing.T) {
 		id := newTestIdentity(t)
 		dlgStore := dlgmemory.New()
 
-		space, err := identity.New("")
-		require.NoError(t, err)
+		space := testutil.RandomSigner(t)
 
-		ps := newProvisionedService(t, id.Signer.DID(), space.Signer.DID())
-		handler := AccessDelegateHandler(dlgStore, ps, logger)
+		ps := newProvisionedService(t, id.Signer.DID(), space.DID())
+		handler := NewAccessDelegateHandler(dlgStore, ps, logger)
 
-		agent, err := identity.New("")
-		require.NoError(t, err)
+		agent := testutil.RandomSigner(t)
 
-		cap := ucan.NewCapability(
-			access.DelegateAbility,
+		args := accesscmds.DelegateArguments{Delegations: []cid.Cid{}}
+
+		inv, err := accesscmds.Delegate.Invoke(
+			agent,
 			space.DID(),
-			access.DelegateCaveats{
-				Delegations: access.DelegationLinksModel{
-					Keys:   []string{},
-					Values: map[string]ucan.Link{},
-				},
-			},
+			&args,
+			invocation.WithAudience(id.Signer.DID()),
 		)
-
-		inv, err := invocation.Invoke(agent.Signer, id.Signer, cap)
 		require.NoError(t, err)
 
-		res, _, err := handler(context.Background(), cap, inv, nil)
+		req := execution.NewRequest(t.Context(), inv)
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(id.Signer))
 		require.NoError(t, err)
 
-		_, fail := result.Unwrap(res)
-		require.Nil(t, fail)
+		err = handler.Handler(req, res)
+		require.NoError(t, err)
+		_, err = blobcmds.Allocate.Unpack(res.Receipt())
+		require.NoError(t, err)
+	})
+
+	t.Run("delegation not found in metadata", func(t *testing.T) {
+		id := newTestIdentity(t)
+		dlgStore := dlgmemory.New()
+
+		space := testutil.RandomSigner(t)
+
+		ps := newProvisionedService(t, id.Signer.DID(), space.DID())
+		handler := NewAccessDelegateHandler(dlgStore, ps, logger)
+
+		agent := testutil.RandomSigner(t)
+
+		// Reference a delegation by CID, but don't include it in the request metadata.
+		// We still need at least one delegation in the request so req.Metadata() is non-nil.
+		other, err := delegation.Delegate(space, agent.DID(), space.DID(), command.MustParse("/other"))
+		require.NoError(t, err)
+
+		missing, err := delegation.Delegate(space, agent.DID(), space.DID(), command.MustParse("/blob/add"))
+		require.NoError(t, err)
+
+		args := accesscmds.DelegateArguments{
+			Delegations: []cid.Cid{missing.Link()},
+		}
+
+		inv, err := accesscmds.Delegate.Invoke(
+			agent,
+			space.DID(),
+			&args,
+			invocation.WithAudience(id.Signer.DID()),
+		)
+		require.NoError(t, err)
+
+		req := execution.NewRequest(t.Context(), inv, execution.WithDelegations(other))
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(id.Signer))
+		require.NoError(t, err)
+
+		// extractDelegations returns an error directly (not via SetFailure) when a
+		// referenced delegation is missing from the request metadata.
+		err = handler.Handler(req, res)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "delegation not found")
 	})
 }

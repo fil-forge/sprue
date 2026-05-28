@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -14,16 +15,14 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/fil-forge/go-libstoracha/jobqueue"
-	"github.com/fil-forge/go-ucanto/core/car"
-	"github.com/fil-forge/go-ucanto/core/dag/blockstore"
-	"github.com/fil-forge/go-ucanto/core/invocation"
-	"github.com/fil-forge/go-ucanto/core/message"
-	"github.com/fil-forge/go-ucanto/core/receipt"
-	"github.com/fil-forge/sprue/pkg/internal/ipldutil"
+	"github.com/fil-forge/libforge/jobqueue"
+	"github.com/fil-forge/sprue/pkg/store"
 	"github.com/fil-forge/sprue/pkg/store/agent"
+	"github.com/fil-forge/ucantone/ipld/codec/dagcbor"
+	"github.com/fil-forge/ucantone/ucan"
+	"github.com/fil-forge/ucantone/ucan/container"
 	cid "github.com/ipfs/go-cid"
-	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
+	"github.com/multiformats/go-multihash"
 )
 
 const (
@@ -138,25 +137,134 @@ func (s *Store) Initialize(ctx context.Context) error {
 	return nil
 }
 
-func (s *Store) GetInvocation(ctx context.Context, task cid.Cid) (invocation.Invocation, error) {
-	root, bs, err := s.getByTask(ctx, task, "in")
+func (s *Store) GetInvocation(ctx context.Context, task cid.Cid) (ucan.Invocation, error) {
+	_, ct, err := s.getByTask(ctx, task, "in")
 	if err != nil {
 		return nil, fmt.Errorf("getting invocation for task %s: %w", task, err)
 	}
-	return invocation.NewInvocationView(cidlink.Link{Cid: root}, bs)
+	for _, inv := range ct.Invocations() {
+		if inv.Task().Link() == task {
+			return inv, nil
+		}
+	}
+	return nil, agent.ErrInvocationNotFound
 }
 
-func (s *Store) GetReceipt(ctx context.Context, task cid.Cid) (receipt.AnyReceipt, error) {
-	root, bs, err := s.getByTask(ctx, task, "out")
+func (s *Store) GetReceipt(ctx context.Context, task cid.Cid) (ucan.Receipt, error) {
+	_, ct, err := s.getByTask(ctx, task, "out")
 	if err != nil {
 		return nil, fmt.Errorf("getting receipt for task %s: %w", task, err)
 	}
-	return receipt.NewAnyReceipt(cidlink.Link{Cid: root}, bs)
+	rcpt, ok := ct.Receipt(task)
+	if !ok {
+		return nil, agent.ErrReceiptNotFound
+	}
+	return rcpt, nil
 }
 
-// getByTask is a helper method that retrieves the invocation or receipt root
+func (s *Store) List(ctx context.Context, task cid.Cid, options ...agent.ListOption) (store.Page[ucan.Container], error) {
+	cfg := agent.ListConfig{}
+	for _, opt := range options {
+		opt(&cfg)
+	}
+
+	// Index entries for a task live under two partition keys (<task>.in and
+	// <task>.out). Query both, then sort + paginate by message CID so the
+	// resulting page is stable across calls.
+	var msgRoots []cid.Cid
+	for _, kind := range []string{"in", "out"} {
+		taskkind := fmt.Sprintf("%s.%s", task, kind)
+		var startKey map[string]types.AttributeValue
+		for {
+			out, err := s.dynamo.Query(ctx, &dynamodb.QueryInput{
+				TableName:              &s.tableName,
+				KeyConditionExpression: aws.String("taskkind = :taskkind"),
+				ExpressionAttributeValues: map[string]types.AttributeValue{
+					":taskkind": &types.AttributeValueMemberS{Value: taskkind},
+				},
+				ExclusiveStartKey: startKey,
+			})
+			if err != nil {
+				return store.Page[ucan.Container]{}, fmt.Errorf("querying DynamoDB for %s: %w", taskkind, err)
+			}
+			for _, item := range out.Items {
+				v, ok := item["identifier"]
+				if !ok {
+					return store.Page[ucan.Container]{}, fmt.Errorf("missing identifier attribute in DynamoDB item: %v", item)
+				}
+				sv, ok := v.(*types.AttributeValueMemberS)
+				if !ok {
+					return store.Page[ucan.Container]{}, fmt.Errorf("unexpected type for identifier attribute in DynamoDB item: %T", v)
+				}
+				parts := strings.SplitN(sv.Value, "@", 2)
+				if len(parts) != 2 {
+					return store.Page[ucan.Container]{}, fmt.Errorf("invalid identifier format in DynamoDB item: %s", sv.Value)
+				}
+				msgRoot, err := cid.Parse(parts[1])
+				if err != nil {
+					return store.Page[ucan.Container]{}, fmt.Errorf("parsing message root CID: %w", err)
+				}
+				msgRoots = append(msgRoots, msgRoot)
+			}
+			if len(out.LastEvaluatedKey) == 0 {
+				break
+			}
+			startKey = out.LastEvaluatedKey
+		}
+	}
+
+	slices.SortFunc(msgRoots, func(a, b cid.Cid) int {
+		return bytes.Compare(a.Bytes(), b.Bytes())
+	})
+
+	if cfg.Cursor != nil {
+		idx := slices.IndexFunc(msgRoots, func(c cid.Cid) bool {
+			return c.String() == *cfg.Cursor
+		})
+		if idx == -1 {
+			return store.Page[ucan.Container]{}, fmt.Errorf("invalid cursor: %s", *cfg.Cursor)
+		}
+		msgRoots = msgRoots[idx+1:]
+	}
+
+	var nextCursor *string
+	if cfg.Limit != nil && len(msgRoots) > *cfg.Limit {
+		last := msgRoots[*cfg.Limit-1].String()
+		nextCursor = &last
+		msgRoots = msgRoots[:*cfg.Limit]
+	}
+
+	results := make([]ucan.Container, 0, len(msgRoots))
+	for _, m := range msgRoots {
+		ct, err := s.fetchMessage(ctx, m)
+		if err != nil {
+			return store.Page[ucan.Container]{}, err
+		}
+		results = append(results, ct)
+	}
+	return store.Page[ucan.Container]{Results: results, Cursor: nextCursor}, nil
+}
+
+func (s *Store) fetchMessage(ctx context.Context, msgRoot cid.Cid) (*container.Container, error) {
+	out, err := s.s3.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: &s.bucketName,
+		Key:    aws.String(toMessagePath(msgRoot)),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("getting message from S3: %w", err)
+	}
+	defer out.Body.Close()
+
+	var ct container.Container
+	if err := ct.UnmarshalCBOR(out.Body); err != nil {
+		return nil, fmt.Errorf("unmarshaling agent message from CBOR: %w", err)
+	}
+	return &ct, nil
+}
+
+// getByTask is a helper method that retrieves the invocation or receipt
 // CID and blocks for a given task CID and kind ("in" for invocation or "out" for receipt).
-func (s *Store) getByTask(ctx context.Context, task cid.Cid, kind string) (cid.Cid, blockstore.BlockReader, error) {
+func (s *Store) getByTask(ctx context.Context, task cid.Cid, kind string) (cid.Cid, *container.Container, error) {
 	taskkind := fmt.Sprintf("%s.%s", task, kind)
 	queryInput := &dynamodb.QueryInput{
 		TableName:              &s.tableName,
@@ -211,29 +319,40 @@ func (s *Store) getByTask(ctx context.Context, task cid.Cid, kind string) (cid.C
 	}
 	defer getRes.Body.Close()
 
-	_, blocks, err := car.Decode(getRes.Body)
-	if err != nil {
-		return cid.Undef, nil, fmt.Errorf("decoding CAR: %w", err)
+	var ct container.Container
+	if err := ct.UnmarshalCBOR(getRes.Body); err != nil {
+		return cid.Undef, nil, fmt.Errorf("unmarshaling agent message from CBOR: %w", err)
 	}
-	bs, err := blockstore.NewBlockStore(blockstore.WithBlocksIterator(blocks))
-	if err != nil {
-		return cid.Undef, nil, fmt.Errorf("creating blockstore: %w", err)
-	}
-	return root, bs, nil
+
+	return root, &ct, nil
 }
 
 func (s *Store) Shutdown(ctx context.Context) error {
 	return s.writeQueue.Shutdown(ctx)
 }
 
-func (s *Store) Write(ctx context.Context, message message.AgentMessage, index []agent.IndexEntry, source []byte) error {
+func (s *Store) Write(ctx context.Context, message ucan.Container, index []agent.IndexEntry) error {
 	var wg sync.WaitGroup
 	var writeErrMutex sync.Mutex
 	var writeErr error
 
-	msgRoot, err := ipldutil.ToCID(message.Root().Link())
+	c, ok := message.(*container.Container)
+	if !ok {
+		c = container.New(
+			container.WithInvocations(message.Invocations()...),
+			container.WithReceipts(message.Receipts()...),
+			container.WithDelegations(message.Delegations()...),
+		)
+	}
+
+	var buf bytes.Buffer
+	if err := c.MarshalCBOR(&buf); err != nil {
+		return fmt.Errorf("marshaling agent message to CBOR: %w", err)
+	}
+
+	msgRoot, err := cid.V1Builder{Codec: dagcbor.Code, MhType: multihash.SHA2_256}.Sum(buf.Bytes())
 	if err != nil {
-		return fmt.Errorf("converting message root link to CID: %w", err)
+		return fmt.Errorf("hashing agent message: %w", err)
 	}
 
 	callback := func(err error) {
@@ -250,7 +369,7 @@ func (s *Store) Write(ctx context.Context, message message.AgentMessage, index [
 		s3Put: &s3.PutObjectInput{
 			Bucket: &s.bucketName,
 			Key:    aws.String(toMessagePath(msgRoot)),
-			Body:   bytes.NewReader(source),
+			Body:   bytes.NewReader(buf.Bytes()),
 		},
 		callback: callback,
 	})
@@ -260,10 +379,7 @@ func (s *Store) Write(ctx context.Context, message message.AgentMessage, index [
 
 	for _, entry := range index {
 		if entry.Invocation != nil {
-			invRoot, err := ipldutil.ToCID(entry.Invocation.Invocation.Link())
-			if err != nil {
-				return fmt.Errorf("converting invocation root link to CID: %w", err)
-			}
+			invRoot := entry.Invocation.Invocation.Link()
 
 			wg.Add(1)
 			err = s.writeQueue.Queue(ctx, awsWriteJob{
@@ -278,10 +394,7 @@ func (s *Store) Write(ctx context.Context, message message.AgentMessage, index [
 			}
 		}
 		if entry.Receipt != nil {
-			rcptRoot, err := ipldutil.ToCID(entry.Receipt.Receipt.Root().Link())
-			if err != nil {
-				return fmt.Errorf("converting receipt root link to CID: %w", err)
-			}
+			rcptRoot := entry.Receipt.Receipt.Link()
 
 			wg.Add(1)
 			err = s.writeQueue.Queue(ctx, awsWriteJob{

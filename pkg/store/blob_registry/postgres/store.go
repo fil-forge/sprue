@@ -9,15 +9,14 @@ import (
 	"fmt"
 	"time"
 
-	captypes "github.com/fil-forge/go-libstoracha/capabilities/types"
-	"github.com/fil-forge/go-libstoracha/digestutil"
-	"github.com/fil-forge/go-ucanto/did"
+	"github.com/fil-forge/libforge/digestutil"
 	"github.com/fil-forge/sprue/pkg/store"
 	blobregistry "github.com/fil-forge/sprue/pkg/store/blob_registry"
 	"github.com/fil-forge/sprue/pkg/store/consumer"
 	"github.com/fil-forge/sprue/pkg/store/metrics"
 	pgmetrics "github.com/fil-forge/sprue/pkg/store/metrics/postgres"
 	pgspacediff "github.com/fil-forge/sprue/pkg/store/space_diff/postgres"
+	"github.com/fil-forge/ucantone/did"
 	"github.com/ipfs/go-cid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -63,7 +62,7 @@ func (s *Store) Get(ctx context.Context, space did.DID, digest multihash.Multiha
 	return rec, nil
 }
 
-func (s *Store) Register(ctx context.Context, space did.DID, blob captypes.Blob, cause cid.Cid) error {
+func (s *Store) Register(ctx context.Context, space did.DID, blob blobregistry.Blob, cause cid.Cid) error {
 	consumers, err := s.collectConsumers(ctx, space)
 	if err != nil {
 		return err
@@ -256,7 +255,7 @@ func scanRecord(row rowScanner) (blobregistry.Record, error) {
 	}
 	return blobregistry.Record{
 		Space: space,
-		Blob: captypes.Blob{
+		Blob: blobregistry.Blob{
 			Digest: digest,
 			Size:   uint64(size),
 		},

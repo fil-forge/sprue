@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/fil-forge/go-ucanto/did"
 	"github.com/fil-forge/sprue/pkg/store"
 	"github.com/fil-forge/sprue/pkg/store/upload"
+	"github.com/fil-forge/ucantone/did"
 	"github.com/ipfs/go-cid"
 )
 
@@ -146,7 +146,7 @@ func (m *Store) Remove(ctx context.Context, space did.DID, root cid.Cid) error {
 	return nil
 }
 
-func (m *Store) Upsert(ctx context.Context, space did.DID, root cid.Cid, shards []cid.Cid, cause cid.Cid) error {
+func (m *Store) Upsert(ctx context.Context, space did.DID, root cid.Cid, index *cid.Cid, shards []cid.Cid, cause cid.Cid) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
@@ -162,6 +162,7 @@ func (m *Store) Upsert(ctx context.Context, space did.DID, root cid.Cid, shards 
 		uploads = append(uploads, upload.UploadRecord{
 			Space:      space,
 			Root:       root,
+			Index:      index,
 			Cause:      cause,
 			InsertedAt: time.Now(),
 		})
@@ -169,6 +170,7 @@ func (m *Store) Upsert(ctx context.Context, space did.DID, root cid.Cid, shards 
 	} else {
 		uploads[idx].UpdatedAt = time.Now()
 		uploads[idx].Cause = cause
+		uploads[idx].Index = index
 	}
 	shardsByUpload, ok := m.shards[space]
 	if !ok {

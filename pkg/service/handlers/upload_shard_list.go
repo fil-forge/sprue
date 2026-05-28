@@ -1,44 +1,24 @@
 package handlers
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/fil-forge/go-libstoracha/capabilities/upload/shard"
-	"github.com/fil-forge/go-ucanto/core/invocation"
-	"github.com/fil-forge/go-ucanto/core/ipld"
-	"github.com/fil-forge/go-ucanto/core/receipt/fx"
-	"github.com/fil-forge/go-ucanto/core/result"
-	"github.com/fil-forge/go-ucanto/core/result/failure"
-	"github.com/fil-forge/go-ucanto/did"
-	"github.com/fil-forge/go-ucanto/server"
-	"github.com/fil-forge/go-ucanto/ucan"
-	"github.com/fil-forge/sprue/pkg/internal/ipldutil"
-	"github.com/fil-forge/sprue/pkg/lib/errors"
+	shardcmds "github.com/fil-forge/libforge/commands/upload/shard"
 	upload_store "github.com/fil-forge/sprue/pkg/store/upload"
-	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
+	"github.com/fil-forge/ucantone/binding"
+	"github.com/fil-forge/ucantone/server"
 	"go.uber.org/zap"
 )
 
-// WithUploadShardListMethod registers the upload/shard/list handler.
 // This handler lists the shards of an upload.
-func WithUploadShardListMethod(uploadStore upload_store.Store, logger *zap.Logger) server.Option {
-	return server.WithServiceMethod(
-		shard.ListAbility,
-		server.Provide(shard.List, UploadShardListHandler(uploadStore, logger)),
-	)
-}
-
-func UploadShardListHandler(uploadStore upload_store.Store, logger *zap.Logger) server.HandlerFunc[shard.ListCaveats, shard.ListOk, failure.IPLDBuilderFailure] {
-	log := logger.With(zap.String("handler", shard.ListAbility))
-	return server.HandlerFunc[shard.ListCaveats, shard.ListOk, failure.IPLDBuilderFailure](
-		func(ctx context.Context,
-			cap ucan.Capability[shard.ListCaveats],
-			inv invocation.Invocation,
-			iCtx server.InvocationContext,
-		) (result.Result[shard.ListOk, failure.IPLDBuilderFailure], fx.Effects, error) {
-			args := cap.Nb()
-			log := log.With(zap.String("space", cap.With()), zap.Stringer("root", args.Root))
+func NewUploadShardListHandler(uploadStore upload_store.Store, logger *zap.Logger) server.Route {
+	log := logger.With(zap.Stringer("handler", shardcmds.List))
+	return shardcmds.List.Route(
+		func(req *binding.Request[*shardcmds.ListArguments], res *binding.Response[*shardcmds.ListOK]) error {
+			args := req.Task().Arguments()
+			space := req.Invocation().Subject()
+			root := args.Root
+			log := log.With(zap.Stringer("space", space), zap.Stringer("root", root))
 
 			var opts []upload_store.ListShardsOption
 			if args.Size != nil {
@@ -51,32 +31,16 @@ func UploadShardListHandler(uploadStore upload_store.Store, logger *zap.Logger) 
 			}
 			log.Debug("listing upload shards")
 
-			space, err := did.Parse(cap.With())
-			if err != nil {
-				return result.Error[shard.ListOk, failure.IPLDBuilderFailure](
-					errors.New(InvalidSpaceErrorName, "invalid space DID: %v", err),
-				), nil, nil
-			}
-
-			root, err := ipldutil.ToCID(args.Root)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			page, err := uploadStore.ListShards(ctx, space, root, opts...)
+			page, err := uploadStore.ListShards(req.Context(), space, root, opts...)
 			if err != nil {
 				log.Error("failed to list upload shards", zap.Error(err))
-				return nil, nil, fmt.Errorf("listing upload shards: %w", err)
+				return fmt.Errorf("listing upload shards: %w", err)
 			}
 
-			results := make([]ipld.Link, 0, len(page.Results))
-			for _, r := range page.Results {
-				results = append(results, cidlink.Link{Cid: r})
-			}
-
-			return result.Ok[shard.ListOk, failure.IPLDBuilderFailure](shard.ListOk{
-				Results: results,
+			return res.SetSuccess(&shardcmds.ListOK{
+				Results: page.Results,
 				Cursor:  page.Cursor,
-			}), nil, nil
-		})
+			})
+		},
+	)
 }

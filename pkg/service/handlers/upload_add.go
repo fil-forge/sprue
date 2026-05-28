@@ -1,84 +1,52 @@
 package handlers
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/fil-forge/go-libstoracha/capabilities/upload"
-	"github.com/fil-forge/go-ucanto/core/invocation"
-	"github.com/fil-forge/go-ucanto/core/receipt/fx"
-	"github.com/fil-forge/go-ucanto/core/result"
-	"github.com/fil-forge/go-ucanto/core/result/failure"
-	"github.com/fil-forge/go-ucanto/did"
-	"github.com/fil-forge/go-ucanto/server"
-	"github.com/fil-forge/go-ucanto/ucan"
-	"github.com/fil-forge/sprue/pkg/internal/ipldutil"
-	"github.com/fil-forge/sprue/pkg/lib/errors"
+	accesscmds "github.com/fil-forge/libforge/commands/access"
+	uploadcmds "github.com/fil-forge/libforge/commands/upload"
+	"github.com/fil-forge/sprue/pkg/provisioning"
 	upload_store "github.com/fil-forge/sprue/pkg/store/upload"
-	"github.com/ipfs/go-cid"
+	"github.com/fil-forge/ucantone/binding"
+	"github.com/fil-forge/ucantone/errors"
+	"github.com/fil-forge/ucantone/server"
 	"go.uber.org/zap"
 )
 
-const InvalidSpaceErrorName = "InvalidSpace"
-
-// WithUploadAddMethod registers the upload/add handler.
 // This handler registers an upload (root CID + shards mapping).
-func WithUploadAddMethod(uploadStore upload_store.Store, logger *zap.Logger) server.Option {
-	return server.WithServiceMethod(
-		upload.AddAbility,
-		server.Provide(upload.Add, UploadAddHandler(uploadStore, logger)),
-	)
-}
-
-func UploadAddHandler(uploadStore upload_store.Store, logger *zap.Logger) server.HandlerFunc[upload.AddCaveats, upload.AddOk, failure.IPLDBuilderFailure] {
-	log := logger.With(zap.String("handler", upload.AddAbility))
-	return server.HandlerFunc[upload.AddCaveats, upload.AddOk, failure.IPLDBuilderFailure](
-		func(ctx context.Context,
-			cap ucan.Capability[upload.AddCaveats],
-			inv invocation.Invocation,
-			iCtx server.InvocationContext,
-		) (result.Result[upload.AddOk, failure.IPLDBuilderFailure], fx.Effects, error) {
+func NewUploadAddHandler(provisioningSvc *provisioning.Service, uploadStore upload_store.Store, logger *zap.Logger) server.Route {
+	log := logger.With(zap.Stringer("handler", uploadcmds.Add))
+	return uploadcmds.Add.Route(
+		func(req *binding.Request[*uploadcmds.AddArguments], res *binding.Response[*uploadcmds.AddOK]) error {
+			args := req.Task().Arguments()
+			space := req.Invocation().Subject()
+			cause := req.Invocation().Task().Link()
 			log := log.With(
-				zap.String("space", cap.With()),
-				zap.Stringer("root", cap.Nb().Root),
-				zap.Int("shards", len(cap.Nb().Shards)),
+				zap.Stringer("space", space),
+				zap.Stringer("root", args.Root),
 			)
+			if args.Index != nil {
+				log = log.With(zap.Stringer("index", *args.Index))
+			}
 			log.Debug("adding upload")
 
-			space, err := did.Parse(cap.With())
+			provs, err := provisioningSvc.ListServiceProviders(req.Context(), space)
 			if err != nil {
-				return result.Error[upload.AddOk, failure.IPLDBuilderFailure](
-					errors.New(InvalidSpaceErrorName, "invalid space DID: %v", err),
-				), nil, nil
+				log.Error("failed to list service providers", zap.Error(err))
+				return fmt.Errorf("listing service providers: %w", err)
+			}
+			if len(provs) == 0 {
+				log.Warn("space has no service provider")
+				return res.SetFailure(errors.New(accesscmds.InsufficientStorageErrorName, "space has no service provider"))
 			}
 
-			root, err := ipldutil.ToCID(cap.Nb().Root)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			shards := make([]cid.Cid, 0, len(cap.Nb().Shards))
-			for _, link := range cap.Nb().Shards {
-				s, err := ipldutil.ToCID(link)
-				if err != nil {
-					return nil, nil, err
-				}
-				shards = append(shards, s)
-			}
-
-			cause, err := ipldutil.ToCID(inv.Link())
-			if err != nil {
-				return nil, nil, err
-			}
-
-			err = uploadStore.Upsert(ctx, space, root, shards, cause)
+			err = uploadStore.Upsert(req.Context(), space, args.Root, args.Index, args.Shards, cause)
 			if err != nil {
 				log.Error("failed to upsert upload", zap.Error(err))
-				return nil, nil, fmt.Errorf("upserting upload: %w", err)
+				return fmt.Errorf("upserting upload: %w", err)
 			}
 
-			return result.Ok[upload.AddOk, failure.IPLDBuilderFailure](upload.AddOk{
-				Root: cap.Nb().Root,
-			}), nil, nil
-		})
+			return res.SetSuccess(&uploadcmds.AddOK{})
+		},
+	)
 }

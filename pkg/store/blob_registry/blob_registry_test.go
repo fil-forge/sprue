@@ -5,23 +5,23 @@ import (
 	"runtime"
 	"testing"
 
-	captypes "github.com/fil-forge/go-libstoracha/capabilities/types"
+	"github.com/fil-forge/libforge/commands/blob"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/store"
 	blobregistry "github.com/fil-forge/sprue/pkg/store/blob_registry"
 	blobregistryaws "github.com/fil-forge/sprue/pkg/store/blob_registry/aws"
-	"github.com/fil-forge/sprue/pkg/store/blob_registry/memory"
+	blobregistrymemory "github.com/fil-forge/sprue/pkg/store/blob_registry/memory"
 	blobregistrypostgres "github.com/fil-forge/sprue/pkg/store/blob_registry/postgres"
 	"github.com/fil-forge/sprue/pkg/store/consumer"
 	consumeraws "github.com/fil-forge/sprue/pkg/store/consumer/aws"
-	memoryconsumer "github.com/fil-forge/sprue/pkg/store/consumer/memory"
+	consumermemory "github.com/fil-forge/sprue/pkg/store/consumer/memory"
 	consumerpostgres "github.com/fil-forge/sprue/pkg/store/consumer/postgres"
 	"github.com/fil-forge/sprue/pkg/store/metrics"
 	metricsaws "github.com/fil-forge/sprue/pkg/store/metrics/aws"
-	memorymetrics "github.com/fil-forge/sprue/pkg/store/metrics/memory"
+	metricsmemory "github.com/fil-forge/sprue/pkg/store/metrics/memory"
 	metricspostgres "github.com/fil-forge/sprue/pkg/store/metrics/postgres"
 	spacediffaws "github.com/fil-forge/sprue/pkg/store/space_diff/aws"
-	memoryspacediff "github.com/fil-forge/sprue/pkg/store/space_diff/memory"
+	spacediffmemory "github.com/fil-forge/sprue/pkg/store/space_diff/memory"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
@@ -48,11 +48,11 @@ type storeBundle struct {
 func makeStores(t *testing.T, k StoreKind) storeBundle {
 	switch k {
 	case Memory:
-		consumerStore := memoryconsumer.New()
-		spaceDiffStore := memoryspacediff.New()
-		spaceMetrics := memorymetrics.NewSpaceStore()
-		adminMetrics := memorymetrics.New()
-		registry := memory.New(spaceDiffStore, consumerStore, spaceMetrics, adminMetrics)
+		consumerStore := consumermemory.New()
+		spaceDiffStore := spacediffmemory.New()
+		spaceMetrics := metricsmemory.NewSpaceStore()
+		adminMetrics := metricsmemory.New()
+		registry := blobregistrymemory.New(spaceDiffStore, consumerStore, spaceMetrics, adminMetrics)
 		return storeBundle{
 			registry:     registry,
 			consumers:    consumerStore,
@@ -130,9 +130,9 @@ func createAWSStores(t *testing.T) storeBundle {
 }
 
 // randomBlob returns a blob with a random digest and the given size.
-func randomBlob(t *testing.T, size uint64) captypes.Blob {
+func randomBlob(t *testing.T, size uint64) blob.Blob {
 	t.Helper()
-	return captypes.Blob{Digest: testutil.RandomMultihash(t), Size: size}
+	return blob.Blob{Digest: testutil.RandomMultihash(t), Size: size}
 }
 
 func TestBlobRegistryStore(t *testing.T) {

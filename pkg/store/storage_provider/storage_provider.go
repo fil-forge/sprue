@@ -5,10 +5,9 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/fil-forge/go-ucanto/core/delegation"
-	"github.com/fil-forge/go-ucanto/did"
-	"github.com/fil-forge/sprue/pkg/lib/errors"
 	"github.com/fil-forge/sprue/pkg/store"
+	"github.com/fil-forge/ucantone/did"
+	"github.com/fil-forge/ucantone/errors"
 )
 
 const (
@@ -43,8 +42,6 @@ type Record struct {
 	Provider did.DID
 	// Public URL that accepts UCAN invocations.
 	Endpoint url.URL
-	// Proof the upload service can invoke blob/allocate and blob/accept.
-	Proof delegation.Delegation
 	// Weight determines chance of selection for uploads relative to other
 	// providers.
 	Weight int
@@ -58,7 +55,7 @@ type Record struct {
 }
 
 type Store interface {
-	Put(ctx context.Context, endpoint url.URL, proof delegation.Delegation, weight int, replicationWeight *int) error
+	Put(ctx context.Context, providerID did.DID, endpoint url.URL, weight int, replicationWeight *int) error
 	// Get a storage provider record by provider DID. May return
 	// [ErrStorageProviderNotFound].
 	Get(ctx context.Context, providerID did.DID) (Record, error)

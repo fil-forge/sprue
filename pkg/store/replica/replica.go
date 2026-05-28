@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/fil-forge/go-ucanto/did"
-	"github.com/fil-forge/sprue/pkg/lib/errors"
+	"github.com/fil-forge/ucantone/did"
+	"github.com/fil-forge/ucantone/errors"
 	"github.com/ipfs/go-cid"
 	"github.com/multiformats/go-multihash"
 )

@@ -11,9 +11,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/fil-forge/go-ucanto/did"
 	"github.com/fil-forge/sprue/pkg/store"
 	"github.com/fil-forge/sprue/pkg/store/upload"
+	"github.com/fil-forge/ucantone/did"
 	"github.com/ipfs/go-cid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -52,7 +52,7 @@ func (s *Store) Exists(ctx context.Context, space did.DID, root cid.Cid) (bool, 
 
 func (s *Store) Get(ctx context.Context, space did.DID, root cid.Cid) (upload.UploadRecord, error) {
 	row := s.pool.QueryRow(ctx, `
-		SELECT space, root, cause, inserted_at, updated_at
+		SELECT space, root, index, cause, inserted_at, updated_at
 		FROM upload
 		WHERE space = $1 AND root = $2
 	`, space.String(), root.String())
@@ -102,7 +102,7 @@ func (s *Store) List(ctx context.Context, space did.DID, options ...upload.ListO
 
 	args := []any{space.String(), limit + 1}
 	query := `
-		SELECT space, root, cause, inserted_at, updated_at
+		SELECT space, root, index, cause, inserted_at, updated_at
 		FROM upload
 		WHERE space = $1
 	`
@@ -205,20 +205,25 @@ func (s *Store) Remove(ctx context.Context, space did.DID, root cid.Cid) error {
 	return nil
 }
 
-func (s *Store) Upsert(ctx context.Context, space did.DID, root cid.Cid, shards []cid.Cid, cause cid.Cid) error {
+func (s *Store) Upsert(ctx context.Context, space did.DID, root cid.Cid, index *cid.Cid, shards []cid.Cid, cause cid.Cid) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("beginning transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	var indexStr *string
+	if index != nil {
+		str := index.String()
+		indexStr = &str
+	}
 	now := time.Now().UTC()
 	if _, err := tx.Exec(ctx, `
-		INSERT INTO upload (space, root, cause, inserted_at, updated_at)
-		VALUES ($1, $2, $3, $4, $4)
+		INSERT INTO upload (space, root, index, cause, inserted_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $5)
 		ON CONFLICT (space, root) DO UPDATE
-		SET cause = EXCLUDED.cause, updated_at = EXCLUDED.updated_at
-	`, space.String(), root.String(), cause.String(), now); err != nil {
+		SET index = EXCLUDED.index, cause = EXCLUDED.cause, updated_at = EXCLUDED.updated_at
+	`, space.String(), root.String(), indexStr, cause.String(), now); err != nil {
 		return fmt.Errorf("upserting upload: %w", err)
 	}
 
@@ -246,11 +251,12 @@ func scanRecord(row rowScanner) (upload.UploadRecord, error) {
 	var (
 		spaceStr   string
 		rootStr    string
+		indexStr   *string
 		causeStr   string
 		insertedAt time.Time
 		updatedAt  time.Time
 	)
-	if err := row.Scan(&spaceStr, &rootStr, &causeStr, &insertedAt, &updatedAt); err != nil {
+	if err := row.Scan(&spaceStr, &rootStr, &indexStr, &causeStr, &insertedAt, &updatedAt); err != nil {
 		return upload.UploadRecord{}, err
 	}
 	space, err := did.Parse(spaceStr)
@@ -261,6 +267,14 @@ func scanRecord(row rowScanner) (upload.UploadRecord, error) {
 	if err != nil {
 		return upload.UploadRecord{}, fmt.Errorf("parsing root CID: %w", err)
 	}
+	var index *cid.Cid
+	if indexStr != nil {
+		c, err := cid.Parse(*indexStr)
+		if err != nil {
+			return upload.UploadRecord{}, fmt.Errorf("parsing index CID: %w", err)
+		}
+		index = &c
+	}
 	cause, err := cid.Parse(causeStr)
 	if err != nil {
 		return upload.UploadRecord{}, fmt.Errorf("parsing cause CID: %w", err)
@@ -268,6 +282,7 @@ func scanRecord(row rowScanner) (upload.UploadRecord, error) {
 	return upload.UploadRecord{
 		Space:      space,
 		Root:       root,
+		Index:      index,
 		Cause:      cause,
 		InsertedAt: insertedAt,
 		UpdatedAt:  updatedAt,

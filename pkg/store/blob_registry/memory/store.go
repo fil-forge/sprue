@@ -7,13 +7,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/fil-forge/go-libstoracha/capabilities/types"
-	"github.com/fil-forge/go-ucanto/did"
+	"github.com/fil-forge/libforge/commands/blob"
 	"github.com/fil-forge/sprue/pkg/store"
 	blobregistry "github.com/fil-forge/sprue/pkg/store/blob_registry"
 	"github.com/fil-forge/sprue/pkg/store/consumer"
 	"github.com/fil-forge/sprue/pkg/store/metrics"
 	spacediff "github.com/fil-forge/sprue/pkg/store/space_diff"
+	"github.com/fil-forge/ucantone/did"
 	cid "github.com/ipfs/go-cid"
 	multihash "github.com/multiformats/go-multihash"
 )
@@ -128,7 +128,7 @@ func (s *Store) List(ctx context.Context, space did.DID, options ...blobregistry
 	return store.Page[blobregistry.Record]{Results: results, Cursor: cursor}, nil
 }
 
-func (s *Store) Register(ctx context.Context, space did.DID, blob types.Blob, cause cid.Cid) error {
+func (s *Store) Register(ctx context.Context, space did.DID, blob blob.Blob, cause cid.Cid) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 

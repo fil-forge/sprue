@@ -1,18 +1,15 @@
 package handlers
 
 import (
-	"context"
 	"testing"
 
-	"github.com/fil-forge/go-libstoracha/capabilities/access"
-	"github.com/fil-forge/go-ucanto/core/invocation"
-	"github.com/fil-forge/go-ucanto/core/result"
-	"github.com/fil-forge/go-ucanto/did"
-	"github.com/fil-forge/go-ucanto/ucan"
+	"github.com/fil-forge/libforge/commands/access"
+	"github.com/fil-forge/libforge/didmailto"
 	"github.com/fil-forge/sprue/internal/testutil"
-	"github.com/fil-forge/sprue/pkg/identity"
-	"github.com/fil-forge/sprue/pkg/lib/didmailto"
 	dlgmemory "github.com/fil-forge/sprue/pkg/store/delegation/memory"
+	"github.com/fil-forge/ucantone/execution"
+	"github.com/fil-forge/ucantone/ucan/command"
+	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 )
@@ -20,161 +17,169 @@ import (
 func TestAccessConfirmHandler(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 
-	t.Run("wrong resource DID", func(t *testing.T) {
+	t.Run("wrong subject", func(t *testing.T) {
 		id := newTestIdentity(t)
 		store := dlgmemory.New()
-		handler := AccessConfirmHandler(id, store, logger)
+		handler := NewAccessConfirmHandler(id, store, logger)
 
-		agent, err := identity.New("")
-		require.NoError(t, err)
+		account := testutil.Must(didmailto.New("alice@example.com"))(t)
+		agent := testutil.RandomSigner(t)
+		notService := testutil.RandomSigner(t)
 
-		account := mustMailtoDID(t, "alice@example.com")
-		causeCID := testutil.RandomCID(t)
-
-		cap := ucan.NewCapability(
-			access.ConfirmAbility,
-			"did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK",
-			access.ConfirmCaveats{
-				Iss:   account,
-				Aud:   agent.Signer.DID(),
-				Att:   []access.CapabilityRequest{{Can: "*"}},
-				Cause: testutil.Must(invocation.Invoke(agent.Signer, id.Signer, ucan.NewCapability("test/thing", id.DID(), ucan.NoCaveats{})))(t).Link(),
+		args := access.ConfirmArguments{
+			Cause:    testutil.RandomCID(t),
+			Issuer:   account,
+			Audience: agent.DID(),
+			Attenuations: []access.CapabilityRequest{
+				{Command: command.Top()},
 			},
+		}
+
+		// Subject is not id.Signer — handler should reject.
+		inv, err := access.Confirm.Invoke(
+			id.Signer,
+			notService.DID(),
+			&args,
+			invocation.WithAudience(id.Signer.DID()),
 		)
-		_ = causeCID
-
-		inv, err := invocation.Invoke(id.Signer, id.Signer, cap)
 		require.NoError(t, err)
 
-		res, _, err := handler(context.Background(), cap, inv, nil)
+		req := execution.NewRequest(t.Context(), inv)
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(id.Signer))
 		require.NoError(t, err)
 
-		_, fail := result.Unwrap(res)
-		require.NotNil(t, fail)
+		err = handler.Handler(req, res)
+		require.NoError(t, err)
+
+		_, err = access.Confirm.Unpack(res.Receipt())
+		require.ErrorIs(t, err, access.ErrInvalidAccessConfirmSubject)
 	})
 
-	t.Run("invalid agent DID", func(t *testing.T) {
+	t.Run("invalid issuer DID", func(t *testing.T) {
 		id := newTestIdentity(t)
 		store := dlgmemory.New()
-		handler := AccessConfirmHandler(id, store, logger)
+		handler := NewAccessConfirmHandler(id, store, logger)
 
-		account := mustMailtoDID(t, "alice@example.com")
-		badAud, err := did.Parse("did:mailto:example.com:alice")
-		require.NoError(t, err)
+		// A did:key (not a did:mailto) — didmailto.Parse will reject it.
+		nonMailto := testutil.RandomSigner(t)
+		agent := testutil.RandomSigner(t)
 
-		agent, err := identity.New("")
-		require.NoError(t, err)
-
-		causeInv, err := invocation.Invoke(agent.Signer, id.Signer, ucan.NewCapability("test/thing", id.DID(), ucan.NoCaveats{}))
-		require.NoError(t, err)
-
-		cap := ucan.NewCapability(
-			access.ConfirmAbility,
-			id.DID(),
-			access.ConfirmCaveats{
-				Iss:   account,
-				Aud:   badAud,
-				Att:   []access.CapabilityRequest{{Can: "*"}},
-				Cause: causeInv.Link(),
+		args := access.ConfirmArguments{
+			Cause:    testutil.RandomCID(t),
+			Issuer:   nonMailto.DID(),
+			Audience: agent.DID(),
+			Attenuations: []access.CapabilityRequest{
+				{Command: command.Top()},
 			},
+		}
+
+		inv, err := access.Confirm.Invoke(
+			id.Signer,
+			id.Signer.DID(),
+			&args,
+			invocation.WithAudience(id.Signer.DID()),
 		)
-
-		inv, err := invocation.Invoke(id.Signer, id.Signer, cap)
 		require.NoError(t, err)
 
-		res, _, err := handler(context.Background(), cap, inv, nil)
+		req := execution.NewRequest(t.Context(), inv)
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(id.Signer))
 		require.NoError(t, err)
 
-		_, fail := result.Unwrap(res)
-		require.NotNil(t, fail)
+		err = handler.Handler(req, res)
+		require.NoError(t, err)
+
+		_, err = access.Confirm.Unpack(res.Receipt())
+		require.ErrorIs(t, err, access.ErrInvalidAccessConfirmIssuer)
 	})
 
 	t.Run("success", func(t *testing.T) {
 		id := newTestIdentity(t)
 		store := dlgmemory.New()
-		handler := AccessConfirmHandler(id, store, logger)
+		handler := NewAccessConfirmHandler(id, store, logger)
 
-		agent, err := identity.New("")
-		require.NoError(t, err)
+		account := testutil.Must(didmailto.New("bob@example.com"))(t)
+		agent := testutil.RandomSigner(t)
 
-		account := mustMailtoDID(t, "bob@example.com")
-
-		causeInv, err := invocation.Invoke(agent.Signer, id.Signer, ucan.NewCapability("test/thing", id.DID(), ucan.NoCaveats{}))
-		require.NoError(t, err)
-
-		cap := ucan.NewCapability(
-			access.ConfirmAbility,
-			id.DID(),
-			access.ConfirmCaveats{
-				Iss:   account,
-				Aud:   agent.Signer.DID(),
-				Att:   []access.CapabilityRequest{{Can: "*"}},
-				Cause: causeInv.Link(),
+		args := access.ConfirmArguments{
+			Cause:    testutil.RandomCID(t),
+			Issuer:   account,
+			Audience: agent.DID(),
+			Attenuations: []access.CapabilityRequest{
+				{Command: command.Top()},
 			},
-		)
-
-		inv, err := invocation.Invoke(id.Signer, id.Signer, cap)
-		require.NoError(t, err)
-
-		res, _, err := handler(context.Background(), cap, inv, nil)
-		require.NoError(t, err)
-
-		ok, fail := result.Unwrap(res)
-		require.Nil(t, fail)
-		// Should return 2 delegations: the account->agent delegation and the service attestation
-		require.Len(t, ok.Delegations.Keys, 2)
-		for _, k := range ok.Delegations.Keys {
-			require.NotEmpty(t, ok.Delegations.Values[k])
 		}
 
-		// Verify delegations were stored
-		page, err := store.ListByAudience(context.Background(), agent.Signer.DID())
+		inv, err := access.Confirm.Invoke(
+			id.Signer,
+			id.Signer.DID(),
+			&args,
+			invocation.WithAudience(id.Signer.DID()),
+		)
 		require.NoError(t, err)
-		require.Len(t, page.Results, 2)
+
+		req := execution.NewRequest(t.Context(), inv)
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(id.Signer))
+		require.NoError(t, err)
+
+		err = handler.Handler(req, res)
+		require.NoError(t, err)
+
+		ok, err := access.Confirm.Unpack(res.Receipt())
+		require.NoError(t, err)
+
+		// One delegation link per attenuation + one account delegation
+		require.Len(t, ok.Delegations, 2)
+
+		// Store holds the delegation and its attestation, the account delegation
+		// and it's attestation all keyed by the agent.
+		page, err := store.ListByAudience(t.Context(), agent.DID())
+		require.NoError(t, err)
+		require.Len(t, page.Results, 4)
 	})
 
 	t.Run("multiple capabilities", func(t *testing.T) {
 		id := newTestIdentity(t)
 		store := dlgmemory.New()
-		handler := AccessConfirmHandler(id, store, logger)
+		handler := NewAccessConfirmHandler(id, store, logger)
 
-		agent, err := identity.New("")
-		require.NoError(t, err)
+		account := testutil.Must(didmailto.New("carol@example.com"))(t)
+		agent := testutil.RandomSigner(t)
 
-		account := mustMailtoDID(t, "carol@example.com")
-
-		causeInv, err := invocation.Invoke(agent.Signer, id.Signer, ucan.NewCapability("test/thing", id.DID(), ucan.NoCaveats{}))
-		require.NoError(t, err)
-
-		cap := ucan.NewCapability(
-			access.ConfirmAbility,
-			id.DID(),
-			access.ConfirmCaveats{
-				Iss: account,
-				Aud: agent.Signer.DID(),
-				Att: []access.CapabilityRequest{
-					{Can: "space/blob/add"},
-					{Can: "upload/add"},
-				},
-				Cause: causeInv.Link(),
+		args := access.ConfirmArguments{
+			Cause:    testutil.RandomCID(t),
+			Issuer:   account,
+			Audience: agent.DID(),
+			Attenuations: []access.CapabilityRequest{
+				{Command: command.MustParse("/blob/add")},
+				{Command: command.MustParse("/upload/add")},
 			},
+		}
+
+		inv, err := access.Confirm.Invoke(
+			id.Signer,
+			id.Signer.DID(),
+			&args,
+			invocation.WithAudience(id.Signer.DID()),
 		)
-
-		inv, err := invocation.Invoke(id.Signer, id.Signer, cap)
 		require.NoError(t, err)
 
-		res, _, err := handler(context.Background(), cap, inv, nil)
+		req := execution.NewRequest(t.Context(), inv)
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(id.Signer))
 		require.NoError(t, err)
 
-		ok, fail := result.Unwrap(res)
-		require.Nil(t, fail)
-		require.Len(t, ok.Delegations.Keys, 2)
+		err = handler.Handler(req, res)
+		require.NoError(t, err)
+
+		ok, err := access.Confirm.Unpack(res.Receipt())
+		require.NoError(t, err)
+
+		// One delegation link per attenuation + one account delegation
+		require.Len(t, ok.Delegations, 3)
+
+		// Two attenuations → two delegations and two attestations, plus one account
+		// delegation and its attestation stored.
+		page, err := store.ListByAudience(t.Context(), agent.DID())
+		require.NoError(t, err)
+		require.Len(t, page.Results, 6)
 	})
-}
-
-func mustMailtoDID(t *testing.T, email string) did.DID {
-	t.Helper()
-	d, err := didmailto.New(email)
-	require.NoError(t, err)
-	return d
 }

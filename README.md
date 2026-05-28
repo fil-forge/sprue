@@ -33,3 +33,5 @@ Sprue supports three store backends, selected by
 * The following dynamo tables have GSIs that do not exist in w3infra that need to be added:
     * `consumer` - `consumerV3` and `customerV2`
 * Using `cid.Cid` in new code over `ipld.Link` to ease transition to UCAN 1.0 when it comes.
+* `retrievalAuth` is now an array of CIDs - an explicit delegation chain.
+* `/upload/add` now takes an optional `index` CID, allowing us to track/remove indexes.

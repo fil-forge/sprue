@@ -6,14 +6,13 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/fil-forge/go-ucanto/core/ipld/codec/cbor"
-	"github.com/fil-forge/go-ucanto/did"
-	"github.com/fil-forge/sprue/pkg/lib/errors"
 	"github.com/fil-forge/sprue/pkg/store/consumer"
 	"github.com/fil-forge/sprue/pkg/store/subscription"
+	"github.com/fil-forge/ucantone/did"
+	"github.com/fil-forge/ucantone/errors"
+	"github.com/fil-forge/ucantone/ipld/codec/dagcbor"
+	"github.com/fil-forge/ucantone/ipld/datamodel"
 	"github.com/ipfs/go-cid"
-	"github.com/ipld/go-ipld-prime/codec/dagcbor"
-	basicnode "github.com/ipld/go-ipld-prime/node/basic"
 	"github.com/multiformats/go-multihash"
 )
 
@@ -79,9 +78,9 @@ func (s *Service) ListServiceProviders(ctx context.Context, space SpaceDID) ([]S
 }
 
 // Provision provisions a service provider for a consumer (space) on behalf of
-// a customer (account). It may return [customer.ErrCustomerNotFound]
-// if the customer does not exist and [consumer.ErrConsumerExists] if the
-// consumer is already provisioned for the provider.
+// a customer (account). It may return [ErrProviderNotAllowed] if the requested
+// provider is not on the list, and [consumer.ErrConsumerExists] if the consumer
+// is already provisioned for the provider.
 func (s *Service) Provision(ctx context.Context, customer AccountDID, consumer SpaceDID, provider ServiceDID, cause cid.Cid) (SubscriptionID, error) {
 	// Ensure the provider is allowed.
 	if !slices.ContainsFunc(s.providers, func(p ServiceDID) bool {
@@ -109,28 +108,14 @@ func (s *Service) Provision(ctx context.Context, customer AccountDID, consumer S
 }
 
 func NewSubscriptionID(consumer SpaceDID) (string, error) {
-	nb := basicnode.Prototype.Map.NewBuilder()
-	ma, err := nb.BeginMap(1)
-	if err != nil {
-		return "", err
-	}
-	na, err := ma.AssembleEntry("consumer")
-	if err != nil {
-		return "", err
-	}
-	if err := na.AssignString(consumer.String()); err != nil {
-		return "", err
-	}
-	if err := ma.Finish(); err != nil {
-		return "", err
-	}
+	model := datamodel.Map{"consumer": consumer.String()}
 	var buf bytes.Buffer
-	if err := dagcbor.Encode(nb.Build(), &buf); err != nil {
+	if err := model.MarshalCBOR(&buf); err != nil {
 		return "", err
 	}
 	c, err := cid.Prefix{
 		Version:  1,
-		Codec:    cbor.Code,
+		Codec:    dagcbor.Code,
 		MhType:   multihash.SHA2_256,
 		MhLength: -1,
 	}.Sum(buf.Bytes())
