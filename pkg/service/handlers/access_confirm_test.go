@@ -22,7 +22,7 @@ func TestAccessConfirmHandler(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	id := newTestIdentity(t)
 
-	var validationOpts = []validator.Option{
+	validationOpts := []validator.Option{
 		validator.WithDIDVerifierResolvers(map[string]validator.DIDVerifierResolverFunc{
 			"mailto": attested.NewDIDVerifierResolver(id.Signer.Verifier()),
 		}),
