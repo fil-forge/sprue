@@ -33,7 +33,7 @@ func TestSigner(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	require.Equal(t, del.Signature().Header().SignatureAlgorithm().Code(), uint64(0x300001))
+	require.Equal(t, del.Signature().Header().SignatureAlgorithm().Code(), attested.Code)
 	sigBytes := del.Signature().Bytes()
 	require.NotEmpty(t, sigBytes)
 
