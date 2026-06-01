@@ -19,9 +19,7 @@ import (
 func TestSigner(t *testing.T) {
 	authority := testutil.RandomSigner(t)
 	alice, err := did.Parse("did:mailto:example.com:alice")
-	if err != nil {
-		t.Fatalf("failed to parse DID: %v", err)
-	}
+	require.NoError(t, err)
 
 	signer := attested.NewSigner(alice, authority)
 
