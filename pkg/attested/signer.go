@@ -9,6 +9,7 @@ import (
 	"github.com/fil-forge/ucantone/varsig"
 	"github.com/ipfs/go-cid"
 	mh "github.com/multiformats/go-multihash"
+	"github.com/multiformats/go-varint"
 )
 
 // Code is the Varsig signature algorithm code for attested signatures, under
@@ -67,14 +68,23 @@ func (SignatureAlgorithm) Code() uint64 {
 }
 
 func (SignatureAlgorithm) Segments() []uint64 {
-	return []uint64{}
+	return []uint64{Code}
 }
 
-func (SignatureAlgorithm) Decode([]byte) (SignatureAlgorithm, int, error) {
-	return SignatureAlgorithm{}, 0, nil
-}
 func (SignatureAlgorithm) Encode() ([]byte, error) {
-	return []byte{}, nil
+	return varint.ToUvarint(Code), nil
+}
+
+func (SignatureAlgorithm) Decode(input []byte) (SignatureAlgorithm, int, error) {
+	code, n, err := varint.FromUvarint(input)
+	if err != nil {
+		return SignatureAlgorithm{}, 0, err
+	}
+	if code != Code {
+		return SignatureAlgorithm{}, n, fmt.Errorf("signature code is not authority-attestation: 0x%02x, expected: 0x%02x", code, Code)
+	}
+
+	return SignatureAlgorithm{}, n, nil
 }
 
 func init() {
