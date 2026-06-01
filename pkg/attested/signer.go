@@ -11,6 +11,13 @@ import (
 	mh "github.com/multiformats/go-multihash"
 )
 
+// Code is the Varsig signature algorithm code for attested signatures, under
+// fil-one RFC 7. Note that the Varsig signature algorithm codes are *not*
+// Multicodec codes! Officially, the Varsig code table makes no provision for
+// extension, but we've selected a code in *Multicodec's* "private use" range,
+// on the theory that it should be safe.
+const Code uint64 = 0x300001
+
 type Signer struct {
 	did       did.DID
 	authority ucan.Signer
@@ -56,7 +63,7 @@ type SignatureAlgorithm struct{}
 var _ varsig.SignatureAlgorithm = SignatureAlgorithm{}
 
 func (SignatureAlgorithm) Code() uint64 {
-	return 0x300001
+	return Code
 }
 
 func (SignatureAlgorithm) Segments() []uint64 {
