@@ -11,8 +11,8 @@ import (
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 
+	"github.com/fil-forge/libforge/identity"
 	"github.com/fil-forge/sprue/internal/config"
-	"github.com/fil-forge/sprue/pkg/identity"
 	"github.com/fil-forge/sprue/pkg/service"
 )
 
@@ -24,7 +24,7 @@ var ServerModule = fx.Module("server",
 
 // NewEchoServer creates and configures the Echo HTTP server.
 func NewEchoServer(
-	id *identity.Identity,
+	id identity.Identity,
 	svc *service.Service,
 ) *echo.Echo {
 	e := echo.New()
@@ -54,14 +54,14 @@ func RegisterServerLifecycle(
 	e *echo.Echo,
 	cfg *config.Config,
 	logger *zap.Logger,
-	id *identity.Identity,
+	id identity.Identity,
 ) {
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
 			addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 			logger.Info("starting sprue service",
 				zap.String("address", addr),
-				zap.String("did", id.DID()),
+				zap.String("did", id.DID().String()),
 			)
 
 			go func() {
@@ -82,7 +82,7 @@ func RegisterServerLifecycle(
 }
 
 // infoHandler returns service information.
-func infoHandler(id *identity.Identity) echo.HandlerFunc {
+func infoHandler(id identity.Identity) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		return c.JSON(http.StatusOK, map[string]interface{}{
 			"service": "sprue",
@@ -100,8 +100,14 @@ func healthHandler(c echo.Context) error {
 }
 
 // didDocumentHandler returns the DID document for did:web resolution.
-func didDocumentHandler(id *identity.Identity) echo.HandlerFunc {
+func didDocumentHandler(id identity.Identity) echo.HandlerFunc {
 	return func(c echo.Context) error {
-		return c.JSON(http.StatusOK, id.DIDDocument())
+		doc, err := id.DIDDocument()
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{
+				"error": "failed to get DID document",
+			})
+		}
+		return c.JSON(http.StatusOK, doc)
 	}
 }

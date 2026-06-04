@@ -5,8 +5,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/fil-forge/libforge/attestation/didmailto"
 	"github.com/fil-forge/libforge/commands/access"
-	"github.com/fil-forge/libforge/didmailto"
 	"github.com/fil-forge/ucantone/execution"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/container"

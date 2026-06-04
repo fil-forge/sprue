@@ -7,9 +7,9 @@ import (
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 
+	"github.com/fil-forge/libforge/identity"
 	"github.com/fil-forge/sprue/internal/config"
 	"github.com/fil-forge/sprue/pkg/billing"
-	"github.com/fil-forge/sprue/pkg/identity"
 	"github.com/fil-forge/sprue/pkg/mailer"
 	"github.com/fil-forge/sprue/pkg/mailer/nop"
 	"github.com/fil-forge/sprue/pkg/mailer/postmark"
@@ -63,9 +63,9 @@ func NewMailingService(deploymentCfg config.DeploymentConfig, mailerCfg config.M
 }
 
 func NewProvisioningService(
-	id *identity.Identity,
+	id identity.Identity,
 	consumerStore consumer.Store,
 	subscriptionStore subscription.Store,
 ) *provisioning.Service {
-	return provisioning.NewService([]provisioning.ServiceDID{id.Signer.DID()}, consumerStore, subscriptionStore)
+	return provisioning.NewService([]provisioning.ServiceDID{id.Issuer.DID()}, consumerStore, subscriptionStore)
 }

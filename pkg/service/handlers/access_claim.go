@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/fil-forge/libforge/commands/access"
-	"github.com/fil-forge/sprue/pkg/identity"
+	"github.com/fil-forge/libforge/identity"
 	delegation_store "github.com/fil-forge/sprue/pkg/store/delegation"
 	"github.com/fil-forge/ucantone/binding"
 	"github.com/fil-forge/ucantone/server"
@@ -14,7 +14,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func NewAccessClaimHandler(id *identity.Identity, delegationStore delegation_store.Store, logger *zap.Logger) server.Route {
+func NewAccessClaimHandler(id identity.Identity, delegationStore delegation_store.Store, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", access.Claim))
 	return access.Claim.Route(
 		func(req *binding.Request[*access.ClaimArguments], res *binding.Response[*access.ClaimOK]) error {

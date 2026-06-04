@@ -3,12 +3,14 @@ package handlers
 import (
 	"testing"
 
+	"github.com/fil-forge/libforge/attestation"
+	"github.com/fil-forge/libforge/attestation/didmailto"
 	"github.com/fil-forge/libforge/commands/access"
-	"github.com/fil-forge/libforge/didmailto"
 	"github.com/fil-forge/sprue/internal/testutil"
-	"github.com/fil-forge/sprue/pkg/attested"
 	dlgmemory "github.com/fil-forge/sprue/pkg/store/delegation/memory"
 	"github.com/fil-forge/ucantone/did"
+	"github.com/fil-forge/ucantone/did/key"
+	"github.com/fil-forge/ucantone/did/resolver"
 	"github.com/fil-forge/ucantone/execution"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/command"
@@ -22,19 +24,25 @@ func TestAccessConfirmHandler(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	id := newTestIdentity(t)
 
-	validationOpts := []validator.Option{
-		validator.WithDIDVerifierResolvers(map[string]validator.DIDVerifierResolverFunc{
-			"mailto": attested.NewDIDVerifierResolver(id.Signer.Verifier()),
-		}),
+	resolver := resolver.ByMethod{
+		"key":    key.Resolver,
+		"mailto": didmailto.NewResolver(id.DID()),
 	}
+	factories := validator.DefaultFactories()
+	factories[attestation.Type] = attestation.NewVerifierFactory(resolver, factories)
+	validationOpts := []validator.Option{
+		validator.WithDIDResolver(resolver),
+		validator.WithVerifierFactories(factories),
+	}
+	ctx := t.Context()
 
 	t.Run("wrong subject", func(t *testing.T) {
 		store := dlgmemory.New()
 		handler := NewAccessConfirmHandler(id, store, logger)
 
 		account := testutil.Must(didmailto.New("alice@example.com"))(t)
-		agent := testutil.RandomSigner(t)
-		notService := testutil.RandomSigner(t)
+		agent := testutil.RandomIssuer(t)
+		notService := testutil.RandomIssuer(t)
 
 		args := access.ConfirmArguments{
 			Cause:    testutil.RandomCID(t),
@@ -47,15 +55,15 @@ func TestAccessConfirmHandler(t *testing.T) {
 
 		// Subject is not id.Signer — handler should reject.
 		inv, err := access.Confirm.Invoke(
-			id.Signer,
+			id.Issuer,
 			notService.DID(),
 			&args,
-			invocation.WithAudience(id.Signer.DID()),
+			invocation.WithAudience(id.Issuer.DID()),
 		)
 		require.NoError(t, err)
 
-		req := execution.NewRequest(t.Context(), inv)
-		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(id.Signer))
+		req := execution.NewRequest(ctx, inv)
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(id.Issuer))
 		require.NoError(t, err)
 
 		err = handler.Handler(req, res)
@@ -70,8 +78,8 @@ func TestAccessConfirmHandler(t *testing.T) {
 		handler := NewAccessConfirmHandler(id, store, logger)
 
 		// A did:key (not a did:mailto) — didmailto.Parse will reject it.
-		nonMailto := testutil.RandomSigner(t)
-		agent := testutil.RandomSigner(t)
+		nonMailto := testutil.RandomIssuer(t)
+		agent := testutil.RandomIssuer(t)
 
 		args := access.ConfirmArguments{
 			Cause:    testutil.RandomCID(t),
@@ -83,15 +91,15 @@ func TestAccessConfirmHandler(t *testing.T) {
 		}
 
 		inv, err := access.Confirm.Invoke(
-			id.Signer,
-			id.Signer.DID(),
+			id.Issuer,
+			id.Issuer.DID(),
 			&args,
-			invocation.WithAudience(id.Signer.DID()),
+			invocation.WithAudience(id.Issuer.DID()),
 		)
 		require.NoError(t, err)
 
-		req := execution.NewRequest(t.Context(), inv)
-		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(id.Signer))
+		req := execution.NewRequest(ctx, inv)
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(id.Issuer))
 		require.NoError(t, err)
 
 		err = handler.Handler(req, res)
@@ -106,7 +114,7 @@ func TestAccessConfirmHandler(t *testing.T) {
 		handler := NewAccessConfirmHandler(id, store, logger)
 
 		account := testutil.Must(didmailto.New("bob@example.com"))(t)
-		agent := testutil.RandomSigner(t)
+		agent := testutil.RandomIssuer(t)
 
 		args := access.ConfirmArguments{
 			Cause:    testutil.RandomCID(t),
@@ -118,15 +126,15 @@ func TestAccessConfirmHandler(t *testing.T) {
 		}
 
 		inv, err := access.Confirm.Invoke(
-			id.Signer,
-			id.Signer.DID(),
+			id.Issuer,
+			id.Issuer.DID(),
 			&args,
-			invocation.WithAudience(id.Signer.DID()),
+			invocation.WithAudience(id.Issuer.DID()),
 		)
 		require.NoError(t, err)
 
-		req := execution.NewRequest(t.Context(), inv)
-		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(id.Signer))
+		req := execution.NewRequest(ctx, inv)
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(id.Issuer))
 		require.NoError(t, err)
 
 		err = handler.Handler(req, res)
@@ -138,7 +146,7 @@ func TestAccessConfirmHandler(t *testing.T) {
 		// One account delegation + one delegation per attenuation
 		require.Len(t, ok.Delegations, 2)
 
-		page, err := store.ListByAudience(t.Context(), agent.DID())
+		page, err := store.ListByAudience(ctx, agent.DID())
 		require.NoError(t, err)
 		require.Len(t, page.Results, 2)
 
@@ -168,9 +176,9 @@ func TestAccessConfirmHandler(t *testing.T) {
 		require.Len(t, powerlineDlg.Policy().Statements(), 0)
 
 		// Both delegations should be valid
-		err = validator.ValidateToken(t.Context(), accountDlg, validationOpts...)
+		err = validator.ValidateToken(ctx, accountDlg, validationOpts...)
 		require.NoError(t, err)
-		err = validator.ValidateToken(t.Context(), powerlineDlg, validationOpts...)
+		err = validator.ValidateToken(ctx, powerlineDlg, validationOpts...)
 		require.NoError(t, err)
 	})
 
@@ -179,7 +187,7 @@ func TestAccessConfirmHandler(t *testing.T) {
 		handler := NewAccessConfirmHandler(id, store, logger)
 
 		account := testutil.Must(didmailto.New("carol@example.com"))(t)
-		agent := testutil.RandomSigner(t)
+		agent := testutil.RandomIssuer(t)
 
 		args := access.ConfirmArguments{
 			Cause:    testutil.RandomCID(t),
@@ -192,15 +200,15 @@ func TestAccessConfirmHandler(t *testing.T) {
 		}
 
 		inv, err := access.Confirm.Invoke(
-			id.Signer,
-			id.Signer.DID(),
+			id.Issuer,
+			id.Issuer.DID(),
 			&args,
-			invocation.WithAudience(id.Signer.DID()),
+			invocation.WithAudience(id.Issuer.DID()),
 		)
 		require.NoError(t, err)
 
-		req := execution.NewRequest(t.Context(), inv)
-		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(id.Signer))
+		req := execution.NewRequest(ctx, inv)
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(id.Issuer))
 		require.NoError(t, err)
 
 		err = handler.Handler(req, res)
@@ -212,7 +220,7 @@ func TestAccessConfirmHandler(t *testing.T) {
 		// One account delegation + one delegation per attenuation
 		require.Len(t, ok.Delegations, 3)
 
-		page, err := store.ListByAudience(t.Context(), agent.DID())
+		page, err := store.ListByAudience(ctx, agent.DID())
 		require.NoError(t, err)
 		require.Len(t, page.Results, 3)
 
@@ -238,7 +246,7 @@ func TestAccessConfirmHandler(t *testing.T) {
 		require.Equal(t, did.Undef, blobDlg.Subject())
 		require.Equal(t, command.MustParse("/blob/add"), blobDlg.Command())
 		require.Len(t, blobDlg.Policy().Statements(), 0)
-		err = validator.ValidateToken(t.Context(), blobDlg, validationOpts...)
+		err = validator.ValidateToken(ctx, blobDlg, validationOpts...)
 		require.NoError(t, err)
 
 		require.Equal(t, account, uploadDlg.Issuer())
@@ -246,7 +254,7 @@ func TestAccessConfirmHandler(t *testing.T) {
 		require.Equal(t, did.Undef, uploadDlg.Subject())
 		require.Equal(t, command.MustParse("/upload/add"), uploadDlg.Command())
 		require.Len(t, uploadDlg.Policy().Statements(), 0)
-		err = validator.ValidateToken(t.Context(), uploadDlg, validationOpts...)
+		err = validator.ValidateToken(ctx, uploadDlg, validationOpts...)
 		require.NoError(t, err)
 	})
 }

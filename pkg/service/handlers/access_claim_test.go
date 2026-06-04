@@ -24,19 +24,19 @@ func TestAccessClaimHandler(t *testing.T) {
 		store := dlgmemory.New()
 		handler := NewAccessClaimHandler(id, store, logger)
 
-		agent := testutil.RandomSigner(t)
+		agent := testutil.RandomIssuer(t)
 
 		args := access.ClaimArguments{}
 		inv, err := access.Claim.Invoke(
 			agent,
 			agent.DID(),
 			&args,
-			invocation.WithAudience(id.Signer.DID()),
+			invocation.WithAudience(id.Issuer.DID()),
 		)
 		require.NoError(t, err)
 
 		req := execution.NewRequest(t.Context(), inv)
-		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(id.Signer))
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(id.Issuer))
 		require.NoError(t, err)
 
 		err = handler.Handler(req, res)
@@ -52,7 +52,7 @@ func TestAccessClaimHandler(t *testing.T) {
 		store := dlgmemory.New()
 		handler := NewAccessClaimHandler(id, store, logger)
 
-		agent := testutil.RandomSigner(t)
+		agent := testutil.RandomIssuer(t)
 
 		dlg, err := delegation.Delegate(testutil.Alice, agent.DID(), testutil.Alice.DID(), command.MustParse("/test/thing"))
 		require.NoError(t, err)
@@ -65,12 +65,12 @@ func TestAccessClaimHandler(t *testing.T) {
 			agent,
 			agent.DID(),
 			&args,
-			invocation.WithAudience(id.Signer.DID()),
+			invocation.WithAudience(id.Issuer.DID()),
 		)
 		require.NoError(t, err)
 
 		req := execution.NewRequest(t.Context(), inv)
-		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(id.Signer))
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(id.Issuer))
 		require.NoError(t, err)
 
 		err = handler.Handler(req, res)
@@ -86,7 +86,7 @@ func TestAccessClaimHandler(t *testing.T) {
 		store := dlgmemory.New()
 		handler := NewAccessClaimHandler(id, store, logger)
 
-		agent := testutil.RandomSigner(t)
+		agent := testutil.RandomIssuer(t)
 
 		dlg1, err := delegation.Delegate(testutil.Alice, agent.DID(), testutil.Alice.DID(), command.MustParse("/test/one"))
 		require.NoError(t, err)
@@ -102,12 +102,12 @@ func TestAccessClaimHandler(t *testing.T) {
 			agent,
 			agent.DID(),
 			&args,
-			invocation.WithAudience(id.Signer.DID()),
+			invocation.WithAudience(id.Issuer.DID()),
 		)
 		require.NoError(t, err)
 
 		req := execution.NewRequest(t.Context(), inv)
-		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(id.Signer))
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(id.Issuer))
 		require.NoError(t, err)
 
 		err = handler.Handler(req, res)
@@ -124,8 +124,8 @@ func TestAccessClaimHandler(t *testing.T) {
 		store := dlgmemory.New()
 		handler := NewAccessClaimHandler(id, store, logger)
 
-		agent := testutil.RandomSigner(t)
-		otherAgent := testutil.RandomSigner(t)
+		agent := testutil.RandomIssuer(t)
+		otherAgent := testutil.RandomIssuer(t)
 
 		// Delegation is for otherAgent, not agent.
 		dlg, err := delegation.Delegate(testutil.Alice, otherAgent.DID(), testutil.Alice.DID(), command.MustParse("/test/thing"))
@@ -139,12 +139,12 @@ func TestAccessClaimHandler(t *testing.T) {
 			agent,
 			agent.DID(),
 			&args,
-			invocation.WithAudience(id.Signer.DID()),
+			invocation.WithAudience(id.Issuer.DID()),
 		)
 		require.NoError(t, err)
 
 		req := execution.NewRequest(t.Context(), inv)
-		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(id.Signer))
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(id.Issuer))
 		require.NoError(t, err)
 
 		err = handler.Handler(req, res)

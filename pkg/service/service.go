@@ -7,15 +7,18 @@ import (
 	"slices"
 	"time"
 
-	"github.com/fil-forge/libforge/didresolver"
-	"github.com/fil-forge/sprue/pkg/attested"
-	"github.com/fil-forge/sprue/pkg/identity"
+	"github.com/fil-forge/libforge/attestation"
+	"github.com/fil-forge/libforge/attestation/didmailto"
+	"github.com/fil-forge/libforge/identity"
 	"github.com/fil-forge/sprue/pkg/lib/ucan_server"
 	"github.com/fil-forge/sprue/pkg/service/ui"
 	"github.com/fil-forge/sprue/pkg/store/agent"
 	delegation_store "github.com/fil-forge/sprue/pkg/store/delegation"
+	"github.com/fil-forge/ucantone/did/key"
+	"github.com/fil-forge/ucantone/did/resolver"
+	"github.com/fil-forge/ucantone/did/web"
 	"github.com/fil-forge/ucantone/ipld/codec/dagcbor"
-	"github.com/fil-forge/ucantone/principal"
+	"github.com/fil-forge/ucantone/multikey"
 	"github.com/fil-forge/ucantone/server"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/container"
@@ -49,7 +52,7 @@ func WithInsecureDIDResolution(enabled bool) Option {
 
 // Service implements the sprue upload service logic.
 type Service struct {
-	identity        *identity.Identity
+	identity        identity.Identity
 	agentStore      agent.Store
 	delegationStore delegation_store.Store
 	logger          *zap.Logger
@@ -57,8 +60,8 @@ type Service struct {
 }
 
 // New creates a new Service instance.
-func New(id *identity.Identity, agentStore agent.Store, delegationStore delegation_store.Store, handlers []server.Route, logger *zap.Logger, options ...Option) (*Service, error) {
-	server, err := createUCANServer(id.Signer, agentStore, handlers, logger, options...)
+func New(id identity.Identity, agentStore agent.Store, delegationStore delegation_store.Store, handlers []server.Route, logger *zap.Logger, options ...Option) (*Service, error) {
+	server, err := createUCANServer(id.Issuer, agentStore, handlers, logger, options...)
 	if err != nil {
 		return nil, err
 	}
@@ -72,30 +75,38 @@ func New(id *identity.Identity, agentStore agent.Store, delegationStore delegati
 }
 
 // createUCANServer creates the UCAN RPC server with registered handlers.
-func createUCANServer(id principal.Signer, agentStore agent.Store, handlers []server.Route, logger *zap.Logger, options ...Option) (*server.HTTPServer, error) {
+func createUCANServer(id multikey.Issuer, agentStore agent.Store, handlers []server.Route, logger *zap.Logger, options ...Option) (*server.HTTPServer, error) {
 	cfg := serviceConfig{}
 	for _, opt := range options {
 		opt(&cfg)
 	}
 
-	httpResolverOpts := []didresolver.Option{}
+	webResolverOpts := []web.Option{}
 	if cfg.insecureDIDResolution {
 		logger.Warn("insecure DID resolution enabled: did:web will be resolved over HTTP instead of HTTPS; this should only be used for development purposes")
-		httpResolverOpts = append(httpResolverOpts, didresolver.InsecureResolution())
+		webResolverOpts = append(webResolverOpts, web.WithInsecure(true))
 	}
-	httpResolver, err := didresolver.NewHTTPResolver(httpResolverOpts...)
+	webResolver, err := web.NewResolver(webResolverOpts...)
 	if err != nil {
 		return nil, err
 	}
-	cacheResolver, err := didresolver.NewCachedResolver(httpResolver.Resolve, time.Hour*3)
+
+	selfDoc, err := identity.Identity{Issuer: id}.DIDDocument()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("creating DID document for service identity: %w", err)
 	}
-	selfResolver := didresolver.NewSelfResolver(id)
-	webResolver := didresolver.NewTieredResolver(
-		selfResolver.Resolve,
-		cacheResolver.Resolve,
-	)
+
+	resolver := resolver.ByMethod{
+		"key": key.Resolver,
+		"web": resolver.Tiered{
+			resolver.WellKnown{id.DID(): selfDoc},
+			resolver.NewCached(webResolver, time.Hour*3),
+		},
+		"mailto": didmailto.NewResolver(id.DID()),
+	}
+
+	factories := validator.DefaultFactories()
+	factories[attestation.Type] = attestation.NewVerifierFactory(resolver, factories)
 
 	serverOpts := append(
 		slices.Clone(cfg.serverOptions),
@@ -103,11 +114,8 @@ func createUCANServer(id principal.Signer, agentStore agent.Store, handlers []se
 		server.WithEventListener(&ucan_server.AgentMessageLogger{Logger: logger, AgentStore: agentStore}),
 		server.WithEventListener(&ucan_server.ErrorHandler{Logger: logger}),
 		server.WithValidationOptions(
-			validator.WithDIDVerifierResolvers(map[string]validator.DIDVerifierResolverFunc{
-				"key":    ucan_server.ResolveDIDKey,
-				"web":    webResolver.Resolve,
-				"mailto": attested.NewDIDVerifierResolver(id.Verifier()),
-			}),
+			validator.WithDIDResolver(resolver),
+			validator.WithVerifierFactories(factories),
 		),
 	)
 

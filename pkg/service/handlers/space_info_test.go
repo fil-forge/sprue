@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/fil-forge/libforge/attestation/didmailto"
 	spacecmds "github.com/fil-forge/libforge/commands/space"
-	"github.com/fil-forge/libforge/didmailto"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/provisioning"
 	"github.com/fil-forge/sprue/pkg/service/handlers"
@@ -14,7 +14,7 @@ import (
 	"github.com/fil-forge/ucantone/did"
 	"github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
-	"github.com/fil-forge/ucantone/principal"
+	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
@@ -25,8 +25,8 @@ import (
 func invokeSpaceInfo(
 	t *testing.T,
 	ctx context.Context,
-	agent principal.Signer,
-	uploadService principal.Signer,
+	agent ucan.Issuer,
+	uploadService ucan.Issuer,
 	space did.DID,
 ) (execution.Request, *execution.ExecResponse) {
 	t.Helper()
@@ -38,7 +38,7 @@ func invokeSpaceInfo(
 	)
 	require.NoError(t, err)
 	req := execution.NewRequest(ctx, inv)
-	res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
+	res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 	require.NoError(t, err)
 	return req, res
 }
@@ -60,7 +60,7 @@ func TestSpaceInfoHandler(t *testing.T) {
 
 		handler := handlers.NewSpaceInfoHandler(provisioningSvc, logger)
 
-		space := testutil.RandomSigner(t)
+		space := testutil.RandomIssuer(t)
 		account := testutil.Must(didmailto.New("alice@example.com"))(t)
 
 		_, err := provisioningSvc.Provision(ctx, account, space.DID(), uploadService.DID(), testutil.RandomCID(t))
@@ -86,7 +86,7 @@ func TestSpaceInfoHandler(t *testing.T) {
 
 		handler := handlers.NewSpaceInfoHandler(provisioningSvc, logger)
 
-		space := testutil.RandomSigner(t)
+		space := testutil.RandomIssuer(t)
 
 		req, res := invokeSpaceInfo(t, ctx, testutil.Alice, uploadService, space.DID())
 

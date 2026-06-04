@@ -4,9 +4,9 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/fil-forge/libforge/attestation/didmailto"
 	blobcmds "github.com/fil-forge/libforge/commands/blob"
 	httpcmds "github.com/fil-forge/libforge/commands/http"
-	"github.com/fil-forge/libforge/didmailto"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/piriclient"
 	"github.com/fil-forge/sprue/pkg/routing"
@@ -97,8 +97,8 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 	t.Run("storage provider not found", func(t *testing.T) {
 		deps := newHTTPPutDeps(t, piriclient.NewProvider(uploadService, logger), logger)
 
-		storageProvider := testutil.RandomSigner(t)
-		space := testutil.RandomSigner(t)
+		storageProvider := testutil.RandomIssuer(t)
+		space := testutil.RandomIssuer(t)
 		digest := testutil.RandomMultihash(t)
 		blob := blobcmds.Blob{Digest: digest, Size: 1024}
 
@@ -147,8 +147,8 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 	})
 
 	t.Run("success registers blob in space", func(t *testing.T) {
-		storageProvider := testutil.RandomSigner(t)
-		space := testutil.RandomSigner(t)
+		storageProvider := testutil.RandomIssuer(t)
+		space := testutil.RandomIssuer(t)
 		digest := testutil.RandomMultihash(t)
 		blob := blobcmds.Blob{Digest: digest, Size: 1024}
 		blobAddTaskLink := testutil.RandomCID(t)

@@ -7,7 +7,7 @@ import (
 	"github.com/fil-forge/sprue/internal/config"
 	appfx "github.com/fil-forge/sprue/internal/fx"
 	"github.com/fil-forge/sprue/internal/testutil"
-	"github.com/fil-forge/ucantone/principal/signer"
+	"github.com/fil-forge/ucantone/multikey"
 	"github.com/google/uuid"
 	"go.uber.org/fx/fxtest"
 )
@@ -45,7 +45,7 @@ func TestWireApp(t *testing.T) {
 						Port: 0,
 					},
 					Identity: config.IdentityConfig{
-						PrivateKey: signer.Format(testutil.WebService),
+						PrivateKey: multikey.FormatSigner(testutil.WebServiceSigner),
 						ServiceDID: testutil.WebService.DID().String(),
 					},
 					Indexer: config.IndexerConfig{
@@ -111,7 +111,7 @@ func TestWireApp(t *testing.T) {
 						Port: 0,
 					},
 					Identity: config.IdentityConfig{
-						PrivateKey: signer.Format(testutil.WebService),
+						PrivateKey: multikey.FormatSigner(testutil.WebServiceSigner),
 						ServiceDID: testutil.WebService.DID().String(),
 					},
 					Indexer: config.IndexerConfig{
@@ -152,7 +152,7 @@ func TestWireApp(t *testing.T) {
 						Port: 0,
 					},
 					Identity: config.IdentityConfig{
-						PrivateKey: signer.Format(testutil.WebService),
+						PrivateKey: multikey.FormatSigner(testutil.WebServiceSigner),
 						ServiceDID: testutil.WebService.DID().String(),
 					},
 					Indexer: config.IndexerConfig{

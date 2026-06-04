@@ -19,7 +19,7 @@ package handlers_test
 // 	"github.com/storacha/go-ucanto/server"
 // 	"github.com/storacha/go-ucanto/ucan"
 // 	"github.com/fil-forge/sprue/internal/testutil"
-// 	"github.com/fil-forge/sprue/pkg/identity"
+//
 // 	"github.com/fil-forge/sprue/pkg/service/handlers"
 // 	"github.com/fil-forge/sprue/pkg/store/agent"
 // 	agent_store "github.com/fil-forge/sprue/pkg/store/agent/memory"
@@ -68,7 +68,7 @@ package handlers_test
 // 		replicaStore := replica_store.New()
 
 // 		ch := handlers.NewBlobReplicaTransferConcludeHandler(
-// 			&identity.Identity{Signer: uploadService}, agentStore, replicaStore, logger,
+// 			identity.Identity{Signer: uploadService}, agentStore, replicaStore, logger,
 // 		)
 
 // 		// Create an invocation with wrong capability (not blob/replica/transfer)
@@ -97,7 +97,7 @@ package handlers_test
 // 		replicaStore := replica_store.New()
 
 // 		ch := handlers.NewBlobReplicaTransferConcludeHandler(
-// 			&identity.Identity{Signer: uploadService}, agentStore, replicaStore, logger,
+// 			identity.Identity{Signer: uploadService}, agentStore, replicaStore, logger,
 // 		)
 
 // 		space := testutil.RandomSigner(t)
@@ -137,7 +137,7 @@ package handlers_test
 // 		replicaStore := replica_store.New()
 
 // 		ch := handlers.NewBlobReplicaTransferConcludeHandler(
-// 			&identity.Identity{Signer: uploadService}, agentStore, replicaStore, logger,
+// 			identity.Identity{Signer: uploadService}, agentStore, replicaStore, logger,
 // 		)
 
 // 		space := testutil.RandomSigner(t)
@@ -202,7 +202,7 @@ package handlers_test
 // 		replicaStore := replica_store.New()
 
 // 		ch := handlers.NewBlobReplicaTransferConcludeHandler(
-// 			&identity.Identity{Signer: uploadService}, agentStore, replicaStore, logger,
+// 			identity.Identity{Signer: uploadService}, agentStore, replicaStore, logger,
 // 		)
 
 // 		space := testutil.RandomSigner(t)
@@ -288,7 +288,7 @@ package handlers_test
 // 		replicaStore := replica_store.New()
 
 // 		ch := handlers.NewBlobReplicaTransferConcludeHandler(
-// 			&identity.Identity{Signer: uploadService}, agentStore, replicaStore, logger,
+// 			identity.Identity{Signer: uploadService}, agentStore, replicaStore, logger,
 // 		)
 
 // 		space := testutil.RandomSigner(t)

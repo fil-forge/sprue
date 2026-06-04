@@ -6,11 +6,12 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/fil-forge/libforge/attestation/didmailto"
 	"github.com/fil-forge/libforge/commands/access"
-	"github.com/fil-forge/libforge/didmailto"
+	"github.com/fil-forge/libforge/identity"
 	"github.com/fil-forge/sprue/internal/config"
 	"github.com/fil-forge/sprue/internal/testutil"
-	"github.com/fil-forge/sprue/pkg/identity"
+
 	"github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
 	"github.com/fil-forge/ucantone/ucan/command"
@@ -31,9 +32,9 @@ func (m *mockMailer) SendValidation(ctx context.Context, to string, validationUR
 	return m.err
 }
 
-func newTestIdentity(t *testing.T) *identity.Identity {
+func newTestIdentity(t *testing.T) identity.Identity {
 	t.Helper()
-	id, err := identity.New("")
+	id, err := identity.New("", "")
 	require.NoError(t, err)
 	return id
 }
@@ -61,18 +62,18 @@ func TestAccessRequestHandler(t *testing.T) {
 			},
 		}
 
-		agent := testutil.RandomSigner(t)
+		agent := testutil.RandomIssuer(t)
 
 		inv, err := access.Request.Invoke(
 			agent,
-			id.Signer.DID(),
+			id.Issuer.DID(),
 			&args,
-			invocation.WithAudience(id.Signer.DID()),
+			invocation.WithAudience(id.Issuer.DID()),
 		)
 		require.NoError(t, err)
 
 		req := execution.NewRequest(t.Context(), inv)
-		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(id.Signer))
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(id.Issuer))
 		require.NoError(t, err)
 
 		err = handler.Handler(req, res)
@@ -94,7 +95,7 @@ func TestAccessRequestHandler(t *testing.T) {
 		handler := NewAccessRequestHandler(serverCfg, id, m, logger)
 
 		// A did:key (not did:mailto) — didmailto.Parse will reject it.
-		nonMailtoSigner := testutil.RandomSigner(t)
+		nonMailtoSigner := testutil.RandomIssuer(t)
 		args := access.RequestArguments{
 			Issuer: nonMailtoSigner.DID(),
 			Attenuations: []access.CapabilityRequest{
@@ -102,18 +103,18 @@ func TestAccessRequestHandler(t *testing.T) {
 			},
 		}
 
-		agent := testutil.RandomSigner(t)
+		agent := testutil.RandomIssuer(t)
 
 		inv, err := access.Request.Invoke(
 			agent,
-			id.Signer.DID(),
+			id.Issuer.DID(),
 			&args,
-			invocation.WithAudience(id.Signer.DID()),
+			invocation.WithAudience(id.Issuer.DID()),
 		)
 		require.NoError(t, err)
 
 		req := execution.NewRequest(t.Context(), inv)
-		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(id.Signer))
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(id.Issuer))
 		require.NoError(t, err)
 
 		err = handler.Handler(req, res)
@@ -140,18 +141,18 @@ func TestAccessRequestHandler(t *testing.T) {
 			},
 		}
 
-		agent := testutil.RandomSigner(t)
+		agent := testutil.RandomIssuer(t)
 
 		inv, err := access.Request.Invoke(
 			agent,
-			id.Signer.DID(),
+			id.Issuer.DID(),
 			&args,
-			invocation.WithAudience(id.Signer.DID()),
+			invocation.WithAudience(id.Issuer.DID()),
 		)
 		require.NoError(t, err)
 
 		req := execution.NewRequest(t.Context(), inv)
-		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(id.Signer))
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(id.Issuer))
 		require.NoError(t, err)
 
 		err = handler.Handler(req, res)
@@ -178,18 +179,18 @@ func TestAccessRequestHandler(t *testing.T) {
 			},
 		}
 
-		agent := testutil.RandomSigner(t)
+		agent := testutil.RandomIssuer(t)
 
 		inv, err := access.Request.Invoke(
 			agent,
-			id.Signer.DID(),
+			id.Issuer.DID(),
 			&args,
-			invocation.WithAudience(id.Signer.DID()),
+			invocation.WithAudience(id.Issuer.DID()),
 		)
 		require.NoError(t, err)
 
 		req := execution.NewRequest(t.Context(), inv)
-		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(id.Signer))
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(id.Issuer))
 		require.NoError(t, err)
 
 		err = handler.Handler(req, res)

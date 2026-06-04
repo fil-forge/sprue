@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
+	"github.com/fil-forge/libforge/attestation/didmailto"
 	accesscmds "github.com/fil-forge/libforge/commands/access"
 	blobcmds "github.com/fil-forge/libforge/commands/blob"
-	"github.com/fil-forge/libforge/didmailto"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/provisioning"
 	consumermemory "github.com/fil-forge/sprue/pkg/store/consumer/memory"
@@ -61,8 +61,8 @@ func TestAccessDelegateHandler(t *testing.T) {
 		ps := newTestProvisioningService(t, nil)
 		handler := NewAccessDelegateHandler(dlgStore, ps, logger)
 
-		agent := testutil.RandomSigner(t)
-		space := testutil.RandomSigner(t)
+		agent := testutil.RandomIssuer(t)
+		space := testutil.RandomIssuer(t)
 
 		args := accesscmds.DelegateArguments{Delegations: []cid.Cid{}}
 
@@ -70,12 +70,12 @@ func TestAccessDelegateHandler(t *testing.T) {
 			agent,
 			space.DID(),
 			&args,
-			invocation.WithAudience(id.Signer.DID()),
+			invocation.WithAudience(id.Issuer.DID()),
 		)
 		require.NoError(t, err)
 
 		req := execution.NewRequest(t.Context(), inv)
-		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(id.Signer))
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(id.Issuer))
 		require.NoError(t, err)
 
 		err = handler.Handler(req, res)
@@ -91,12 +91,12 @@ func TestAccessDelegateHandler(t *testing.T) {
 		id := newTestIdentity(t)
 		dlgStore := dlgmemory.New()
 
-		space := testutil.RandomSigner(t)
+		space := testutil.RandomIssuer(t)
 
-		ps := newProvisionedService(t, id.Signer.DID(), space.DID())
+		ps := newProvisionedService(t, id.Issuer.DID(), space.DID())
 		handler := NewAccessDelegateHandler(dlgStore, ps, logger)
 
-		agent := testutil.RandomSigner(t)
+		agent := testutil.RandomIssuer(t)
 
 		// Create a delegation from the space to the agent for some capability.
 		dlg, err := delegation.Delegate(space, agent.DID(), space.DID(), command.MustParse("/blob/add"))
@@ -110,13 +110,13 @@ func TestAccessDelegateHandler(t *testing.T) {
 			agent,
 			space.DID(),
 			&args,
-			invocation.WithAudience(id.Signer.DID()),
+			invocation.WithAudience(id.Issuer.DID()),
 		)
 		require.NoError(t, err)
 
 		// Attach the delegation to the request metadata so extractDelegations can find it.
 		req := execution.NewRequest(t.Context(), inv, execution.WithDelegations(dlg))
-		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(id.Signer))
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(id.Issuer))
 		require.NoError(t, err)
 
 		err = handler.Handler(req, res)
@@ -134,12 +134,12 @@ func TestAccessDelegateHandler(t *testing.T) {
 		id := newTestIdentity(t)
 		dlgStore := dlgmemory.New()
 
-		space := testutil.RandomSigner(t)
+		space := testutil.RandomIssuer(t)
 
-		ps := newProvisionedService(t, id.Signer.DID(), space.DID())
+		ps := newProvisionedService(t, id.Issuer.DID(), space.DID())
 		handler := NewAccessDelegateHandler(dlgStore, ps, logger)
 
-		agent := testutil.RandomSigner(t)
+		agent := testutil.RandomIssuer(t)
 
 		args := accesscmds.DelegateArguments{Delegations: []cid.Cid{}}
 
@@ -147,12 +147,12 @@ func TestAccessDelegateHandler(t *testing.T) {
 			agent,
 			space.DID(),
 			&args,
-			invocation.WithAudience(id.Signer.DID()),
+			invocation.WithAudience(id.Issuer.DID()),
 		)
 		require.NoError(t, err)
 
 		req := execution.NewRequest(t.Context(), inv)
-		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(id.Signer))
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(id.Issuer))
 		require.NoError(t, err)
 
 		err = handler.Handler(req, res)
@@ -165,12 +165,12 @@ func TestAccessDelegateHandler(t *testing.T) {
 		id := newTestIdentity(t)
 		dlgStore := dlgmemory.New()
 
-		space := testutil.RandomSigner(t)
+		space := testutil.RandomIssuer(t)
 
-		ps := newProvisionedService(t, id.Signer.DID(), space.DID())
+		ps := newProvisionedService(t, id.Issuer.DID(), space.DID())
 		handler := NewAccessDelegateHandler(dlgStore, ps, logger)
 
-		agent := testutil.RandomSigner(t)
+		agent := testutil.RandomIssuer(t)
 
 		// Reference a delegation by CID, but don't include it in the request metadata.
 		// We still need at least one delegation in the request so req.Metadata() is non-nil.
@@ -188,12 +188,12 @@ func TestAccessDelegateHandler(t *testing.T) {
 			agent,
 			space.DID(),
 			&args,
-			invocation.WithAudience(id.Signer.DID()),
+			invocation.WithAudience(id.Issuer.DID()),
 		)
 		require.NoError(t, err)
 
 		req := execution.NewRequest(t.Context(), inv, execution.WithDelegations(other))
-		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(id.Signer))
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(id.Issuer))
 		require.NoError(t, err)
 
 		// extractDelegations returns an error directly (not via SetFailure) when a

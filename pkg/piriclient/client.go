@@ -31,25 +31,25 @@ const replicaAllocationTTL = time.Hour * 24
 // Client is a UCAN client for communicating with Piri nodes.
 type Client struct {
 	piriDID did.DID
-	signer  ucan.Signer
+	issuer  ucan.Issuer
 	client  *client.HTTPClient
 	logger  *zap.Logger
 }
 
 // New creates a new Piri client.
 // The delegationFetcher is used to fetch delegation proofs on-demand for each request.
-func New(endpoint *url.URL, piriDID did.DID, signer ucan.Signer, logger *zap.Logger) (*Client, error) {
+func New(endpoint *url.URL, piriDID did.DID, issuer ucan.Issuer, logger *zap.Logger) (*Client, error) {
 	client, err := client.NewHTTP(endpoint)
 	if err != nil {
 		return nil, fmt.Errorf("creating HTTP client: %w", err)
 	}
-	return NewWithClient(piriDID, signer, client, logger), nil
+	return NewWithClient(piriDID, issuer, client, logger), nil
 }
 
-func NewWithClient(piriDID did.DID, signer ucan.Signer, client *client.HTTPClient, logger *zap.Logger) *Client {
+func NewWithClient(piriDID did.DID, issuer ucan.Issuer, client *client.HTTPClient, logger *zap.Logger) *Client {
 	return &Client{
 		piriDID: piriDID,
-		signer:  signer,
+		issuer:  issuer,
 		client:  client,
 		logger:  logger,
 	}
@@ -66,7 +66,7 @@ type AllocateRequest struct {
 // Allocate sends a /blob/allocate invocation to the piri node.
 // Returns the response data, the invocation that was sent, and the receipt from piri.
 func (c *Client) Allocate(ctx context.Context, req *AllocateRequest, proofStore ucanlib.ProofStore, options ...invocation.Option) (*blobcmds.AllocateOK, ucan.Invocation, ucan.Receipt, error) {
-	inv, prfs, attestations, err := c.AllocateInvocation(ctx, req, proofStore, options...)
+	inv, prfs, err := c.AllocateInvocation(ctx, req, proofStore, options...)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("creating allocate invocation: %w", err)
 	}
@@ -75,7 +75,6 @@ func (c *Client) Allocate(ctx context.Context, req *AllocateRequest, proofStore 
 		zap.Stringer("issuer", inv.Issuer()),
 		zap.Stringer("audience", inv.Audience()),
 		zap.Int("proofs", len(prfs)),
-		zap.Int("attestations", len(attestations)),
 	)
 
 	allocOK, rcpt, _, err := ucan_client.Execute[*blobcmds.AllocateOK](
@@ -84,7 +83,6 @@ func (c *Client) Allocate(ctx context.Context, req *AllocateRequest, proofStore 
 		c.logger,
 		inv,
 		execution.WithDelegations(prfs...),
-		execution.WithInvocations(attestations...),
 	)
 	if err != nil {
 		return nil, nil, nil, err
@@ -93,19 +91,19 @@ func (c *Client) Allocate(ctx context.Context, req *AllocateRequest, proofStore 
 }
 
 // AllocateInvocation returns the invocation for the allocate request (for use in effects).
-func (c *Client) AllocateInvocation(ctx context.Context, req *AllocateRequest, proofStore ucanlib.ProofStore, options ...invocation.Option) (ucan.Invocation, []ucan.Delegation, []ucan.Invocation, error) {
+func (c *Client) AllocateInvocation(ctx context.Context, req *AllocateRequest, proofStore ucanlib.ProofStore, options ...invocation.Option) (ucan.Invocation, []ucan.Delegation, error) {
 	// The proof chain is rooted at the storage provider (the proofs the provider
 	// granted the upload service at registration), so the subject is the provider
 	// DID, not the space. The space rides in the invocation arguments instead.
-	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.signer.DID(), blobcmds.Allocate.Command, c.piriDID)
+	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.issuer.DID(), blobcmds.Allocate.Command, c.piriDID)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("building proof chain: %w", err)
+		return nil, nil, fmt.Errorf("building proof chain: %w", err)
 	}
 
-	attestations, err := proofStore.ProofAttestations(ctx, prfs, c.signer.DID())
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("getting proof attestations: %w", err)
-	}
+	// attestations, err := proofStore.ProofAttestations(ctx, prfs, c.issuer.DID())
+	// if err != nil {
+	// 	return nil, nil, nil, fmt.Errorf("getting proof attestations: %w", err)
+	// }
 
 	options = slices.Clone(options)
 	options = append(
@@ -115,7 +113,7 @@ func (c *Client) AllocateInvocation(ctx context.Context, req *AllocateRequest, p
 	)
 
 	inv, err := blobcmds.Allocate.Invoke(
-		c.signer,
+		c.issuer,
 		c.piriDID,
 		&blobcmds.AllocateArguments{
 			Space: req.Space,
@@ -125,10 +123,10 @@ func (c *Client) AllocateInvocation(ctx context.Context, req *AllocateRequest, p
 		options...,
 	)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("creating allocate invocation: %w", err)
+		return nil, nil, fmt.Errorf("creating allocate invocation: %w", err)
 	}
 
-	return inv, prfs, attestations, nil
+	return inv, prfs, nil
 }
 
 // PiriDID returns the DID of the piri node.
@@ -146,7 +144,7 @@ type AcceptRequest struct {
 
 // Accept sends a /blob/accept invocation to the piri node.
 func (c *Client) Accept(ctx context.Context, req *AcceptRequest, proofStore ucanlib.ProofStore, options ...invocation.Option) (*blobcmds.AcceptOK, ucan.Invocation, ucan.Receipt, ucan.Container, error) {
-	inv, prfs, attestations, err := c.AcceptInvocation(ctx, req, proofStore, options...)
+	inv, prfs, err := c.AcceptInvocation(ctx, req, proofStore, options...)
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("creating accept invocation: %w", err)
 	}
@@ -155,7 +153,6 @@ func (c *Client) Accept(ctx context.Context, req *AcceptRequest, proofStore ucan
 		zap.Stringer("issuer", inv.Issuer()),
 		zap.Stringer("audience", inv.Audience()),
 		zap.Int("proofs", len(prfs)),
-		zap.Int("attestations", len(attestations)),
 	)
 
 	acceptOK, rcpt, meta, err := ucan_client.Execute[*blobcmds.AcceptOK](
@@ -164,7 +161,6 @@ func (c *Client) Accept(ctx context.Context, req *AcceptRequest, proofStore ucan
 		c.logger,
 		inv,
 		execution.WithDelegations(prfs...),
-		execution.WithInvocations(attestations...),
 	)
 	if err != nil {
 		return nil, nil, nil, nil, err
@@ -173,17 +169,12 @@ func (c *Client) Accept(ctx context.Context, req *AcceptRequest, proofStore ucan
 }
 
 // AcceptInvocation returns the invocation for the accept request (for use in effects).
-func (c *Client) AcceptInvocation(ctx context.Context, req *AcceptRequest, proofStore ucanlib.ProofStore, options ...invocation.Option) (ucan.Invocation, []ucan.Delegation, []ucan.Invocation, error) {
+func (c *Client) AcceptInvocation(ctx context.Context, req *AcceptRequest, proofStore ucanlib.ProofStore, options ...invocation.Option) (ucan.Invocation, []ucan.Delegation, error) {
 	// As with allocate, the proof chain is rooted at the storage provider, so the
 	// subject is the provider DID and the space travels in the arguments.
-	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.signer.DID(), blobcmds.Accept.Command, c.piriDID)
+	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.issuer.DID(), blobcmds.Accept.Command, c.piriDID)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("building proof chain: %w", err)
-	}
-
-	attestations, err := proofStore.ProofAttestations(ctx, prfs, c.signer.DID())
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("getting proof attestations: %w", err)
+		return nil, nil, fmt.Errorf("building proof chain: %w", err)
 	}
 
 	options = slices.Clone(options)
@@ -194,7 +185,7 @@ func (c *Client) AcceptInvocation(ctx context.Context, req *AcceptRequest, proof
 	)
 
 	inv, err := blobcmds.Accept.Invoke(
-		c.signer,
+		c.issuer,
 		c.piriDID,
 		&blobcmds.AcceptArguments{
 			Space: req.Space,
@@ -204,10 +195,10 @@ func (c *Client) AcceptInvocation(ctx context.Context, req *AcceptRequest, proof
 		options...,
 	)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("creating accept invocation: %w", err)
+		return nil, nil, fmt.Errorf("creating accept invocation: %w", err)
 	}
 
-	return inv, prfs, attestations, nil
+	return inv, prfs, nil
 }
 
 // ReplicaAllocateRequest contains the parameters for a /blob/replica/allocate invocation.
@@ -223,14 +214,9 @@ type ReplicaAllocateRequest struct {
 // Returns the response data, the invocation that was sent, the receipt from
 // piri, and any metadata. It returns an error if the receipt contains a failure result.
 func (c *Client) ReplicaAllocate(ctx context.Context, req *ReplicaAllocateRequest, proofStore ucanlib.ProofStore, options ...invocation.Option) (*blobreplicacmds.AllocateOK, ucan.Invocation, ucan.Receipt, ucan.Container, error) {
-	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.signer.DID(), blobreplicacmds.Allocate.Command, req.Space)
+	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.issuer.DID(), blobreplicacmds.Allocate.Command, req.Space)
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("building proof chain: %w", err)
-	}
-
-	attestations, err := proofStore.ProofAttestations(ctx, prfs, c.signer.DID())
-	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("getting proof attestations: %w", err)
 	}
 
 	options = slices.Clone(options)
@@ -245,7 +231,7 @@ func (c *Client) ReplicaAllocate(ctx context.Context, req *ReplicaAllocateReques
 	)
 
 	inv, err := blobreplicacmds.Allocate.Invoke(
-		c.signer,
+		c.issuer,
 		req.Space,
 		&blobreplicacmds.AllocateArguments{
 			Blob:  blobcmds.Blob{Digest: req.Digest, Size: req.Size},
@@ -269,7 +255,6 @@ func (c *Client) ReplicaAllocate(ctx context.Context, req *ReplicaAllocateReques
 		c.logger,
 		inv,
 		execution.WithDelegations(prfs...),
-		execution.WithInvocations(attestations...),
 	)
 	if err != nil {
 		return nil, nil, nil, nil, err

@@ -23,13 +23,13 @@ import (
 type Client struct {
 	endpoint   *url.URL
 	indexerDID did.DID
-	signer     ucan.Signer
+	issuer     ucan.Issuer
 	client     *client.HTTPClient
 	logger     *zap.Logger
 }
 
 // New creates a new indexer client.
-func New(endpoint *url.URL, indexerDID did.DID, signer ucan.Signer, logger *zap.Logger) (*Client, error) {
+func New(endpoint *url.URL, indexerDID did.DID, issuer ucan.Issuer, logger *zap.Logger) (*Client, error) {
 	client, err := client.NewHTTP(endpoint)
 	if err != nil {
 		return nil, fmt.Errorf("creating HTTP client: %w", err)
@@ -37,7 +37,7 @@ func New(endpoint *url.URL, indexerDID did.DID, signer ucan.Signer, logger *zap.
 	return &Client{
 		endpoint:   endpoint,
 		indexerDID: indexerDID,
-		signer:     signer,
+		issuer:     issuer,
 		client:     client,
 		logger:     logger,
 	}, nil
@@ -48,23 +48,19 @@ func New(endpoint *url.URL, indexerDID did.DID, signer ucan.Signer, logger *zap.
 // The proofStore parameter is used to build the delegation chain authorizing
 // the upload service to retrieve the index blob via `/content/retrieve` command.
 func (c *Client) PublishIndexClaim(ctx context.Context, space did.DID, index cid.Cid, proofStore ucanlib.ProofStore, options ...invocation.Option) (ucan.Receipt, error) {
-	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.signer.DID(), contentcmds.Retrieve.Command, space)
+	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.issuer.DID(), contentcmds.Retrieve.Command, space)
 	if err != nil {
 		return nil, fmt.Errorf("building proof chain: %w", err)
 	}
-	attestations, err := proofStore.ProofAttestations(ctx, prfs, c.signer.DID())
-	if err != nil {
-		return nil, fmt.Errorf("building attestations: %w", err)
-	}
 	// Create a content retrieval delegation from upload service to indexer
-	indexerDelegation, err := contentcmds.Retrieve.Delegate(c.signer, c.indexerDID, space)
+	indexerDelegation, err := contentcmds.Retrieve.Delegate(c.issuer, c.indexerDID, space)
 	if err != nil {
 		return nil, fmt.Errorf("creating indexer delegation: %w", err)
 	}
 
 	inv, err := assertcmds.Index.Invoke(
-		c.signer,
-		c.signer.DID(),
+		c.issuer,
+		c.issuer.DID(),
 		&assertcmds.IndexArguments{Index: index},
 		invocation.WithAudience(c.indexerDID),
 		invocation.WithMetadata(
@@ -82,7 +78,6 @@ func (c *Client) PublishIndexClaim(ctx context.Context, space did.DID, index cid
 		inv,
 		execution.WithDelegations(prfs...),
 		execution.WithDelegations(indexerDelegation),
-		execution.WithInvocations(attestations...),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("executing assert index invocation: %w", err)

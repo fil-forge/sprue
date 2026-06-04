@@ -2,19 +2,18 @@ package handlers_test
 
 import (
 	"context"
-	"fmt"
 	"net/http/httptest"
 	"net/url"
 	"testing"
 
+	"github.com/fil-forge/libforge/attestation/didmailto"
 	accesscmds "github.com/fil-forge/libforge/commands/access"
 	assertcmds "github.com/fil-forge/libforge/commands/assert"
 	blobcmds "github.com/fil-forge/libforge/commands/blob"
 	contentcmds "github.com/fil-forge/libforge/commands/content"
 	indexcmds "github.com/fil-forge/libforge/commands/index"
-	"github.com/fil-forge/libforge/didmailto"
+	"github.com/fil-forge/libforge/identity"
 	"github.com/fil-forge/sprue/internal/testutil"
-	"github.com/fil-forge/sprue/pkg/identity"
 	"github.com/fil-forge/sprue/pkg/indexerclient"
 	"github.com/fil-forge/sprue/pkg/provisioning"
 	"github.com/fil-forge/sprue/pkg/service/handlers"
@@ -22,15 +21,14 @@ import (
 	subscription_store "github.com/fil-forge/sprue/pkg/store/subscription/memory"
 	"github.com/fil-forge/ucantone/binding"
 	"github.com/fil-forge/ucantone/did"
+	"github.com/fil-forge/ucantone/did/key"
+	"github.com/fil-forge/ucantone/did/resolver"
 	"github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
-	"github.com/fil-forge/ucantone/principal"
-	"github.com/fil-forge/ucantone/principal/verifier"
 	"github.com/fil-forge/ucantone/server"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/fil-forge/ucantone/validator"
-	"github.com/fil-forge/ucantone/validator/errors"
 	"github.com/ipfs/go-cid"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
@@ -41,28 +39,21 @@ import (
 // so signatures verify against the underlying did:key.
 func newMockIndexerServer(
 	t *testing.T,
-	indexerSigner principal.Signer,
-	uploadService principal.Signer,
+	indexerIdent identity.Identity,
+	uploadService identity.Identity,
 	indexOK *assertcmds.IndexOK,
 ) *httptest.Server {
 	t.Helper()
 
-	resolveDIDKey := func(ctx context.Context, d did.DID) (ucan.Verifier, error) {
-		if d == indexerSigner.DID() {
-			return indexerSigner.Verifier(), nil
-		}
-		if d == uploadService.DID() {
-			return uploadService.Verifier(), nil
-		}
-		if d.Method() == "key" {
-			verifier.FromDIDKey(d)
-		}
-		return nil, errors.NewDIDKeyResolutionError(d, fmt.Errorf("unexpected DID to resolve"))
-	}
-
 	srv := server.NewHTTP(
-		indexerSigner,
-		server.WithValidationOptions(validator.WithDIDVerifierResolver(resolveDIDKey)),
+		indexerIdent,
+		server.WithValidationOptions(validator.WithDIDResolver(resolver.Tiered{
+			resolver.WellKnown{
+				indexerIdent.DID():  testutil.Must(indexerIdent.DIDDocument())(t),
+				uploadService.DID(): testutil.Must(uploadService.DIDDocument())(t),
+			},
+			key.Resolver,
+		})),
 	)
 
 	srv.Handle(assertcmds.Index.Command, assertcmds.Index.Handler(func(
@@ -82,9 +73,9 @@ func newMockIndexerServer(
 func invokeIndexAdd(
 	t *testing.T,
 	ctx context.Context,
-	agent principal.Signer,
-	uploadService principal.Signer,
-	space principal.Signer,
+	agent ucan.Issuer,
+	uploadService ucan.Issuer,
+	space ucan.Principal,
 	index cid.Cid,
 	reqOpts ...execution.RequestOption,
 ) (execution.Request, *execution.ExecResponse) {
@@ -97,7 +88,7 @@ func invokeIndexAdd(
 	)
 	require.NoError(t, err)
 	req := execution.NewRequest(ctx, inv, reqOpts...)
-	res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
+	res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 	require.NoError(t, err)
 	return req, res
 }
@@ -110,7 +101,7 @@ func TestIndexAddHandler(t *testing.T) {
 	alice := testutil.Alice
 	aliceAccount := testutil.Must(didmailto.New("alice@example.com"))(t)
 
-	id := &identity.Identity{Signer: uploadService}
+	id := identity.Identity{Issuer: uploadService}
 
 	t.Run("no service providers", func(t *testing.T) {
 		consumerStore := consumer_store.New()
@@ -120,7 +111,7 @@ func TestIndexAddHandler(t *testing.T) {
 
 		handler := handlers.NewIndexAddHandler(id, provisioningSvc, blobReg, nil, logger)
 
-		space := testutil.RandomSigner(t)
+		space := testutil.RandomIssuer(t)
 		req, res := invokeIndexAdd(t, ctx, alice, uploadService, space, testutil.RandomCID(t))
 
 		err := handler.Handler(req, res)
@@ -141,7 +132,7 @@ func TestIndexAddHandler(t *testing.T) {
 			subscriptionStore,
 		)
 
-		space := testutil.RandomSigner(t)
+		space := testutil.RandomIssuer(t)
 		require.NoError(t, consumerStore.Add(ctx, uploadService.DID(), space.DID(), aliceAccount, "sub-1", testutil.RandomCID(t)))
 
 		handler := handlers.NewIndexAddHandler(id, provisioningSvc, blobReg, nil, logger)
@@ -165,7 +156,7 @@ func TestIndexAddHandler(t *testing.T) {
 			subscriptionStore,
 		)
 
-		space := testutil.RandomSigner(t)
+		space := testutil.RandomIssuer(t)
 		require.NoError(t, consumerStore.Add(ctx, uploadService.DID(), space.DID(), aliceAccount, "sub-1", testutil.RandomCID(t)))
 
 		indexCID := testutil.RandomCID(t)
@@ -173,10 +164,10 @@ func TestIndexAddHandler(t *testing.T) {
 		require.NoError(t, blobReg.Register(ctx, space.DID(), indexBlob, testutil.RandomCID(t)))
 
 		// Stand up a mock indexer that returns success on /assert/index.
-		indexerSigner := testutil.RandomSigner(t)
-		indexerSrv := newMockIndexerServer(t, indexerSigner, uploadService, &assertcmds.IndexOK{})
+		indexerIdent := identity.Identity{Issuer: testutil.RandomMultikeyIssuer(t)}
+		indexerSrv := newMockIndexerServer(t, indexerIdent, uploadService, &assertcmds.IndexOK{})
 		indexerURL := testutil.Must(url.Parse(indexerSrv.URL))(t)
-		indexerCli, err := indexerclient.New(indexerURL, indexerSigner.DID(), uploadService, logger)
+		indexerCli, err := indexerclient.New(indexerURL, indexerIdent.DID(), uploadService, logger)
 		require.NoError(t, err)
 
 		handler := handlers.NewIndexAddHandler(id, provisioningSvc, blobReg, indexerCli, logger)
@@ -207,17 +198,17 @@ func TestIndexAddHandler(t *testing.T) {
 			subscriptionStore,
 		)
 
-		space := testutil.RandomSigner(t)
+		space := testutil.RandomIssuer(t)
 		require.NoError(t, consumerStore.Add(ctx, uploadService.DID(), space.DID(), aliceAccount, "sub-1", testutil.RandomCID(t)))
 
 		indexCID := testutil.RandomCID(t)
 		indexBlob := blobcmds.Blob{Digest: indexCID.Hash(), Size: 512}
 		require.NoError(t, blobReg.Register(ctx, space.DID(), indexBlob, testutil.RandomCID(t)))
 
-		indexerSigner := testutil.RandomSigner(t)
-		indexerSrv := newMockIndexerServer(t, indexerSigner, uploadService, &assertcmds.IndexOK{})
+		indexerIdent := identity.Identity{Issuer: testutil.RandomMultikeyIssuer(t)}
+		indexerSrv := newMockIndexerServer(t, indexerIdent, uploadService, &assertcmds.IndexOK{})
 		indexerURL := testutil.Must(url.Parse(indexerSrv.URL))(t)
-		indexerCli, err := indexerclient.New(indexerURL, indexerSigner.DID(), uploadService, logger)
+		indexerCli, err := indexerclient.New(indexerURL, indexerIdent.DID(), uploadService, logger)
 		require.NoError(t, err)
 
 		handler := handlers.NewIndexAddHandler(id, provisioningSvc, blobReg, indexerCli, logger)

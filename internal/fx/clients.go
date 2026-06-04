@@ -3,8 +3,9 @@ package fx
 import (
 	"net/url"
 
+	"github.com/fil-forge/libforge/identity"
 	"github.com/fil-forge/sprue/internal/config"
-	"github.com/fil-forge/sprue/pkg/identity"
+
 	"github.com/fil-forge/sprue/pkg/indexerclient"
 	"github.com/fil-forge/sprue/pkg/piriclient"
 	"github.com/fil-forge/ucantone/did"
@@ -18,8 +19,8 @@ var ClientsModule = fx.Module("clients",
 	fx.Provide(NewPiriClientProvider),
 )
 
-func NewPiriClientProvider(id *identity.Identity, logger *zap.Logger) piriclient.Provider {
-	return piriclient.NewProvider(id.Signer, logger)
+func NewPiriClientProvider(id identity.Identity, logger *zap.Logger) piriclient.Provider {
+	return piriclient.NewProvider(id.Issuer, logger)
 }
 
 // IndexerClientResult wraps the optional indexer client.
@@ -34,7 +35,7 @@ type IndexerClientResult struct {
 // NewIndexerClient creates an indexer client if configured.
 func NewIndexerClient(
 	cfg *config.Config,
-	id *identity.Identity,
+	id identity.Identity,
 	logger *zap.Logger,
 ) IndexerClientResult {
 	if cfg.Indexer.Endpoint == "" {
@@ -75,7 +76,7 @@ func NewIndexerClient(
 		}
 	}
 
-	client, err := indexerclient.New(indexerURL, indexerDID, id.Signer, logger)
+	client, err := indexerclient.New(indexerURL, indexerDID, id.Issuer, logger)
 	if err != nil {
 		logger.Warn("failed to create indexer client",
 			zap.Error(err),

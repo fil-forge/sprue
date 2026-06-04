@@ -1,8 +1,9 @@
 package service
 
 import (
+	"github.com/fil-forge/libforge/identity"
 	"github.com/fil-forge/sprue/internal/config"
-	"github.com/fil-forge/sprue/pkg/identity"
+
 	"github.com/fil-forge/sprue/pkg/service"
 	"github.com/fil-forge/sprue/pkg/store/agent"
 	"github.com/fil-forge/sprue/pkg/store/delegation"
@@ -20,7 +21,7 @@ var Module = fx.Module("service",
 type ServiceParams struct {
 	fx.In
 
-	Identity         *identity.Identity
+	Identity         identity.Identity
 	DeploymentConfig config.DeploymentConfig
 	AgentStore       agent.Store
 	DelegationStore  delegation.Store

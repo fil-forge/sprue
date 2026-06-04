@@ -6,8 +6,8 @@ import (
 
 	blobcmds "github.com/fil-forge/libforge/commands/blob"
 	ucancmds "github.com/fil-forge/libforge/commands/ucan"
+	"github.com/fil-forge/libforge/identity"
 	"github.com/fil-forge/sprue/internal/testutil"
-	"github.com/fil-forge/sprue/pkg/identity"
 	"github.com/fil-forge/sprue/pkg/service/handlers"
 	"github.com/fil-forge/sprue/pkg/store/agent"
 	agent_store "github.com/fil-forge/sprue/pkg/store/agent/memory"
@@ -47,7 +47,7 @@ func TestUCANConcludeHandler(t *testing.T) {
 		handlerMap := map[ucan.Command]handlers.ConclusionHandlerFunc{}
 
 		handler := handlers.NewUCANConcludeHandler(
-			&identity.Identity{Signer: uploadService}, agentStore, handlerMap, logger,
+			identity.Identity{Issuer: uploadService}, agentStore, handlerMap, logger,
 		)
 
 		_, rcpt := newTaskAndReceipt(t, command.MustParse("/test/thing"))
@@ -63,7 +63,7 @@ func TestUCANConcludeHandler(t *testing.T) {
 		// The receipt is referenced in args but NOT attached to the request
 		// metadata, so the handler can't find it.
 		req := execution.NewRequest(ctx, concludeInv)
-		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
 		err = handler.Handler(req, res)
@@ -78,7 +78,7 @@ func TestUCANConcludeHandler(t *testing.T) {
 		handlerMap := map[ucan.Command]handlers.ConclusionHandlerFunc{}
 
 		handler := handlers.NewUCANConcludeHandler(
-			&identity.Identity{Signer: uploadService}, agentStore, handlerMap, logger,
+			identity.Identity{Issuer: uploadService}, agentStore, handlerMap, logger,
 		)
 
 		// Receipt is supplied but the ran invocation is neither in the request
@@ -94,7 +94,7 @@ func TestUCANConcludeHandler(t *testing.T) {
 		require.NoError(t, err)
 
 		req := execution.NewRequest(ctx, concludeInv, execution.WithReceipts(rcpt))
-		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
 		err = handler.Handler(req, res)
@@ -122,7 +122,7 @@ func TestUCANConcludeHandler(t *testing.T) {
 		}
 
 		handler := handlers.NewUCANConcludeHandler(
-			&identity.Identity{Signer: uploadService}, agentStore, handlerMap, logger,
+			identity.Identity{Issuer: uploadService}, agentStore, handlerMap, logger,
 		)
 
 		taskInv, rcpt := newTaskAndReceipt(t, command.MustParse("/test/thing"))
@@ -144,7 +144,7 @@ func TestUCANConcludeHandler(t *testing.T) {
 		require.NoError(t, err)
 
 		req := execution.NewRequest(ctx, concludeInv, execution.WithReceipts(rcpt))
-		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
 		err = handler.Handler(req, res)
@@ -164,7 +164,7 @@ func TestUCANConcludeHandler(t *testing.T) {
 		handlerMap := map[ucan.Command]handlers.ConclusionHandlerFunc{}
 
 		handler := handlers.NewUCANConcludeHandler(
-			&identity.Identity{Signer: uploadService}, agentStore, handlerMap, logger,
+			identity.Identity{Issuer: uploadService}, agentStore, handlerMap, logger,
 		)
 
 		taskInv, rcpt := newTaskAndReceipt(t, command.MustParse("/test/unhandled"))
@@ -184,7 +184,7 @@ func TestUCANConcludeHandler(t *testing.T) {
 		require.NoError(t, err)
 
 		req := execution.NewRequest(ctx, concludeInv, execution.WithReceipts(rcpt))
-		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
 		err = handler.Handler(req, res)
@@ -206,7 +206,7 @@ func TestUCANConcludeHandler(t *testing.T) {
 		}
 
 		handler := handlers.NewUCANConcludeHandler(
-			&identity.Identity{Signer: uploadService}, agentStore, handlerMap, logger,
+			identity.Identity{Issuer: uploadService}, agentStore, handlerMap, logger,
 		)
 
 		taskInv, rcpt := newTaskAndReceipt(t, command.MustParse("/test/thing"))
@@ -225,7 +225,7 @@ func TestUCANConcludeHandler(t *testing.T) {
 			execution.WithReceipts(rcpt),
 			execution.WithInvocations(taskInv),
 		)
-		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
 		err = handler.Handler(req, res)

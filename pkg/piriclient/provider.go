@@ -15,18 +15,18 @@ type Provider interface {
 
 // PiriProvider is the default Provider that creates HTTP-connected piri clients.
 type PiriProvider struct {
-	signer ucan.Signer
+	issuer ucan.Issuer
 	logger *zap.Logger
 }
 
 var _ Provider = (*PiriProvider)(nil)
 
-func NewProvider(signer ucan.Signer, logger *zap.Logger) *PiriProvider {
-	return &PiriProvider{signer: signer, logger: logger}
+func NewProvider(issuer ucan.Issuer, logger *zap.Logger) *PiriProvider {
+	return &PiriProvider{issuer: issuer, logger: logger}
 }
 
 // Client provides a client configured to communicate with the specified storage
 // node.
 func (p *PiriProvider) Client(id did.DID, endpoint url.URL) (*Client, error) {
-	return New(&endpoint, id, p.signer, p.logger)
+	return New(&endpoint, id, p.issuer, p.logger)
 }

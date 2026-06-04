@@ -17,7 +17,7 @@ import (
 func addProvider(t *testing.T, store *spmemory.Store, weight int, replicationWeight *int) storageprovider.Record {
 	t.Helper()
 	ctx := t.Context()
-	storageProvider := testutil.RandomSigner(t)
+	storageProvider := testutil.RandomIssuer(t)
 	endpoint := testutil.Must(url.Parse("https://piri.example.com"))(t)
 	err := store.Put(ctx, storageProvider.DID(), *endpoint, weight, replicationWeight, container.New())
 	require.NoError(t, err)
@@ -44,7 +44,7 @@ func TestGetProviderInfo(t *testing.T) {
 	t.Run("not found", func(t *testing.T) {
 		store := spmemory.New()
 		svc := routing.NewService(store, logger)
-		unknown := testutil.RandomSigner(t)
+		unknown := testutil.RandomIssuer(t)
 
 		_, err := svc.GetProviderInfo(ctx, unknown.DID())
 		require.ErrorIs(t, err, storageprovider.ErrStorageProviderNotFound)

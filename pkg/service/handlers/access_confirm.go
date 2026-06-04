@@ -6,8 +6,10 @@ import (
 	"github.com/ipfs/go-cid"
 	"go.uber.org/zap"
 
+	"github.com/fil-forge/libforge/attestation"
+	"github.com/fil-forge/libforge/attestation/didmailto"
 	"github.com/fil-forge/libforge/commands/access"
-	"github.com/fil-forge/libforge/didmailto"
+	"github.com/fil-forge/libforge/identity"
 	"github.com/fil-forge/ucantone/binding"
 	"github.com/fil-forge/ucantone/did"
 	"github.com/fil-forge/ucantone/ipld/datamodel"
@@ -17,17 +19,15 @@ import (
 	"github.com/fil-forge/ucantone/ucan/container"
 	"github.com/fil-forge/ucantone/ucan/delegation"
 
-	"github.com/fil-forge/sprue/pkg/attested"
-	"github.com/fil-forge/sprue/pkg/identity"
 	delegation_store "github.com/fil-forge/sprue/pkg/store/delegation"
 )
 
-func NewAccessConfirmHandler(id *identity.Identity, delegationStore delegation_store.Store, logger *zap.Logger) server.Route {
+func NewAccessConfirmHandler(id identity.Identity, delegationStore delegation_store.Store, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", access.Confirm))
 	return access.Confirm.Route(
 		func(req *binding.Request[*access.ConfirmArguments], res *binding.Response[*access.ConfirmOK]) error {
 			args := req.Task().Arguments()
-			if req.Invocation().Subject() != id.Signer.DID() {
+			if req.Invocation().Subject() != id.DID() {
 				log.Warn("not a valid invocation", zap.Stringer("subject", req.Invocation().Subject()))
 				return res.SetFailure(access.ErrInvalidAccessConfirmSubject)
 			}
@@ -38,7 +38,7 @@ func NewAccessConfirmHandler(id *identity.Identity, delegationStore delegation_s
 				return res.SetFailure(access.ErrInvalidAccessConfirmIssuer)
 			}
 
-			attestedAccount := attested.NewSigner(accountDID, id.Signer)
+			account := attestation.Attest(req.Context(), accountDID, id)
 			agent := args.Audience
 
 			cmds := make([]string, 0, len(args.Attenuations))
@@ -48,7 +48,7 @@ func NewAccessConfirmHandler(id *identity.Identity, delegationStore delegation_s
 
 			log := log.With(
 				zap.Stringer("agent", agent),
-				zap.Stringer("account", attestedAccount),
+				zap.Stringer("account", account),
 				zap.Stringer("cause", args.Cause),
 				zap.Strings("commands", cmds),
 			)
@@ -56,7 +56,7 @@ func NewAccessConfirmHandler(id *identity.Identity, delegationStore delegation_s
 
 			// Create session proofs
 			delegations, _, err := createSessionProofs(
-				attestedAccount,
+				account,
 				agent,
 				args.Attenuations,
 				datamodel.Map{
@@ -97,7 +97,7 @@ func NewAccessConfirmHandler(id *identity.Identity, delegationStore delegation_s
 
 // createSessionProofs creates delegations from the account to the agent.
 func createSessionProofs(
-	account ucan.Signer,
+	account ucan.Issuer,
 	agent did.DID,
 	attenuations []access.CapabilityRequest,
 	meta datamodel.Map,
