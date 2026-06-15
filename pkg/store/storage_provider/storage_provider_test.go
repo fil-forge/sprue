@@ -148,6 +148,36 @@ func TestStorageProviderStore(t *testing.T) {
 				require.Equal(t, replWeight2, *rec.ReplicationWeight)
 			})
 
+			t.Run("Put with nil replicationWeight clears a previously-stored value", func(t *testing.T) {
+				provider := testutil.Alice
+				endpoint := randomEndpoint(t)
+				weight := 10
+				replWeight := 5
+
+				require.NoError(t, s.Put(t.Context(), provider.DID(), endpoint, weight, &replWeight, randomProofs(t)))
+
+				rec, err := s.Get(t.Context(), provider.DID())
+				require.NoError(t, err)
+				require.NotNil(t, rec.ReplicationWeight)
+
+				require.NoError(t, s.Put(t.Context(), provider.DID(), endpoint, weight, nil, randomProofs(t)))
+
+				rec, err = s.Get(t.Context(), provider.DID())
+				require.NoError(t, err)
+				require.Nil(t, rec.ReplicationWeight)
+			})
+
+			t.Run("Put accepts a nil replicationWeight on insert", func(t *testing.T) {
+				provider := testutil.Bob
+				endpoint := randomEndpoint(t)
+
+				require.NoError(t, s.Put(t.Context(), provider.DID(), endpoint, 10, nil, randomProofs(t)))
+
+				rec, err := s.Get(t.Context(), provider.DID())
+				require.NoError(t, err)
+				require.Nil(t, rec.ReplicationWeight)
+			})
+
 			t.Run("Get returns ErrStorageProviderNotFound for unknown provider", func(t *testing.T) {
 				provider := testutil.RandomDID(t)
 

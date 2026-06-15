@@ -34,7 +34,7 @@ func NewHTTPPutConcludeHandler(
 	)
 	return ConclusionHandler{
 		Command: httpcmds.Put.Command,
-		Handler: func(ctx context.Context, putInv ucan.Invocation, putRcpt ucan.Receipt, _ ucan.Container) error {
+		Handler: func(ctx context.Context, putInv ucan.Invocation, putRcpt ucan.Receipt) error {
 			log := log.With(zap.Stringer("ran", putRcpt.Ran()))
 			log.Debug("handling conclude")
 

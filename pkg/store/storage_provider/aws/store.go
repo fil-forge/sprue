@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -75,12 +76,16 @@ func (s *Store) Put(ctx context.Context, id did.DID, endpoint url.URL, weight in
 		return fmt.Errorf("encoding proofs: %w", err)
 	}
 	now := time.Now().UTC().Format(timeutil.SimplifiedISO8601)
+	setClauses := []string{
+		"#endpoint = :endpoint",
+		"#weight = :weight",
+		"#proofs = :proofs",
+		"#insertedAt = if_not_exists(#insertedAt, :now)",
+		"#updatedAt = :now",
+	}
 	input := dynamodb.UpdateItemInput{
 		TableName: aws.String(s.tableName),
 		Key:       map[string]types.AttributeValue{"provider": &types.AttributeValueMemberS{Value: id.String()}},
-		UpdateExpression: aws.String(
-			"SET #endpoint = :endpoint, #weight = :weight, #replicationWeight = :replicationWeight, #proofs = :proofs, #insertedAt = if_not_exists(#insertedAt, :now), #updatedAt = :now",
-		),
 		ExpressionAttributeNames: map[string]string{
 			"#endpoint":   "endpoint",
 			"#weight":     "weight",
@@ -95,10 +100,17 @@ func (s *Store) Put(ctx context.Context, id did.DID, endpoint url.URL, weight in
 			":now":      &types.AttributeValueMemberS{Value: now},
 		},
 	}
+	updateExpr := "SET " + strings.Join(setClauses, ", ")
 	if replicationWeight != nil {
 		input.ExpressionAttributeNames["#replicationWeight"] = "replicationWeight"
 		input.ExpressionAttributeValues[":replicationWeight"] = &types.AttributeValueMemberN{Value: strconv.Itoa(*replicationWeight)}
+		updateExpr += ", #replicationWeight = :replicationWeight"
+	} else {
+		// Clear any previously-stored replicationWeight when none is provided.
+		input.ExpressionAttributeNames["#replicationWeight"] = "replicationWeight"
+		updateExpr += " REMOVE #replicationWeight"
 	}
+	input.UpdateExpression = aws.String(updateExpr)
 
 	_, err = s.dynamo.UpdateItem(ctx, &input)
 	if err != nil {
