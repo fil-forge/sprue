@@ -8,6 +8,7 @@ import (
 	"github.com/fil-forge/sprue/pkg/commands/admin/provider"
 	"github.com/fil-forge/sprue/pkg/identity"
 	"github.com/fil-forge/sprue/pkg/service/handlers"
+	storageprovider "github.com/fil-forge/sprue/pkg/store/storage_provider"
 	storage_provider_store "github.com/fil-forge/sprue/pkg/store/storage_provider/memory"
 	"github.com/fil-forge/ucantone/did"
 	"github.com/fil-forge/ucantone/errors/datamodel"
@@ -21,13 +22,26 @@ import (
 	"go.uber.org/zap/zaptest"
 )
 
-// registerProofs returns an encoded UCAN container delegating allocation
-// capabilities to the upload service, as expected by the register handler.
-func registerProofs(t *testing.T, provider did.DID) []byte {
+// requiredProofCommands are the capabilities the register handler expects the
+// provider to delegate to the upload service.
+var requiredProofCommands = []command.Command{
+	command.MustParse("/blob/allocate"),
+	command.MustParse("/blob/accept"),
+	command.MustParse("/blob/replica/allocate"),
+}
+
+// registerProofs returns an encoded UCAN container delegating the required
+// allocation capabilities from the provider to the upload service, as expected
+// by the register handler.
+func registerProofs(t *testing.T, providerSigner ucan.Signer, audience did.DID) []byte {
 	t.Helper()
-	dlg, err := delegation.Delegate(testutil.Alice, testutil.WebService.DID(), provider, command.MustParse("/blob/allocate"))
-	require.NoError(t, err)
-	proofBytes, err := container.Encode(container.Raw, container.New(container.WithDelegations(dlg)))
+	dlgs := make([]ucan.Delegation, 0, len(requiredProofCommands))
+	for _, cmd := range requiredProofCommands {
+		dlg, err := delegation.Delegate(providerSigner, audience, providerSigner.DID(), cmd)
+		require.NoError(t, err)
+		dlgs = append(dlgs, dlg)
+	}
+	proofBytes, err := container.Encode(container.Raw, container.New(container.WithDelegations(dlgs...)))
 	require.NoError(t, err)
 	return proofBytes
 }
@@ -99,7 +113,7 @@ func TestAdminProviderRegisterHandler(t *testing.T) {
 		args := provider.RegisterArguments{
 			Provider: storageProvider.DID(),
 			Endpoint: "https://piri.example.com",
-			Proofs:   registerProofs(t, storageProvider.DID()),
+			Proofs:   registerProofs(t, storageProvider, uploadService.DID()),
 		}
 
 		// First registration by service identity (authorized)
@@ -127,6 +141,45 @@ func TestAdminProviderRegisterHandler(t *testing.T) {
 		require.Equal(t, "ProviderAlreadyRegistered", errModel.Name())
 	})
 
+	t.Run("rejects proofs missing a required delegation", func(t *testing.T) {
+		spStore := storage_provider_store.New()
+
+		handler := handlers.NewAdminProviderRegisterHandler(
+			&identity.Identity{Signer: uploadService}, spStore, logger,
+		)
+
+		storageProvider := testutil.RandomSigner(t)
+
+		// Delegate only /blob/allocate, omitting /blob/accept and
+		// /blob/replica/allocate.
+		dlg, err := delegation.Delegate(storageProvider, uploadService.DID(), storageProvider.DID(), command.MustParse("/blob/allocate"))
+		require.NoError(t, err)
+		proofBytes, err := container.Encode(container.Raw, container.New(container.WithDelegations(dlg)))
+		require.NoError(t, err)
+
+		args := provider.RegisterArguments{
+			Provider: storageProvider.DID(),
+			Endpoint: "https://piri.example.com",
+			Proofs:   proofBytes,
+		}
+
+		req := issueRegisterInvocation(t, uploadService, uploadService.DID(), args)
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
+		require.NoError(t, err)
+
+		err = handler.Handler(req, res)
+		require.NoError(t, err)
+
+		_, err = provider.Register.Unpack(res.Receipt())
+		var errModel datamodel.ErrorModel
+		require.ErrorAs(t, err, &errModel)
+		require.Equal(t, "InvalidProofs", errModel.Name())
+
+		// Provider must not have been stored.
+		_, err = spStore.Get(ctx, storageProvider.DID())
+		require.ErrorIs(t, err, storageprovider.ErrStorageProviderNotFound)
+	})
+
 	t.Run("service identity can register", func(t *testing.T) {
 		spStore := storage_provider_store.New()
 
@@ -139,7 +192,7 @@ func TestAdminProviderRegisterHandler(t *testing.T) {
 		args := provider.RegisterArguments{
 			Provider: storageProvider.DID(),
 			Endpoint: "https://piri.example.com",
-			Proofs:   registerProofs(t, storageProvider.DID()),
+			Proofs:   registerProofs(t, storageProvider, uploadService.DID()),
 		}
 
 		req := issueRegisterInvocation(t, uploadService, uploadService.DID(), args)
