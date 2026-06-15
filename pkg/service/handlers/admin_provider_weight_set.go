@@ -28,7 +28,7 @@ func NewAdminProviderWeightSetHandler(id *identity.Identity, providerStore stora
 			}
 
 			replicationWeight := int(args.ReplicationWeight)
-			err = providerStore.Put(req.Context(), p.Provider, p.Endpoint, int(args.Weight), &replicationWeight)
+			err = providerStore.Put(req.Context(), p.Provider, p.Endpoint, int(args.Weight), &replicationWeight, p.Proofs)
 			if err != nil {
 				if errors.Is(err, storageprovider.ErrStorageProviderNotFound) {
 					log.Warn("Provider not found", zap.Stringer("provider", args.Provider))

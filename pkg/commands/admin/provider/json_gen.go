@@ -393,6 +393,31 @@ func (t *RegisterArguments) MarshalDagJSON(w io.Writer) error {
 		}
 	}
 
+	// t.Proofs ([]uint8) (slice)
+	if len("proofs") > 8192 {
+		return fmt.Errorf("string in field \"proofs\" was too long")
+	}
+	if err := jw.WriteString(string("proofs")); err != nil {
+		return fmt.Errorf("writing string for field \"proofs\": %w", err)
+	}
+	if err := jw.WriteObjectColon(); err != nil {
+		return err
+	}
+	if len(t.Proofs) > 2097152 {
+		return fmt.Errorf("byte array in field t.Proofs was too long")
+	}
+
+	if err := jw.WriteBytes(t.Proofs); err != nil {
+		return fmt.Errorf("writing bytes for field t.Proofs: %w", err)
+	}
+
+	written++
+	if written > 0 {
+		if err := jw.WriteComma(); err != nil {
+			return err
+		}
+	}
+
 	// t.Provider (did.DID) (struct)
 	if len("provider") > 8192 {
 		return fmt.Errorf("string in field \"provider\" was too long")
@@ -457,6 +482,22 @@ func (t *RegisterArguments) UnmarshalDagJSON(r io.Reader) (err error) {
 						return fmt.Errorf("reading string for field t.Endpoint: %w", err)
 					}
 					t.Endpoint = string(sval)
+				}
+
+				// t.Proofs ([]uint8) (slice)
+			case "proofs":
+
+				{
+					bval, err := jr.ReadBytes(2097152)
+					if err != nil {
+						if errors.Is(err, jsg.ErrLimitExceeded) {
+							return fmt.Errorf("reading bytes for field t.Proofs: byte array too large")
+						}
+						return fmt.Errorf("reading bytes for field t.Proofs: %w", err)
+					}
+					if len(bval) > 0 {
+						t.Proofs = []uint8(bval)
+					}
 				}
 
 				// t.Provider (did.DID) (struct)

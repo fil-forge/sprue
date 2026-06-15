@@ -9,6 +9,7 @@ import (
 	"github.com/fil-forge/sprue/pkg/routing"
 	storageprovider "github.com/fil-forge/sprue/pkg/store/storage_provider"
 	spmemory "github.com/fil-forge/sprue/pkg/store/storage_provider/memory"
+	"github.com/fil-forge/ucantone/ucan/container"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 )
@@ -18,7 +19,7 @@ func addProvider(t *testing.T, store *spmemory.Store, weight int, replicationWei
 	ctx := t.Context()
 	storageProvider := testutil.RandomSigner(t)
 	endpoint := testutil.Must(url.Parse("https://piri.example.com"))(t)
-	err := store.Put(ctx, storageProvider.DID(), *endpoint, weight, replicationWeight)
+	err := store.Put(ctx, storageProvider.DID(), *endpoint, weight, replicationWeight, container.New())
 	require.NoError(t, err)
 	rec, err := store.Get(ctx, storageProvider.DID())
 	require.NoError(t, err)

@@ -154,6 +154,16 @@ func newMockPiriServer(
 	return httpSrv
 }
 
+// providerProofs builds the proof container a storage provider grants the
+// upload service at registration: self-issued delegations (subject = provider)
+// authorizing `/blob/allocate` and `/blob/accept`.
+func providerProofs(t *testing.T, storageProvider, uploadService principal.Signer) ucan.Container {
+	t.Helper()
+	allocProof := testutil.Must(blobcmds.Allocate.Delegate(storageProvider, uploadService.DID(), storageProvider.DID()))(t)
+	acceptProof := testutil.Must(blobcmds.Accept.Delegate(storageProvider, uploadService.DID(), storageProvider.DID()))(t)
+	return container.New(container.WithDelegations(allocProof, acceptProof))
+}
+
 func TestBlobAddHandler(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	ctx := t.Context()
@@ -228,7 +238,7 @@ func TestBlobAddHandler(t *testing.T) {
 		// Register a storage provider with weight 0 — it'll be filtered out.
 		storageProvider := testutil.RandomSigner(t)
 		endpoint := testutil.Must(url.Parse("https://piri.example.com"))(t)
-		err := deps.spStore.Put(ctx, storageProvider.DID(), *endpoint, 0, nil)
+		err := deps.spStore.Put(ctx, storageProvider.DID(), *endpoint, 0, nil, container.New())
 		require.NoError(t, err)
 
 		args := blobcmds.AddArguments{
@@ -280,7 +290,10 @@ func TestBlobAddHandler(t *testing.T) {
 		piriSrv := newMockPiriServer(t, storageProvider, uploadService, allocateOK, acceptOK)
 		piriURL := testutil.Must(url.Parse(piriSrv.URL))(t)
 
-		err := deps.spStore.Put(ctx, storageProvider.DID(), *piriURL, 100, nil)
+		// The upload service is authorized to invoke /blob/allocate and /blob/accept
+		// by the proofs the provider granted it at registration, sourced from the
+		// provider record rather than the invocation metadata.
+		err := deps.spStore.Put(ctx, storageProvider.DID(), *piriURL, 100, nil, providerProofs(t, storageProvider, uploadService))
 		require.NoError(t, err)
 
 		args := blobcmds.AddArguments{
@@ -295,15 +308,7 @@ func TestBlobAddHandler(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		addProof := testutil.Must(blobcmds.Add.Delegate(space, testutil.Alice.DID(), space.DID()))(t)
-
-		// Authorize the upload service to invoke /blob/allocate and /blob/accept
-		// on the space. This is the proof chain the upload service forwards to the
-		// storage provider.
-		allocProof := testutil.Must(blobcmds.Allocate.Delegate(space, uploadService.DID(), space.DID()))(t)
-		acceptProof := testutil.Must(blobcmds.Accept.Delegate(space, uploadService.DID(), space.DID()))(t)
-
-		req := execution.NewRequest(ctx, inv, execution.WithDelegations(addProof, allocProof, acceptProof))
+		req := execution.NewRequest(ctx, inv)
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
 		require.NoError(t, err)
 
@@ -336,7 +341,7 @@ func TestBlobAddHandler(t *testing.T) {
 		piriSrv := newMockPiriServer(t, storageProvider, uploadService, allocateOK, acceptOK)
 		piriURL := testutil.Must(url.Parse(piriSrv.URL))(t)
 
-		err := deps.spStore.Put(ctx, storageProvider.DID(), *piriURL, 100, nil)
+		err := deps.spStore.Put(ctx, storageProvider.DID(), *piriURL, 100, nil, providerProofs(t, storageProvider, uploadService))
 		require.NoError(t, err)
 
 		args := blobcmds.AddArguments{
@@ -351,10 +356,7 @@ func TestBlobAddHandler(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		allocProof := testutil.Must(blobcmds.Allocate.Delegate(space, uploadService.DID(), space.DID()))(t)
-		acceptProof := testutil.Must(blobcmds.Accept.Delegate(space, uploadService.DID(), space.DID()))(t)
-
-		req := execution.NewRequest(ctx, inv, execution.WithDelegations(allocProof, acceptProof))
+		req := execution.NewRequest(ctx, inv)
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
 		require.NoError(t, err)
 

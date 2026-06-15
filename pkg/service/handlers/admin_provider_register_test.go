@@ -13,10 +13,24 @@ import (
 	"github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
 	"github.com/fil-forge/ucantone/ucan"
+	"github.com/fil-forge/ucantone/ucan/command"
+	"github.com/fil-forge/ucantone/ucan/container"
+	"github.com/fil-forge/ucantone/ucan/delegation"
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 )
+
+// registerProofs returns an encoded UCAN container delegating allocation
+// capabilities to the upload service, as expected by the register handler.
+func registerProofs(t *testing.T, provider did.DID) []byte {
+	t.Helper()
+	dlg, err := delegation.Delegate(testutil.Alice, testutil.WebService.DID(), provider, command.MustParse("/blob/allocate"))
+	require.NoError(t, err)
+	proofBytes, err := container.Encode(container.Raw, container.New(container.WithDelegations(dlg)))
+	require.NoError(t, err)
+	return proofBytes
+}
 
 // issueRegisterInvocation creates an admin/provider/register invocation request
 func issueRegisterInvocation(
@@ -85,6 +99,7 @@ func TestAdminProviderRegisterHandler(t *testing.T) {
 		args := provider.RegisterArguments{
 			Provider: storageProvider.DID(),
 			Endpoint: "https://piri.example.com",
+			Proofs:   registerProofs(t, storageProvider.DID()),
 		}
 
 		// First registration by service identity (authorized)
@@ -124,6 +139,7 @@ func TestAdminProviderRegisterHandler(t *testing.T) {
 		args := provider.RegisterArguments{
 			Provider: storageProvider.DID(),
 			Endpoint: "https://piri.example.com",
+			Proofs:   registerProofs(t, storageProvider.DID()),
 		}
 
 		req := issueRegisterInvocation(t, uploadService, uploadService.DID(), args)

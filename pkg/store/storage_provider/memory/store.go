@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"fmt"
 	"maps"
 	"net/url"
 	"slices"
@@ -12,6 +13,7 @@ import (
 	"github.com/fil-forge/sprue/pkg/store"
 	storageprovider "github.com/fil-forge/sprue/pkg/store/storage_provider"
 	"github.com/fil-forge/ucantone/did"
+	"github.com/fil-forge/ucantone/ucan"
 )
 
 type Store struct {
@@ -84,13 +86,17 @@ func (s *Store) List(ctx context.Context, options ...storageprovider.ListOption)
 	return store.Page[storageprovider.Record]{Results: records, Cursor: cursor}, nil
 }
 
-func (s *Store) Put(ctx context.Context, id did.DID, endpoint url.URL, weight int, replicationWeight *int) error {
+func (s *Store) Put(ctx context.Context, id did.DID, endpoint url.URL, weight int, replicationWeight *int, proofs ucan.Container) error {
+	if proofs == nil {
+		return fmt.Errorf("missing proofs")
+	}
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	if sp, ok := s.providers[id]; ok {
 		sp.Endpoint = endpoint
 		sp.Weight = weight
 		sp.ReplicationWeight = replicationWeight
+		sp.Proofs = proofs
 		sp.UpdatedAt = time.Now()
 		s.providers[id] = sp
 		return nil
@@ -100,6 +106,7 @@ func (s *Store) Put(ctx context.Context, id did.DID, endpoint url.URL, weight in
 		Endpoint:          endpoint,
 		Weight:            weight,
 		ReplicationWeight: replicationWeight,
+		Proofs:            proofs,
 		InsertedAt:        time.Now(),
 	}
 	return nil

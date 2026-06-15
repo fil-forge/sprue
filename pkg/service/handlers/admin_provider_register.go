@@ -9,6 +9,7 @@ import (
 	"github.com/fil-forge/ucantone/binding"
 	"github.com/fil-forge/ucantone/errors"
 	"github.com/fil-forge/ucantone/server"
+	"github.com/fil-forge/ucantone/ucan/container"
 	"go.uber.org/zap"
 )
 
@@ -33,6 +34,12 @@ func NewAdminProviderRegisterHandler(id *identity.Identity, providerStore storag
 				return res.SetFailure(errors.New("InvalidEndpoint", "parsing endpoint: %s", err.Error()))
 			}
 
+			proofs, err := container.Decode(args.Proofs)
+			if err != nil {
+				log.Warn("Invalid proofs", zap.Error(err))
+				return res.SetFailure(errors.New("InvalidProofs", "decoding proofs: %s", err.Error()))
+			}
+
 			_, err = providerStore.Get(req.Context(), args.Provider)
 			if err != nil {
 				if !errors.Is(err, storageprovider.ErrStorageProviderNotFound) {
@@ -44,7 +51,7 @@ func NewAdminProviderRegisterHandler(id *identity.Identity, providerStore storag
 				return res.SetFailure(errors.New("ProviderAlreadyRegistered", "a provider with this DID is already registered"))
 			}
 
-			err = providerStore.Put(req.Context(), args.Provider, *endpoint, initialWeight, &initialReplicationWeight)
+			err = providerStore.Put(req.Context(), args.Provider, *endpoint, initialWeight, &initialReplicationWeight, proofs)
 			if err != nil {
 				log.Error("Failed to register provider", zap.Error(err))
 				return err

@@ -14,6 +14,7 @@ import (
 	"github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
 	"github.com/fil-forge/ucantone/ucan"
+	"github.com/fil-forge/ucantone/ucan/container"
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
@@ -114,7 +115,7 @@ func TestAdminProviderWeightSetHandler(t *testing.T) {
 
 		// Pre-register the provider with initial weights.
 		initialReplWeight := 0
-		err = spStore.Put(ctx, storageProvider.DID(), *endpoint, 0, &initialReplWeight)
+		err = spStore.Put(ctx, storageProvider.DID(), *endpoint, 0, &initialReplWeight, container.New())
 		require.NoError(t, err)
 
 		args := weight.SetArguments{
