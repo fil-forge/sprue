@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	blobcmds "github.com/fil-forge/libforge/commands/blob"
+	replicacmds "github.com/fil-forge/libforge/commands/blob/replica"
+	pdpcmds "github.com/fil-forge/libforge/commands/pdp"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/commands/admin/provider"
 	"github.com/fil-forge/sprue/pkg/identity"
@@ -24,10 +26,11 @@ import (
 
 // requiredProofCommands are the capabilities the register handler expects the
 // provider to delegate to the upload service.
-var requiredProofCommands = []command.Command{
-	command.MustParse("/blob/allocate"),
-	command.MustParse("/blob/accept"),
-	command.MustParse("/blob/replica/allocate"),
+var requiredProofCommands = []ucan.Command{
+	blobcmds.Allocate.Command,
+	blobcmds.Accept.Command,
+	replicacmds.Allocate.Command,
+	pdpcmds.Info.Command,
 }
 
 // registerProofs returns an encoded UCAN container delegating the required

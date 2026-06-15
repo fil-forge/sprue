@@ -5,6 +5,7 @@ import (
 
 	blobcmds "github.com/fil-forge/libforge/commands/blob"
 	replicacmds "github.com/fil-forge/libforge/commands/blob/replica"
+	pdpcmds "github.com/fil-forge/libforge/commands/pdp"
 	ucanlib "github.com/fil-forge/libforge/ucan"
 	"github.com/fil-forge/sprue/pkg/commands/admin/provider"
 	"github.com/fil-forge/sprue/pkg/identity"
@@ -28,6 +29,7 @@ var requiredProofs = []ucan.Command{
 	blobcmds.Allocate.Command,
 	blobcmds.Accept.Command,
 	replicacmds.Allocate.Command,
+	pdpcmds.Info.Command,
 }
 
 func NewAdminProviderRegisterHandler(id *identity.Identity, providerStore storageprovider.Store, logger *zap.Logger) server.Route {
