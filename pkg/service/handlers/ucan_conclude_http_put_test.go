@@ -89,7 +89,7 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		err = deps.ch.Handler(ctx, putInv, putRcpt, nil)
+		err = deps.ch.Handler(ctx, putInv, putRcpt)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "getting allocation invocation")
 	})
@@ -141,7 +141,7 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		err = deps.ch.Handler(ctx, putInv, putRcpt, nil)
+		err = deps.ch.Handler(ctx, putInv, putRcpt)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "getting storage provider info")
 	})
@@ -218,7 +218,7 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 		// The upload service is authorized to invoke /blob/accept by the proofs
 		// the provider granted it at registration (sourced from the provider
 		// record), so no proof travels in the conclude metadata.
-		err = deps.ch.Handler(ctx, putInv, putRcpt, nil)
+		err = deps.ch.Handler(ctx, putInv, putRcpt)
 		require.NoError(t, err)
 
 		// Blob should now be registered in the space, with cause = blobAddTaskLink.

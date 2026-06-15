@@ -16,7 +16,7 @@ import (
 	"go.uber.org/zap"
 )
 
-type ConclusionHandlerFunc func(context.Context, ucan.Invocation, ucan.Receipt, ucan.Container) error
+type ConclusionHandlerFunc func(context.Context, ucan.Invocation, ucan.Receipt) error
 
 // ConclusionHandler is the definition of a handler for an invocation conclusion
 // - a receiver for a receipt attesting to an invocation result.
@@ -85,7 +85,7 @@ func NewUCANConcludeHandler(id *identity.Identity, agentStore agent.Store, handl
 			log.Debug("found invocation for conclusion")
 
 			if handler, ok := handlers[ranInv.Command()]; ok {
-				err := handler(req.Context(), ranInv, rcpt, req.Metadata())
+				err := handler(req.Context(), ranInv, rcpt)
 				if err != nil {
 					log.Error("failed to conclude invocation", zap.Error(err))
 					return fmt.Errorf("concluding %q: %w", ranInv.Command(), err)
