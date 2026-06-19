@@ -3,7 +3,7 @@ module github.com/fil-forge/sprue
 go 1.25.3
 
 require (
-	github.com/alanshaw/dag-json-gen v0.0.5
+	github.com/alanshaw/dag-json-gen v0.0.6
 	github.com/aws/aws-sdk-go-v2 v1.41.3
 	github.com/aws/aws-sdk-go-v2/config v1.32.11
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.11
@@ -11,7 +11,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.56.1
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.96.4
 	github.com/docker/docker v28.5.2+incompatible
-	github.com/fil-forge/libforge v0.0.0-20260615094549-c97f4def5564
+	github.com/fil-forge/libforge v0.0.0-20260619084920-1753f2265c95
 	github.com/fil-forge/ucantone v0.0.0-20260522152152-eda937bc2684
 	github.com/google/uuid v1.6.0
 	github.com/ipfs/go-cid v0.6.1
@@ -29,7 +29,7 @@ require (
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.42.0
 	github.com/whyrusleeping/cbor-gen v0.3.1
 	go.uber.org/fx v1.24.0
-	go.uber.org/zap v1.27.1
+	go.uber.org/zap v1.28.0
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da
 )
 
@@ -62,7 +62,7 @@ require (
 	github.com/containerd/log v0.1.0 // indirect
 	github.com/containerd/platforms v0.2.1 // indirect
 	github.com/cpuguy83/dockercfg v0.3.2 // indirect
-	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/distribution/reference v0.6.0 // indirect
 	github.com/docker/go-connections v0.6.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
@@ -110,7 +110,7 @@ require (
 	github.com/patrickmn/go-cache v2.1.0+incompatible // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
 	github.com/sagikazarmark/locafero v0.11.0 // indirect
 	github.com/sethvargo/go-retry v0.3.0 // indirect
@@ -141,7 +141,7 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/crypto v0.50.0 // indirect
-	golang.org/x/exp v0.0.0-20260218203240-3dfff04db8fa // indirect
+	golang.org/x/exp v0.0.0-20260312153236-7ab1446f8b90 // indirect
 	golang.org/x/net v0.52.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.43.0 // indirect
