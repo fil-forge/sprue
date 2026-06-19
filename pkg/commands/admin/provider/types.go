@@ -5,6 +5,7 @@ import "github.com/fil-forge/ucantone/did"
 type RegisterArguments struct {
 	Provider did.DID `cborgen:"provider" dagjsongen:"provider"`
 	Endpoint string  `cborgen:"endpoint" dagjsongen:"endpoint"`
+	Proofs   []byte  `cborgen:"proofs" dagjsongen:"proofs"`
 }
 
 type Provider struct {

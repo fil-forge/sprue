@@ -89,7 +89,7 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		err = deps.ch.Handler(ctx, putInv, putRcpt, nil)
+		err = deps.ch.Handler(ctx, putInv, putRcpt)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "getting allocation invocation")
 	})
@@ -106,8 +106,8 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 		// NOT register that provider in the spStore — router lookup fails.
 		allocInv, err := blobcmds.Allocate.Invoke(
 			uploadService,
-			space.DID(),
-			&blobcmds.AllocateArguments{Blob: blob, Cause: testutil.RandomCID(t)},
+			storageProvider.DID(),
+			&blobcmds.AllocateArguments{Space: space.DID(), Blob: blob, Cause: testutil.RandomCID(t)},
 			invocation.WithAudience(storageProvider.DID()),
 		)
 		require.NoError(t, err)
@@ -141,7 +141,7 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		err = deps.ch.Handler(ctx, putInv, putRcpt, nil)
+		err = deps.ch.Handler(ctx, putInv, putRcpt)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "getting storage provider info")
 	})
@@ -168,7 +168,7 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 		piriURL := testutil.Must(url.Parse(piriSrv.URL))(t)
 
 		deps := newHTTPPutDeps(t, piriclient.NewProvider(uploadService, logger), logger)
-		require.NoError(t, deps.spStore.Put(ctx, storageProvider.DID(), *piriURL, 100, nil))
+		require.NoError(t, deps.spStore.Put(ctx, storageProvider.DID(), *piriURL, 100, nil, providerProofs(t, storageProvider, uploadService)))
 
 		// Provision the space so blob_registry.Register succeeds.
 		account := testutil.Must(didmailto.New("alice@example.com"))(t)
@@ -179,8 +179,8 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 		// Prior /blob/allocate invocation in the agent store.
 		allocInv, err := blobcmds.Allocate.Invoke(
 			uploadService,
-			space.DID(),
-			&blobcmds.AllocateArguments{Blob: blob, Cause: blobAddTaskLink},
+			storageProvider.DID(),
+			&blobcmds.AllocateArguments{Space: space.DID(), Blob: blob, Cause: blobAddTaskLink},
 			invocation.WithAudience(storageProvider.DID()),
 		)
 		require.NoError(t, err)
@@ -215,14 +215,10 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		// Authorize the upload service to invoke /blob/accept on the space and
-		// pass the proof through the conclude metadata so the piri client can
-		// forward it to the storage provider.
-		acceptProof, err := blobcmds.Accept.Delegate(space, uploadService.DID(), space.DID())
-		require.NoError(t, err)
-		meta := container.New(container.WithDelegations(acceptProof))
-
-		err = deps.ch.Handler(ctx, putInv, putRcpt, meta)
+		// The upload service is authorized to invoke /blob/accept by the proofs
+		// the provider granted it at registration (sourced from the provider
+		// record), so no proof travels in the conclude metadata.
+		err = deps.ch.Handler(ctx, putInv, putRcpt)
 		require.NoError(t, err)
 
 		// Blob should now be registered in the space, with cause = blobAddTaskLink.

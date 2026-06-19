@@ -12,6 +12,7 @@ import (
 	storageprovider "github.com/fil-forge/sprue/pkg/store/storage_provider"
 	"github.com/fil-forge/ucantone/did"
 	"github.com/fil-forge/ucantone/errors"
+	"github.com/fil-forge/ucantone/ucan"
 	"go.uber.org/zap"
 )
 
@@ -38,6 +39,10 @@ func WithExclusions(providers ...did.DID) SelectOption {
 type StorageProviderInfo struct {
 	ID       did.DID
 	Endpoint url.URL
+	// Proofs are the UCAN delegations the provider granted the upload service at
+	// registration (`/blob/allocate`, `/blob/accept`, `/blob/replica/allocate`),
+	// used to build the proof chain for invocations sent to the provider.
+	Proofs ucan.Container
 }
 
 type Service struct {
@@ -62,6 +67,7 @@ func (s *Service) GetProviderInfo(ctx context.Context, provider did.DID) (Storag
 	return StorageProviderInfo{
 		ID:       rec.Provider,
 		Endpoint: rec.Endpoint,
+		Proofs:   rec.Proofs,
 	}, nil
 }
 
@@ -105,6 +111,7 @@ func (s *Service) SelectStorageProvider(ctx context.Context, blob blob.Blob, opt
 	return StorageProviderInfo{
 		ID:       selected.Provider,
 		Endpoint: selected.Endpoint,
+		Proofs:   selected.Proofs,
 	}, nil
 }
 
@@ -135,6 +142,7 @@ func (s *Service) SelectReplicationProvider(ctx context.Context, primary did.DID
 	return StorageProviderInfo{
 		ID:       selected.Provider,
 		Endpoint: selected.Endpoint,
+		Proofs:   selected.Proofs,
 	}, nil
 }
 

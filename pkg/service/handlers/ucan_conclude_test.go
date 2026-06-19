@@ -113,7 +113,7 @@ func TestUCANConcludeHandler(t *testing.T) {
 			gotRcpt ucan.Receipt
 		)
 		handlerMap := map[ucan.Command]handlers.ConclusionHandlerFunc{
-			command.MustParse("/test/thing"): func(_ context.Context, inv ucan.Invocation, rcpt ucan.Receipt, _ ucan.Container) error {
+			command.MustParse("/test/thing"): func(_ context.Context, inv ucan.Invocation, rcpt ucan.Receipt) error {
 				called = true
 				gotInv = inv
 				gotRcpt = rcpt
@@ -199,7 +199,7 @@ func TestUCANConcludeHandler(t *testing.T) {
 
 		var called bool
 		handlerMap := map[ucan.Command]handlers.ConclusionHandlerFunc{
-			command.MustParse("/test/thing"): func(_ context.Context, _ ucan.Invocation, _ ucan.Receipt, _ ucan.Container) error {
+			command.MustParse("/test/thing"): func(_ context.Context, _ ucan.Invocation, _ ucan.Receipt) error {
 				called = true
 				return nil
 			},

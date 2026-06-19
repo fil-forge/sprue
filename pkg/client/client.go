@@ -12,6 +12,7 @@ import (
 	"github.com/fil-forge/ucantone/client"
 	"github.com/fil-forge/ucantone/did"
 	"github.com/fil-forge/ucantone/ucan"
+	"github.com/fil-forge/ucantone/ucan/container"
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"go.uber.org/zap"
 )
@@ -40,9 +41,18 @@ func NewWithClient(uploadServiceID did.DID, client *client.HTTPClient, signer uc
 	}
 }
 
-func (c *Client) AdminProviderRegister(ctx context.Context, providerID did.DID, endpoint string, options ...invocation.Option) (ucan.Receipt, error) {
+func (c *Client) AdminProviderRegister(ctx context.Context, providerID did.DID, endpoint string, proofs ucan.Container, options ...invocation.Option) (ucan.Receipt, error) {
 	if c.signer.DID() != c.uploadServiceID {
 		return nil, fmt.Errorf("admin operation not permitted: signer DID %s does not match upload service ID %s", c.signer.DID(), c.uploadServiceID)
+	}
+
+	if proofs == nil {
+		return nil, fmt.Errorf("missing proofs")
+	}
+
+	proofBytes, err := container.Encode(container.Raw, proofs)
+	if err != nil {
+		return nil, fmt.Errorf("encoding proofs: %w", err)
 	}
 
 	options = slices.Clone(options)
@@ -57,6 +67,7 @@ func (c *Client) AdminProviderRegister(ctx context.Context, providerID did.DID, 
 		&providercap.RegisterArguments{
 			Provider: providerID,
 			Endpoint: endpoint,
+			Proofs:   proofBytes,
 		},
 		options...,
 	)

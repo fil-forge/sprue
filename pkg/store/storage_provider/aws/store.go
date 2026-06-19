@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -15,6 +16,8 @@ import (
 	"github.com/fil-forge/sprue/pkg/store"
 	storageprovider "github.com/fil-forge/sprue/pkg/store/storage_provider"
 	"github.com/fil-forge/ucantone/did"
+	"github.com/fil-forge/ucantone/ucan"
+	"github.com/fil-forge/ucantone/ucan/container"
 )
 
 var DynamoStorageProviderTableProps = struct {
@@ -64,32 +67,52 @@ func (s *Store) Initialize(ctx context.Context) error {
 	return nil
 }
 
-func (s *Store) Put(ctx context.Context, id did.DID, endpoint url.URL, weight int, replicationWeight *int) error {
+func (s *Store) Put(ctx context.Context, id did.DID, endpoint url.URL, weight int, replicationWeight *int, proofs ucan.Container) error {
+	if proofs == nil {
+		return fmt.Errorf("missing proofs")
+	}
+	proofBytes, err := container.Encode(container.Raw, proofs)
+	if err != nil {
+		return fmt.Errorf("encoding proofs: %w", err)
+	}
 	now := time.Now().UTC().Format(timeutil.SimplifiedISO8601)
+	setClauses := []string{
+		"#endpoint = :endpoint",
+		"#weight = :weight",
+		"#proofs = :proofs",
+		"#insertedAt = if_not_exists(#insertedAt, :now)",
+		"#updatedAt = :now",
+	}
 	input := dynamodb.UpdateItemInput{
 		TableName: aws.String(s.tableName),
 		Key:       map[string]types.AttributeValue{"provider": &types.AttributeValueMemberS{Value: id.String()}},
-		UpdateExpression: aws.String(
-			"SET #endpoint = :endpoint, #weight = :weight, #replicationWeight = :replicationWeight, #insertedAt = if_not_exists(#insertedAt, :now), #updatedAt = :now",
-		),
 		ExpressionAttributeNames: map[string]string{
 			"#endpoint":   "endpoint",
 			"#weight":     "weight",
+			"#proofs":     "proofs",
 			"#insertedAt": "insertedAt",
 			"#updatedAt":  "updatedAt",
 		},
 		ExpressionAttributeValues: map[string]types.AttributeValue{
 			":endpoint": &types.AttributeValueMemberS{Value: endpoint.String()},
 			":weight":   &types.AttributeValueMemberN{Value: strconv.Itoa(weight)},
+			":proofs":   &types.AttributeValueMemberB{Value: proofBytes},
 			":now":      &types.AttributeValueMemberS{Value: now},
 		},
 	}
+	updateExpr := "SET " + strings.Join(setClauses, ", ")
 	if replicationWeight != nil {
 		input.ExpressionAttributeNames["#replicationWeight"] = "replicationWeight"
 		input.ExpressionAttributeValues[":replicationWeight"] = &types.AttributeValueMemberN{Value: strconv.Itoa(*replicationWeight)}
+		updateExpr += ", #replicationWeight = :replicationWeight"
+	} else {
+		// Clear any previously-stored replicationWeight when none is provided.
+		input.ExpressionAttributeNames["#replicationWeight"] = "replicationWeight"
+		updateExpr += " REMOVE #replicationWeight"
 	}
+	input.UpdateExpression = aws.String(updateExpr)
 
-	_, err := s.dynamo.UpdateItem(ctx, &input)
+	_, err = s.dynamo.UpdateItem(ctx, &input)
 	if err != nil {
 		return fmt.Errorf("storing storage provider: %w", err)
 	}
@@ -213,11 +236,20 @@ func itemToRecord(item map[string]types.AttributeValue) (storageprovider.Record,
 		replicationWeight = &weight
 	}
 
+	var proofs ucan.Container
+	if proofsAttr, ok := item["proofs"].(*types.AttributeValueMemberB); ok && len(proofsAttr.Value) > 0 {
+		proofs, err = container.Decode(proofsAttr.Value)
+		if err != nil {
+			return storageprovider.Record{}, fmt.Errorf("decoding proofs: %w", err)
+		}
+	}
+
 	rec := storageprovider.Record{
 		Provider:          providerDID,
 		Endpoint:          *endpointURL,
 		Weight:            weight,
 		ReplicationWeight: replicationWeight,
+		Proofs:            proofs,
 	}
 	if v, ok := item["insertedAt"].(*types.AttributeValueMemberS); ok {
 		rec.InsertedAt, _ = time.Parse(timeutil.SimplifiedISO8601, v.Value)

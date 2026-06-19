@@ -17,6 +17,7 @@ CREATE TABLE storage_provider (
     endpoint           TEXT        NOT NULL,
     weight             INTEGER     NOT NULL,
     replication_weight INTEGER,
+    proofs             BYTEA,
     inserted_at        TIMESTAMPTZ NOT NULL,
     updated_at         TIMESTAMPTZ NOT NULL
 );

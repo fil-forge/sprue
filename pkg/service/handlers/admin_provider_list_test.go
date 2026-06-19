@@ -13,6 +13,7 @@ import (
 	"github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
 	"github.com/fil-forge/ucantone/ucan"
+	"github.com/fil-forge/ucantone/ucan/container"
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
@@ -100,8 +101,8 @@ func TestAdminProviderListHandler(t *testing.T) {
 		require.NoError(t, err)
 
 		repWeight := 50
-		require.NoError(t, spStore.Put(ctx, sp1.DID(), *endpoint1, 100, &repWeight))
-		require.NoError(t, spStore.Put(ctx, sp2.DID(), *endpoint2, 200, nil))
+		require.NoError(t, spStore.Put(ctx, sp1.DID(), *endpoint1, 100, &repWeight, container.New()))
+		require.NoError(t, spStore.Put(ctx, sp2.DID(), *endpoint2, 200, nil, container.New()))
 
 		req := issueListInvocation(t, uploadService, uploadService.DID())
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))

@@ -382,7 +382,31 @@ func (t *RegisterArguments) MarshalCBOR(w io.Writer) error {
 
 	cw := cbg.NewCborWriter(w)
 
-	if _, err := cw.Write([]byte{162}); err != nil {
+	if _, err := cw.Write([]byte{163}); err != nil {
+		return err
+	}
+
+	// t.Proofs ([]uint8) (slice)
+	if len("proofs") > 8192 {
+		return xerrors.Errorf("Value in field \"proofs\" was too long")
+	}
+
+	if err := cw.WriteMajorTypeHeader(cbg.MajTextString, uint64(len("proofs"))); err != nil {
+		return err
+	}
+	if _, err := cw.WriteString(string("proofs")); err != nil {
+		return err
+	}
+
+	if len(t.Proofs) > 2097152 {
+		return xerrors.Errorf("Byte array in field t.Proofs was too long")
+	}
+
+	if err := cw.WriteMajorTypeHeader(cbg.MajByteString, uint64(len(t.Proofs))); err != nil {
+		return err
+	}
+
+	if _, err := cw.Write(t.Proofs); err != nil {
 		return err
 	}
 
@@ -468,7 +492,30 @@ func (t *RegisterArguments) UnmarshalCBOR(r io.Reader) (err error) {
 		}
 
 		switch string(nameBuf[:nameLen]) {
-		// t.Endpoint (string) (string)
+		// t.Proofs ([]uint8) (slice)
+		case "proofs":
+
+			maj, extra, err = cr.ReadHeader()
+			if err != nil {
+				return err
+			}
+
+			if extra > 2097152 {
+				return fmt.Errorf("t.Proofs: byte array too large (%d)", extra)
+			}
+			if maj != cbg.MajByteString {
+				return fmt.Errorf("expected byte array")
+			}
+
+			if extra > 0 {
+				t.Proofs = make([]uint8, extra)
+			}
+
+			if _, err := io.ReadFull(cr, t.Proofs); err != nil {
+				return err
+			}
+
+			// t.Endpoint (string) (string)
 		case "endpoint":
 
 			{

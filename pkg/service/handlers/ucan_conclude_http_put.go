@@ -34,7 +34,7 @@ func NewHTTPPutConcludeHandler(
 	)
 	return ConclusionHandler{
 		Command: httpcmds.Put.Command,
-		Handler: func(ctx context.Context, putInv ucan.Invocation, putRcpt ucan.Receipt, meta ucan.Container) error {
+		Handler: func(ctx context.Context, putInv ucan.Invocation, putRcpt ucan.Receipt) error {
 			log := log.With(zap.Stringer("ran", putRcpt.Ran()))
 			log.Debug("handling conclude")
 
@@ -53,24 +53,23 @@ func NewHTTPPutConcludeHandler(
 				return fmt.Errorf("getting allocation invocation: %w", err)
 			}
 
-			provider := allocInv.Audience()
-			if !provider.Defined() {
-				// shouldn't happen, subject should be the space and audience the node
-				provider = allocInv.Subject()
-			}
-			space := allocInv.Subject()
-
-			log = log.With(
-				zap.Stringer("space", space),
-				zap.Stringer("provider", provider),
-			)
+			// The allocate invocation's subject and audience are both the storage
+			// provider (its proofs are rooted at the provider). The space now
+			// travels in the allocate arguments rather than on the subject.
+			provider := allocInv.Subject()
 
 			var allocArgs blobcmds.AllocateArguments
 			if err := allocArgs.UnmarshalCBOR(bytes.NewReader(allocInv.ArgumentsBytes())); err != nil {
 				log.Error("failed to unmarshal allocate arguments", zap.Error(err))
 				return fmt.Errorf("unmarshaling allocate arguments: %w", err)
 			}
-			log = log.With(zap.String("digest", digestutil.Format(allocArgs.Blob.Digest)))
+			space := allocArgs.Space
+
+			log = log.With(
+				zap.Stringer("space", space),
+				zap.Stringer("provider", provider),
+				zap.String("digest", digestutil.Format(allocArgs.Blob.Digest)),
+			)
 
 			info, err := router.GetProviderInfo(ctx, provider)
 			if err != nil {
@@ -84,7 +83,7 @@ func NewHTTPPutConcludeHandler(
 				return fmt.Errorf("creating client: %w", err)
 			}
 
-			proofStore := ucanlib.NewContainerProofStore(meta)
+			proofStore := ucanlib.NewContainerProofStore(info.Proofs)
 			// Must match the accInv constructed in blob_add.go maybeAccept:
 			// (1) Put = putInv.Task().Link() and
 			// (2) WithNoNonce, so this invocation's CID matches the one whose

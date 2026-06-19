@@ -8,6 +8,7 @@ import (
 	"github.com/fil-forge/sprue/pkg/store"
 	"github.com/fil-forge/ucantone/did"
 	"github.com/fil-forge/ucantone/errors"
+	"github.com/fil-forge/ucantone/ucan"
 )
 
 const (
@@ -48,6 +49,9 @@ type Record struct {
 	// ReplicationWeight determines the chance of selection for replications
 	// relative to other providers. Defaults to weight if not set.
 	ReplicationWeight *int
+	// Proofs are UCAN delegations granting the upload service `/blob/allocate`,
+	// `/blob/accept` and `/blob/replica/allocate`.
+	Proofs ucan.Container
 	// Date and time the record was created (ISO 8601).
 	InsertedAt time.Time
 	// Date and time the record was last updated (ISO 8601).
@@ -55,7 +59,7 @@ type Record struct {
 }
 
 type Store interface {
-	Put(ctx context.Context, providerID did.DID, endpoint url.URL, weight int, replicationWeight *int) error
+	Put(ctx context.Context, providerID did.DID, endpoint url.URL, weight int, replicationWeight *int, proofs ucan.Container) error
 	// Get a storage provider record by provider DID. May return
 	// [ErrStorageProviderNotFound].
 	Get(ctx context.Context, providerID did.DID) (Record, error)

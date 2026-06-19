@@ -94,7 +94,10 @@ func (c *Client) Allocate(ctx context.Context, req *AllocateRequest, proofStore 
 
 // AllocateInvocation returns the invocation for the allocate request (for use in effects).
 func (c *Client) AllocateInvocation(ctx context.Context, req *AllocateRequest, proofStore ucanlib.ProofStore, options ...invocation.Option) (ucan.Invocation, []ucan.Delegation, []ucan.Invocation, error) {
-	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.signer.DID(), blobcmds.Allocate.Command, req.Space)
+	// The proof chain is rooted at the storage provider (the proofs the provider
+	// granted the upload service at registration), so the subject is the provider
+	// DID, not the space. The space rides in the invocation arguments instead.
+	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.signer.DID(), blobcmds.Allocate.Command, c.piriDID)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("building proof chain: %w", err)
 	}
@@ -113,8 +116,9 @@ func (c *Client) AllocateInvocation(ctx context.Context, req *AllocateRequest, p
 
 	inv, err := blobcmds.Allocate.Invoke(
 		c.signer,
-		req.Space,
+		c.piriDID,
 		&blobcmds.AllocateArguments{
+			Space: req.Space,
 			Blob:  blobcmds.Blob{Digest: req.Digest, Size: req.Size},
 			Cause: req.Cause,
 		},
@@ -170,7 +174,9 @@ func (c *Client) Accept(ctx context.Context, req *AcceptRequest, proofStore ucan
 
 // AcceptInvocation returns the invocation for the accept request (for use in effects).
 func (c *Client) AcceptInvocation(ctx context.Context, req *AcceptRequest, proofStore ucanlib.ProofStore, options ...invocation.Option) (ucan.Invocation, []ucan.Delegation, []ucan.Invocation, error) {
-	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.signer.DID(), blobcmds.Accept.Command, req.Space)
+	// As with allocate, the proof chain is rooted at the storage provider, so the
+	// subject is the provider DID and the space travels in the arguments.
+	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.signer.DID(), blobcmds.Accept.Command, c.piriDID)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("building proof chain: %w", err)
 	}
@@ -189,10 +195,11 @@ func (c *Client) AcceptInvocation(ctx context.Context, req *AcceptRequest, proof
 
 	inv, err := blobcmds.Accept.Invoke(
 		c.signer,
-		req.Space,
+		c.piriDID,
 		&blobcmds.AcceptArguments{
-			Blob: blobcmds.Blob{Digest: req.Digest, Size: req.Size},
-			Put:  promise.AwaitOK{Task: req.Put},
+			Space: req.Space,
+			Blob:  blobcmds.Blob{Digest: req.Digest, Size: req.Size},
+			Put:   promise.AwaitOK{Task: req.Put},
 		},
 		options...,
 	)

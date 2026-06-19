@@ -154,8 +154,7 @@ func NewBlobAddHandler(id *identity.Identity, provisioningSvc *provisioning.Serv
 			}
 
 			cause := req.Invocation().Task().Link()
-			proofStore := ucanlib.NewContainerProofStore(req.Metadata())
-			provider, allocInv, allocRcpt, allocOK, err := doAllocate(req.Context(), router, nodeProvider, agentStore, space, blob, cause, proofStore, log)
+			provider, allocInv, allocRcpt, allocOK, err := doAllocate(req.Context(), router, nodeProvider, agentStore, space, blob, cause, log)
 			if err != nil {
 				if errors.Is(err, routing.ErrCandidateUnavailable) {
 					return res.SetFailure(routing.ErrCandidateUnavailable)
@@ -171,7 +170,7 @@ func NewBlobAddHandler(id *identity.Identity, provisioningSvc *provisioning.Serv
 				return fmt.Errorf("generating put invocation: %w", err)
 			}
 
-			accInv, accRcpt, accExtras, err := maybeAccept(req.Context(), agentStore, blobRegistry, nodeProvider, provider, space, blob, cause, putInv, putRcpt, proofStore, log)
+			accInv, accRcpt, accExtras, err := maybeAccept(req.Context(), agentStore, blobRegistry, nodeProvider, provider, space, blob, cause, putInv, putRcpt, log)
 			if err != nil {
 				return err
 			}
@@ -209,7 +208,6 @@ func doAllocate(
 	space did.DID,
 	blob blobcmds.Blob,
 	cause cid.Cid,
-	proofStore ucanlib.ProofStore,
 	logger *zap.Logger,
 ) (routing.StorageProviderInfo, ucan.Invocation, ucan.Receipt, blobcmds.AllocateOK, error) {
 	log := logger.With(zap.Stringer("cause", cause))
@@ -231,6 +229,9 @@ func doAllocate(
 			return routing.StorageProviderInfo{}, nil, nil, blobcmds.AllocateOK{}, err
 		}
 
+		// The proof chain for `/blob/allocate` comes from the proofs the selected
+		// provider granted the upload service at registration.
+		proofStore := ucanlib.NewContainerProofStore(candidate.Proofs)
 		res, inv, rcpt, err := client.Allocate(ctx, &piriclient.AllocateRequest{
 			Space:  space,
 			Digest: blob.Digest,
@@ -357,7 +358,6 @@ func maybeAccept(
 	cause cid.Cid, // original /space/blob/add task
 	putInv ucan.Invocation,
 	putRcpt ucan.Receipt,
-	proofStore ucanlib.ProofStore,
 	logger *zap.Logger,
 ) (ucan.Invocation, ucan.Receipt, acceptExtras, error) {
 	log := logger
@@ -368,6 +368,10 @@ func maybeAccept(
 		log.Error("failed to create piri client for accept", zap.Error(err))
 		return nil, nil, acceptExtras{}, err
 	}
+
+	// The proof chain for `/blob/accept` comes from the proofs the provider
+	// granted the upload service at registration.
+	proofStore := ucanlib.NewContainerProofStore(providerInfo.Proofs)
 
 	accReq := piriclient.AcceptRequest{
 		Space:  space,
