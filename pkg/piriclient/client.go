@@ -100,11 +100,6 @@ func (c *Client) AllocateInvocation(ctx context.Context, req *AllocateRequest, p
 		return nil, nil, fmt.Errorf("building proof chain: %w", err)
 	}
 
-	// attestations, err := proofStore.ProofAttestations(ctx, prfs, c.issuer.DID())
-	// if err != nil {
-	// 	return nil, nil, nil, fmt.Errorf("getting proof attestations: %w", err)
-	// }
-
 	options = slices.Clone(options)
 	options = append(
 		options,
