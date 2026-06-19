@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
+	"github.com/fil-forge/libforge/attestation/didmailto"
 	accesscmds "github.com/fil-forge/libforge/commands/access"
 	blobcmds "github.com/fil-forge/libforge/commands/blob"
 	uploadcmds "github.com/fil-forge/libforge/commands/upload"
-	"github.com/fil-forge/libforge/didmailto"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/provisioning"
 	"github.com/fil-forge/sprue/pkg/service/handlers"
@@ -17,8 +17,8 @@ import (
 	"github.com/fil-forge/ucantone/did"
 	"github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
-	"github.com/fil-forge/ucantone/principal"
 	"github.com/fil-forge/ucantone/server"
+	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/ipfs/go-cid"
 	"github.com/stretchr/testify/require"
@@ -32,7 +32,7 @@ type uploadAddDeps struct {
 	consumerStore *consumer_store.Store
 }
 
-func newUploadAddDeps(t *testing.T, uploadService principal.Signer, logger *zap.Logger) *uploadAddDeps {
+func newUploadAddDeps(t *testing.T, uploadService ucan.Principal, logger *zap.Logger) *uploadAddDeps {
 	t.Helper()
 	consumerStore := consumer_store.New()
 	provisioningSvc := provisioning.NewService(
@@ -50,9 +50,9 @@ func newUploadAddDeps(t *testing.T, uploadService principal.Signer, logger *zap.
 func invokeUploadAdd(
 	t *testing.T,
 	ctx context.Context,
-	agent principal.Signer,
-	uploadService principal.Signer,
-	space principal.Signer,
+	agent ucan.Issuer,
+	uploadService ucan.Issuer,
+	space ucan.Principal,
 	args *uploadcmds.AddArguments,
 ) (execution.Request, *execution.ExecResponse) {
 	t.Helper()
@@ -64,14 +64,14 @@ func invokeUploadAdd(
 	)
 	require.NoError(t, err)
 	req := execution.NewRequest(ctx, inv)
-	res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
+	res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 	require.NoError(t, err)
 	return req, res
 }
 
 // provisionUploadSpace adds a consumer record so the upload service shows up as
 // a provider for the space when the handler calls ListServiceProviders.
-func provisionUploadSpace(t *testing.T, consumerStore *consumer_store.Store, uploadService principal.Signer, space principal.Signer) {
+func provisionUploadSpace(t *testing.T, consumerStore *consumer_store.Store, uploadService ucan.Principal, space ucan.Principal) {
 	t.Helper()
 	account := testutil.Must(didmailto.New("alice@example.com"))(t)
 	require.NoError(t, consumerStore.Add(
@@ -94,7 +94,7 @@ func TestUploadAddHandler(t *testing.T) {
 	t.Run("space not provisioned", func(t *testing.T) {
 		deps := newUploadAddDeps(t, uploadService, logger)
 
-		space := testutil.RandomSigner(t)
+		space := testutil.RandomIssuer(t)
 		root := testutil.RandomCID(t)
 		req, res := invokeUploadAdd(t, ctx, alice, uploadService, space, &uploadcmds.AddArguments{Root: root})
 
@@ -115,7 +115,7 @@ func TestUploadAddHandler(t *testing.T) {
 	t.Run("success with no shards", func(t *testing.T) {
 		deps := newUploadAddDeps(t, uploadService, logger)
 
-		space := testutil.RandomSigner(t)
+		space := testutil.RandomIssuer(t)
 		provisionUploadSpace(t, deps.consumerStore, uploadService, space)
 
 		root := testutil.RandomCID(t)
@@ -141,7 +141,7 @@ func TestUploadAddHandler(t *testing.T) {
 	t.Run("success with shards", func(t *testing.T) {
 		deps := newUploadAddDeps(t, uploadService, logger)
 
-		space := testutil.RandomSigner(t)
+		space := testutil.RandomIssuer(t)
 		provisionUploadSpace(t, deps.consumerStore, uploadService, space)
 
 		root := testutil.RandomCID(t)
@@ -167,7 +167,7 @@ func TestUploadAddHandler(t *testing.T) {
 	t.Run("success with index", func(t *testing.T) {
 		deps := newUploadAddDeps(t, uploadService, logger)
 
-		space := testutil.RandomSigner(t)
+		space := testutil.RandomIssuer(t)
 		provisionUploadSpace(t, deps.consumerStore, uploadService, space)
 
 		root := testutil.RandomCID(t)
@@ -192,7 +192,7 @@ func TestUploadAddHandler(t *testing.T) {
 	t.Run("upsert updates existing upload", func(t *testing.T) {
 		deps := newUploadAddDeps(t, uploadService, logger)
 
-		space := testutil.RandomSigner(t)
+		space := testutil.RandomIssuer(t)
 		provisionUploadSpace(t, deps.consumerStore, uploadService, space)
 
 		root := testutil.RandomCID(t)

@@ -7,8 +7,8 @@ import (
 
 	accesscmds "github.com/fil-forge/libforge/commands/access"
 	indexcmds "github.com/fil-forge/libforge/commands/index"
+	"github.com/fil-forge/libforge/identity"
 	ucanlib "github.com/fil-forge/libforge/ucan"
-	"github.com/fil-forge/sprue/pkg/identity"
 	"github.com/fil-forge/sprue/pkg/indexerclient"
 	"github.com/fil-forge/sprue/pkg/provisioning"
 	blobregistry "github.com/fil-forge/sprue/pkg/store/blob_registry"
@@ -17,7 +17,7 @@ import (
 	"github.com/fil-forge/ucantone/server"
 )
 
-func NewIndexAddHandler(id *identity.Identity, provisioningSvc *provisioning.Service, blobRegistry blobregistry.Store, indexerClient *indexerclient.Client, logger *zap.Logger) server.Route {
+func NewIndexAddHandler(id identity.Identity, provisioningSvc *provisioning.Service, blobRegistry blobregistry.Store, indexerClient *indexerclient.Client, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", indexcmds.Add))
 	return indexcmds.Add.Route(
 		func(req *binding.Request[*indexcmds.AddArguments], res *binding.Response[*indexcmds.AddOK]) error {

@@ -29,7 +29,7 @@ package handlers
 // 	"github.com/storacha/go-ucanto/ucan"
 // 	"github.com/storacha/go-ucanto/validator"
 // 	"github.com/fil-forge/sprue/internal/config"
-// 	"github.com/fil-forge/sprue/pkg/identity"
+//
 // 	"github.com/fil-forge/sprue/pkg/internal/ipldutil"
 // 	"github.com/fil-forge/sprue/pkg/piriclient"
 // 	"github.com/fil-forge/sprue/pkg/routing"
@@ -59,7 +59,7 @@ package handlers
 // // WithSpaceBlobReplicateMethod registers the space/blob/replicate handler.
 // func WithSpaceBlobReplicateMethod(
 // 	cfg config.DeploymentConfig,
-// 	id *identity.Identity,
+// 	id identity.Identity,
 // 	router *routing.Service,
 // 	blobRegistry blobregistry.Store,
 // 	replicaStore replica.Store,
@@ -78,7 +78,7 @@ package handlers
 
 // func BlobReplicateHandler(
 // 	cfg config.DeploymentConfig,
-// 	id *identity.Identity,
+// 	id identity.Identity,
 // 	router *routing.Service,
 // 	blobRegistry blobregistry.Store,
 // 	replicaStore replica.Store,

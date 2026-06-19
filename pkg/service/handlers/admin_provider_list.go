@@ -5,8 +5,8 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/fil-forge/libforge/identity"
 	"github.com/fil-forge/sprue/pkg/commands/admin/provider"
-	"github.com/fil-forge/sprue/pkg/identity"
 	"github.com/fil-forge/sprue/pkg/store"
 	storageprovider "github.com/fil-forge/sprue/pkg/store/storage_provider"
 	"github.com/fil-forge/ucantone/binding"
@@ -14,11 +14,11 @@ import (
 	"github.com/fil-forge/ucantone/server"
 )
 
-func NewAdminProviderListHandler(id *identity.Identity, providerStore storageprovider.Store, logger *zap.Logger) server.Route {
+func NewAdminProviderListHandler(id identity.Identity, providerStore storageprovider.Store, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", provider.List))
 	return provider.List.Route(
 		func(req *binding.Request[*provider.ListArguments], res *binding.Response[*provider.ListOK]) error {
-			if req.Invocation().Issuer() != id.Signer.DID() {
+			if req.Invocation().Issuer() != id.Issuer.DID() {
 				log.Warn("Unauthorized access attempt", zap.Stringer("issuer", req.Invocation().Issuer()))
 				return res.SetFailure(errors.New("Unauthorized", "only the service identity can list providers"))
 			}

@@ -9,7 +9,7 @@ import (
 	"github.com/fil-forge/sprue/pkg/service/handlers"
 	upload_store "github.com/fil-forge/sprue/pkg/store/upload/memory"
 	"github.com/fil-forge/ucantone/execution"
-	"github.com/fil-forge/ucantone/principal"
+	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/ipfs/go-cid"
 	"github.com/stretchr/testify/require"
@@ -21,9 +21,9 @@ import (
 func invokeUploadShardList(
 	t *testing.T,
 	ctx context.Context,
-	agent principal.Signer,
-	uploadService principal.Signer,
-	space principal.Signer,
+	agent ucan.Issuer,
+	uploadService ucan.Issuer,
+	space ucan.Principal,
 	args *shardcmds.ListArguments,
 ) (execution.Request, *execution.ExecResponse) {
 	t.Helper()
@@ -35,7 +35,7 @@ func invokeUploadShardList(
 	)
 	require.NoError(t, err)
 	req := execution.NewRequest(ctx, inv)
-	res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
+	res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 	require.NoError(t, err)
 	return req, res
 }
@@ -51,7 +51,7 @@ func TestUploadShardListHandler(t *testing.T) {
 		store := upload_store.New()
 		handler := handlers.NewUploadShardListHandler(store, logger)
 
-		space := testutil.RandomSigner(t)
+		space := testutil.RandomIssuer(t)
 		root := testutil.RandomCID(t)
 
 		// Upload exists with no shards.
@@ -71,7 +71,7 @@ func TestUploadShardListHandler(t *testing.T) {
 		store := upload_store.New()
 		handler := handlers.NewUploadShardListHandler(store, logger)
 
-		space := testutil.RandomSigner(t)
+		space := testutil.RandomIssuer(t)
 		root := testutil.RandomCID(t)
 		shard1 := testutil.RandomCID(t)
 		shard2 := testutil.RandomCID(t)
@@ -99,7 +99,7 @@ func TestUploadShardListHandler(t *testing.T) {
 		store := upload_store.New()
 		handler := handlers.NewUploadShardListHandler(store, logger)
 
-		space := testutil.RandomSigner(t)
+		space := testutil.RandomIssuer(t)
 		root := testutil.RandomCID(t)
 		shard1 := testutil.RandomCID(t)
 		shard2 := testutil.RandomCID(t)
@@ -122,7 +122,7 @@ func TestUploadShardListHandler(t *testing.T) {
 		store := upload_store.New()
 		handler := handlers.NewUploadShardListHandler(store, logger)
 
-		space := testutil.RandomSigner(t)
+		space := testutil.RandomIssuer(t)
 		root := testutil.RandomCID(t)
 		shard1 := testutil.RandomCID(t)
 		shard2 := testutil.RandomCID(t)

@@ -6,9 +6,9 @@ import (
 	blobcmds "github.com/fil-forge/libforge/commands/blob"
 	replicacmds "github.com/fil-forge/libforge/commands/blob/replica"
 	pdpcmds "github.com/fil-forge/libforge/commands/pdp"
+	"github.com/fil-forge/libforge/identity"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/commands/admin/provider"
-	"github.com/fil-forge/sprue/pkg/identity"
 	"github.com/fil-forge/sprue/pkg/service/handlers"
 	storageprovider "github.com/fil-forge/sprue/pkg/store/storage_provider"
 	storage_provider_store "github.com/fil-forge/sprue/pkg/store/storage_provider/memory"
@@ -36,11 +36,11 @@ var requiredProofCommands = []ucan.Command{
 // registerProofs returns an encoded UCAN container delegating the required
 // allocation capabilities from the provider to the upload service, as expected
 // by the register handler.
-func registerProofs(t *testing.T, providerSigner ucan.Signer, audience did.DID) []byte {
+func registerProofs(t *testing.T, providerIssuer ucan.Issuer, audience did.DID) []byte {
 	t.Helper()
 	dlgs := make([]ucan.Delegation, 0, len(requiredProofCommands))
 	for _, cmd := range requiredProofCommands {
-		dlg, err := delegation.Delegate(providerSigner, audience, providerSigner.DID(), cmd)
+		dlg, err := delegation.Delegate(providerIssuer, audience, providerIssuer.DID(), cmd)
 		require.NoError(t, err)
 		dlgs = append(dlgs, dlg)
 	}
@@ -52,7 +52,7 @@ func registerProofs(t *testing.T, providerSigner ucan.Signer, audience did.DID) 
 // issueRegisterInvocation creates an admin/provider/register invocation request
 func issueRegisterInvocation(
 	t *testing.T,
-	issuer ucan.Signer,
+	issuer ucan.Issuer,
 	audience did.DID,
 	args provider.RegisterArguments,
 ) execution.Request {
@@ -79,11 +79,11 @@ func TestAdminProviderRegisterHandler(t *testing.T) {
 		spStore := storage_provider_store.New()
 
 		handler := handlers.NewAdminProviderRegisterHandler(
-			&identity.Identity{Signer: uploadService}, spStore, logger,
+			identity.Identity{Issuer: uploadService}, spStore, logger,
 		)
 
-		storageProvider := testutil.RandomSigner(t)
-		unauthorizedIssuer := testutil.RandomSigner(t)
+		storageProvider := testutil.RandomIssuer(t)
+		unauthorizedIssuer := testutil.RandomIssuer(t)
 
 		args := provider.RegisterArguments{
 			Provider: storageProvider.DID(),
@@ -92,7 +92,7 @@ func TestAdminProviderRegisterHandler(t *testing.T) {
 
 		// Issuer is neither the service nor the provider
 		req := issueRegisterInvocation(t, unauthorizedIssuer, uploadService.DID(), args)
-		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
 		err = handler.Handler(req, res)
@@ -108,10 +108,10 @@ func TestAdminProviderRegisterHandler(t *testing.T) {
 		spStore := storage_provider_store.New()
 
 		handler := handlers.NewAdminProviderRegisterHandler(
-			&identity.Identity{Signer: uploadService}, spStore, logger,
+			identity.Identity{Issuer: uploadService}, spStore, logger,
 		)
 
-		storageProvider := testutil.RandomSigner(t)
+		storageProvider := testutil.RandomIssuer(t)
 
 		args := provider.RegisterArguments{
 			Provider: storageProvider.DID(),
@@ -121,7 +121,7 @@ func TestAdminProviderRegisterHandler(t *testing.T) {
 
 		// First registration by service identity (authorized)
 		req := issueRegisterInvocation(t, uploadService, uploadService.DID(), args)
-		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
 		err = handler.Handler(req, res)
@@ -131,7 +131,7 @@ func TestAdminProviderRegisterHandler(t *testing.T) {
 
 		// Second registration should fail
 		req2 := issueRegisterInvocation(t, uploadService, uploadService.DID(), args)
-		res2, err := execution.NewResponse(req2.Invocation().Task().Link(), execution.WithSigner(uploadService))
+		res2, err := execution.NewResponse(req2.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
 		err = handler.Handler(req2, res2)
@@ -148,10 +148,10 @@ func TestAdminProviderRegisterHandler(t *testing.T) {
 		spStore := storage_provider_store.New()
 
 		handler := handlers.NewAdminProviderRegisterHandler(
-			&identity.Identity{Signer: uploadService}, spStore, logger,
+			identity.Identity{Issuer: uploadService}, spStore, logger,
 		)
 
-		storageProvider := testutil.RandomSigner(t)
+		storageProvider := testutil.RandomIssuer(t)
 
 		// Delegate only /blob/allocate, omitting /blob/accept and
 		// /blob/replica/allocate.
@@ -167,7 +167,7 @@ func TestAdminProviderRegisterHandler(t *testing.T) {
 		}
 
 		req := issueRegisterInvocation(t, uploadService, uploadService.DID(), args)
-		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
 		err = handler.Handler(req, res)
@@ -187,10 +187,10 @@ func TestAdminProviderRegisterHandler(t *testing.T) {
 		spStore := storage_provider_store.New()
 
 		handler := handlers.NewAdminProviderRegisterHandler(
-			&identity.Identity{Signer: uploadService}, spStore, logger,
+			identity.Identity{Issuer: uploadService}, spStore, logger,
 		)
 
-		storageProvider := testutil.RandomSigner(t)
+		storageProvider := testutil.RandomIssuer(t)
 
 		args := provider.RegisterArguments{
 			Provider: storageProvider.DID(),
@@ -199,7 +199,7 @@ func TestAdminProviderRegisterHandler(t *testing.T) {
 		}
 
 		req := issueRegisterInvocation(t, uploadService, uploadService.DID(), args)
-		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
 		err = handler.Handler(req, res)

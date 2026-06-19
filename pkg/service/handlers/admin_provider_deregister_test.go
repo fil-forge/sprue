@@ -5,9 +5,9 @@ import (
 	"testing"
 
 	blobcmds "github.com/fil-forge/libforge/commands/blob"
+	"github.com/fil-forge/libforge/identity"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/commands/admin/provider"
-	"github.com/fil-forge/sprue/pkg/identity"
 	"github.com/fil-forge/sprue/pkg/service/handlers"
 	storageprovider "github.com/fil-forge/sprue/pkg/store/storage_provider"
 	storage_provider_store "github.com/fil-forge/sprue/pkg/store/storage_provider/memory"
@@ -23,7 +23,7 @@ import (
 
 func issueDeregisterInvocation(
 	t *testing.T,
-	issuer ucan.Signer,
+	issuer ucan.Issuer,
 	audience did.DID,
 	args provider.DeregisterArguments,
 ) execution.Request {
@@ -50,11 +50,11 @@ func TestAdminProviderDeregisterHandler(t *testing.T) {
 		spStore := storage_provider_store.New()
 
 		handler := handlers.NewAdminProviderDeregisterHandler(
-			&identity.Identity{Signer: uploadService}, spStore, logger,
+			identity.Identity{Issuer: uploadService}, spStore, logger,
 		)
 
-		storageProvider := testutil.RandomSigner(t)
-		unauthorizedIssuer := testutil.RandomSigner(t)
+		storageProvider := testutil.RandomIssuer(t)
+		unauthorizedIssuer := testutil.RandomIssuer(t)
 
 		// Pre-populate the store so we can verify the record is NOT removed.
 		endpoint, err := url.Parse("https://piri.example.com")
@@ -67,7 +67,7 @@ func TestAdminProviderDeregisterHandler(t *testing.T) {
 		}
 
 		req := issueDeregisterInvocation(t, unauthorizedIssuer, uploadService.DID(), args)
-		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
 		err = handler.Handler(req, res)
@@ -87,10 +87,10 @@ func TestAdminProviderDeregisterHandler(t *testing.T) {
 		spStore := storage_provider_store.New()
 
 		handler := handlers.NewAdminProviderDeregisterHandler(
-			&identity.Identity{Signer: uploadService}, spStore, logger,
+			identity.Identity{Issuer: uploadService}, spStore, logger,
 		)
 
-		storageProvider := testutil.RandomSigner(t)
+		storageProvider := testutil.RandomIssuer(t)
 
 		endpoint, err := url.Parse("https://piri.example.com")
 		require.NoError(t, err)
@@ -102,7 +102,7 @@ func TestAdminProviderDeregisterHandler(t *testing.T) {
 		}
 
 		req := issueDeregisterInvocation(t, uploadService, uploadService.DID(), args)
-		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
 		err = handler.Handler(req, res)
@@ -118,17 +118,17 @@ func TestAdminProviderDeregisterHandler(t *testing.T) {
 		spStore := storage_provider_store.New()
 
 		handler := handlers.NewAdminProviderDeregisterHandler(
-			&identity.Identity{Signer: uploadService}, spStore, logger,
+			identity.Identity{Issuer: uploadService}, spStore, logger,
 		)
 
-		storageProvider := testutil.RandomSigner(t)
+		storageProvider := testutil.RandomIssuer(t)
 
 		args := provider.DeregisterArguments{
 			Provider: storageProvider.DID(),
 		}
 
 		req := issueDeregisterInvocation(t, uploadService, uploadService.DID(), args)
-		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
 		err = handler.Handler(req, res)

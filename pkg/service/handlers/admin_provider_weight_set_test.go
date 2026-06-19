@@ -5,9 +5,9 @@ import (
 	"testing"
 
 	blobcmds "github.com/fil-forge/libforge/commands/blob"
+	"github.com/fil-forge/libforge/identity"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/commands/admin/provider/weight"
-	"github.com/fil-forge/sprue/pkg/identity"
 	"github.com/fil-forge/sprue/pkg/service/handlers"
 	storage_provider_store "github.com/fil-forge/sprue/pkg/store/storage_provider/memory"
 	"github.com/fil-forge/ucantone/did"
@@ -22,7 +22,7 @@ import (
 
 func issueWeightSetInvocation(
 	t *testing.T,
-	issuer ucan.Signer,
+	issuer ucan.Issuer,
 	audience did.DID,
 	args weight.SetArguments,
 ) execution.Request {
@@ -49,11 +49,11 @@ func TestAdminProviderWeightSetHandler(t *testing.T) {
 		spStore := storage_provider_store.New()
 
 		handler := handlers.NewAdminProviderWeightSetHandler(
-			&identity.Identity{Signer: uploadService}, spStore, logger,
+			identity.Identity{Issuer: uploadService}, spStore, logger,
 		)
 
-		storageProvider := testutil.RandomSigner(t)
-		unauthorizedIssuer := testutil.RandomSigner(t)
+		storageProvider := testutil.RandomIssuer(t)
+		unauthorizedIssuer := testutil.RandomIssuer(t)
 
 		args := weight.SetArguments{
 			Provider:          storageProvider.DID(),
@@ -62,7 +62,7 @@ func TestAdminProviderWeightSetHandler(t *testing.T) {
 		}
 
 		req := issueWeightSetInvocation(t, unauthorizedIssuer, uploadService.DID(), args)
-		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
 		err = handler.Handler(req, res)
@@ -78,10 +78,10 @@ func TestAdminProviderWeightSetHandler(t *testing.T) {
 		spStore := storage_provider_store.New()
 
 		handler := handlers.NewAdminProviderWeightSetHandler(
-			&identity.Identity{Signer: uploadService}, spStore, logger,
+			identity.Identity{Issuer: uploadService}, spStore, logger,
 		)
 
-		storageProvider := testutil.RandomSigner(t)
+		storageProvider := testutil.RandomIssuer(t)
 
 		args := weight.SetArguments{
 			Provider:          storageProvider.DID(),
@@ -90,7 +90,7 @@ func TestAdminProviderWeightSetHandler(t *testing.T) {
 		}
 
 		req := issueWeightSetInvocation(t, uploadService, uploadService.DID(), args)
-		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
 		err = handler.Handler(req, res)
@@ -106,10 +106,10 @@ func TestAdminProviderWeightSetHandler(t *testing.T) {
 		spStore := storage_provider_store.New()
 
 		handler := handlers.NewAdminProviderWeightSetHandler(
-			&identity.Identity{Signer: uploadService}, spStore, logger,
+			identity.Identity{Issuer: uploadService}, spStore, logger,
 		)
 
-		storageProvider := testutil.RandomSigner(t)
+		storageProvider := testutil.RandomIssuer(t)
 		endpoint, err := url.Parse("https://piri.example.com")
 		require.NoError(t, err)
 
@@ -125,7 +125,7 @@ func TestAdminProviderWeightSetHandler(t *testing.T) {
 		}
 
 		req := issueWeightSetInvocation(t, uploadService, uploadService.DID(), args)
-		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
 		err = handler.Handler(req, res)

@@ -8,10 +8,11 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/fil-forge/libforge/attestation/didmailto"
 	"github.com/fil-forge/libforge/commands/access"
-	"github.com/fil-forge/libforge/didmailto"
+	"github.com/fil-forge/libforge/identity"
 	"github.com/fil-forge/sprue/internal/config"
-	"github.com/fil-forge/sprue/pkg/identity"
+
 	"github.com/fil-forge/sprue/pkg/mailer"
 	"github.com/fil-forge/ucantone/binding"
 	"github.com/fil-forge/ucantone/errors"
@@ -33,7 +34,7 @@ var (
 	ErrInvalidAuthorizationAudience = errors.New(access.InvalidAuthorizationAudienceErrorName, "invalid authorization audience DID")
 )
 
-func NewAccessRequestHandler(serverCfg config.ServerConfig, id *identity.Identity, mailer mailer.Mailer, logger *zap.Logger) server.Route {
+func NewAccessRequestHandler(serverCfg config.ServerConfig, id identity.Identity, mailer mailer.Mailer, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", access.Request))
 	return access.Request.Route(
 		func(req *binding.Request[*access.RequestArguments], res *binding.Response[*access.RequestOK]) error {
@@ -82,8 +83,8 @@ func NewAccessRequestHandler(serverCfg config.ServerConfig, id *identity.Identit
 			// surface where an attacker could attempt concurrent authorization
 			// requests in an attempt to confuse a user into clicking the wrong link.
 			confirmation, err := access.Confirm.Invoke(
-				id.Signer,
-				id.Signer.DID(),
+				id.Issuer,
+				id.Issuer.DID(),
 				// We link to the authorization request so that this invocation can
 				// not be used to authorize a different request.
 				&access.ConfirmArguments{
@@ -98,7 +99,7 @@ func NewAccessRequestHandler(serverCfg config.ServerConfig, id *identity.Identit
 				// audience same as issuer because this is a service invocation
 				// that will get handled by /access/confirm handler
 				// but only if the receiver of this email wants it to be
-				invocation.WithAudience(id.Signer.DID()),
+				invocation.WithAudience(id.Issuer.DID()),
 				invocation.WithExpiration(ucan.UnixTimestamp(exp)),
 				// we copy the facts in so that information can be passed
 				// from the invoker of this capability to the invoker of the confirm

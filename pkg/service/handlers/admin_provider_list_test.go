@@ -4,9 +4,9 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/fil-forge/libforge/identity"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/commands/admin/provider"
-	"github.com/fil-forge/sprue/pkg/identity"
 	"github.com/fil-forge/sprue/pkg/service/handlers"
 	storage_provider_store "github.com/fil-forge/sprue/pkg/store/storage_provider/memory"
 	"github.com/fil-forge/ucantone/did"
@@ -21,7 +21,7 @@ import (
 
 func issueListInvocation(
 	t *testing.T,
-	issuer ucan.Signer,
+	issuer ucan.Issuer,
 	audience did.DID,
 ) execution.Request {
 	t.Helper()
@@ -48,13 +48,13 @@ func TestAdminProviderListHandler(t *testing.T) {
 		spStore := storage_provider_store.New()
 
 		handler := handlers.NewAdminProviderListHandler(
-			&identity.Identity{Signer: uploadService}, spStore, logger,
+			identity.Identity{Issuer: uploadService}, spStore, logger,
 		)
 
-		unauthorizedIssuer := testutil.RandomSigner(t)
+		unauthorizedIssuer := testutil.RandomIssuer(t)
 
 		req := issueListInvocation(t, unauthorizedIssuer, uploadService.DID())
-		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
 		err = handler.Handler(req, res)
@@ -70,11 +70,11 @@ func TestAdminProviderListHandler(t *testing.T) {
 		spStore := storage_provider_store.New()
 
 		handler := handlers.NewAdminProviderListHandler(
-			&identity.Identity{Signer: uploadService}, spStore, logger,
+			identity.Identity{Issuer: uploadService}, spStore, logger,
 		)
 
 		req := issueListInvocation(t, uploadService, uploadService.DID())
-		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
 		err = handler.Handler(req, res)
@@ -89,11 +89,11 @@ func TestAdminProviderListHandler(t *testing.T) {
 		spStore := storage_provider_store.New()
 
 		handler := handlers.NewAdminProviderListHandler(
-			&identity.Identity{Signer: uploadService}, spStore, logger,
+			identity.Identity{Issuer: uploadService}, spStore, logger,
 		)
 
-		sp1 := testutil.RandomSigner(t)
-		sp2 := testutil.RandomSigner(t)
+		sp1 := testutil.RandomIssuer(t)
+		sp2 := testutil.RandomIssuer(t)
 
 		endpoint1, err := url.Parse("https://piri-1.example.com")
 		require.NoError(t, err)
@@ -105,7 +105,7 @@ func TestAdminProviderListHandler(t *testing.T) {
 		require.NoError(t, spStore.Put(ctx, sp2.DID(), *endpoint2, 200, nil, container.New()))
 
 		req := issueListInvocation(t, uploadService, uploadService.DID())
-		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
 		err = handler.Handler(req, res)

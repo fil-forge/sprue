@@ -1,21 +1,19 @@
 package handlers_test
 
 import (
-	"context"
 	"crypto/ed25519"
-	"fmt"
 	"net/http/httptest"
 	"net/url"
 	"testing"
 	"time"
 
+	"github.com/fil-forge/libforge/attestation/didmailto"
 	"github.com/fil-forge/libforge/commands"
 	accesscmds "github.com/fil-forge/libforge/commands/access"
 	blobcmds "github.com/fil-forge/libforge/commands/blob"
 	httpcmds "github.com/fil-forge/libforge/commands/http"
-	"github.com/fil-forge/libforge/didmailto"
+	"github.com/fil-forge/libforge/identity"
 	"github.com/fil-forge/sprue/internal/testutil"
-	"github.com/fil-forge/sprue/pkg/identity"
 	"github.com/fil-forge/sprue/pkg/piriclient"
 	"github.com/fil-forge/sprue/pkg/provisioning"
 	"github.com/fil-forge/sprue/pkg/routing"
@@ -30,11 +28,12 @@ import (
 	subscription_store "github.com/fil-forge/sprue/pkg/store/subscription/memory"
 	"github.com/fil-forge/ucantone/binding"
 	"github.com/fil-forge/ucantone/did"
+	"github.com/fil-forge/ucantone/did/key"
+	"github.com/fil-forge/ucantone/did/resolver"
 	"github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
-	"github.com/fil-forge/ucantone/principal"
-	ed25519signer "github.com/fil-forge/ucantone/principal/ed25519"
-	"github.com/fil-forge/ucantone/principal/verifier"
+	"github.com/fil-forge/ucantone/multikey"
+	ed25519signer "github.com/fil-forge/ucantone/multikey/ed25519"
 	"github.com/fil-forge/ucantone/server"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/container"
@@ -42,7 +41,6 @@ import (
 	"github.com/fil-forge/ucantone/ucan/promise"
 	"github.com/fil-forge/ucantone/ucan/receipt"
 	"github.com/fil-forge/ucantone/validator"
-	"github.com/fil-forge/ucantone/validator/errors"
 	"github.com/multiformats/go-multihash"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -58,7 +56,7 @@ type blobAddTestDeps struct {
 	blobReg           *blob_registry.Store
 }
 
-func newBlobAddTestDeps(t *testing.T, uploadService principal.Signer, logger *zap.Logger) *blobAddTestDeps {
+func newBlobAddTestDeps(t *testing.T, uploadService multikey.Issuer, logger *zap.Logger) *blobAddTestDeps {
 	t.Helper()
 	consumerStore := consumer_store.New()
 	subscriptionStore := subscription_store.New()
@@ -74,7 +72,7 @@ func newBlobAddTestDeps(t *testing.T, uploadService principal.Signer, logger *za
 	)
 	nodeProvider := piriclient.NewProvider(uploadService, logger)
 	handler := handlers.NewBlobAddHandler(
-		&identity.Identity{Signer: uploadService},
+		identity.Identity{Issuer: uploadService},
 		provisioningSvc,
 		router,
 		nodeProvider,
@@ -94,11 +92,11 @@ func newBlobAddTestDeps(t *testing.T, uploadService principal.Signer, logger *za
 
 // provisionSpace adds the consumer record so provisioningSvc.ListServiceProviders
 // returns the upload service for the space.
-func provisionSpace(t *testing.T, deps *blobAddTestDeps, uploadService principal.Signer, space did.DID) {
+func provisionSpace(t *testing.T, deps *blobAddTestDeps, uploadService ucan.Issuer, space did.DID) {
 	t.Helper()
 	account := testutil.Must(didmailto.New("alice@example.com"))(t)
 	err := deps.consumerStore.Add(
-		context.Background(),
+		t.Context(),
 		uploadService.DID(),
 		space,
 		account,
@@ -113,26 +111,19 @@ func provisionSpace(t *testing.T, deps *blobAddTestDeps, uploadService principal
 // did:web identity so signatures verify against the underlying did:key.
 func newMockPiriServer(
 	t *testing.T,
-	storageProvider principal.Signer,
-	uploadService principal.Signer,
+	storageProvider ucan.Issuer,
+	uploadService identity.Identity,
 	allocateOK *blobcmds.AllocateOK,
 	acceptOK *blobcmds.AcceptOK,
 ) *httptest.Server {
 	t.Helper()
 
-	resolveDIDKey := func(ctx context.Context, d did.DID) (ucan.Verifier, error) {
-		if d == uploadService.DID() {
-			return uploadService.Verifier(), nil
-		}
-		if d.Method() == "key" {
-			return verifier.FromDIDKey(d)
-		}
-		return nil, errors.NewDIDKeyResolutionError(d, fmt.Errorf("unexpected DID to resolve"))
-	}
-
 	srv := server.NewHTTP(
 		storageProvider,
-		server.WithValidationOptions(validator.WithDIDVerifierResolver(resolveDIDKey)),
+		server.WithValidationOptions(validator.WithDIDResolver(resolver.Tiered{
+			resolver.WellKnown{uploadService.DID(): testutil.Must(uploadService.DIDDocument())(t)},
+			key.Resolver,
+		})),
 	)
 
 	srv.Handle(blobcmds.Allocate.Command, blobcmds.Allocate.Handler(func(
@@ -157,7 +148,7 @@ func newMockPiriServer(
 // providerProofs builds the proof container a storage provider grants the
 // upload service at registration: self-issued delegations (subject = provider)
 // authorizing `/blob/allocate` and `/blob/accept`.
-func providerProofs(t *testing.T, storageProvider, uploadService principal.Signer) ucan.Container {
+func providerProofs(t *testing.T, storageProvider, uploadService ucan.Issuer) ucan.Container {
 	t.Helper()
 	allocProof := testutil.Must(blobcmds.Allocate.Delegate(storageProvider, uploadService.DID(), storageProvider.DID()))(t)
 	acceptProof := testutil.Must(blobcmds.Accept.Delegate(storageProvider, uploadService.DID(), storageProvider.DID()))(t)
@@ -173,7 +164,7 @@ func TestBlobAddHandler(t *testing.T) {
 	t.Run("no providers for space", func(t *testing.T) {
 		deps := newBlobAddTestDeps(t, uploadService, logger)
 
-		space := testutil.RandomSigner(t)
+		space := testutil.RandomIssuer(t)
 		args := blobcmds.AddArguments{
 			Blob: blobcmds.Blob{Digest: testutil.RandomMultihash(t), Size: 1024},
 		}
@@ -187,7 +178,7 @@ func TestBlobAddHandler(t *testing.T) {
 		require.NoError(t, err)
 
 		req := execution.NewRequest(ctx, inv)
-		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
 		err = deps.handler.Handler(req, res)
@@ -202,7 +193,7 @@ func TestBlobAddHandler(t *testing.T) {
 	t.Run("no candidates available", func(t *testing.T) {
 		deps := newBlobAddTestDeps(t, uploadService, logger)
 
-		space := testutil.RandomSigner(t)
+		space := testutil.RandomIssuer(t)
 		provisionSpace(t, deps, uploadService, space.DID())
 
 		// No storage providers in spStore — the router will return ErrCandidateUnavailable.
@@ -219,7 +210,7 @@ func TestBlobAddHandler(t *testing.T) {
 		require.NoError(t, err)
 
 		req := execution.NewRequest(ctx, inv)
-		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
 		err = deps.handler.Handler(req, res)
@@ -232,11 +223,11 @@ func TestBlobAddHandler(t *testing.T) {
 	t.Run("zero weight providers returns candidate unavailable", func(t *testing.T) {
 		deps := newBlobAddTestDeps(t, uploadService, logger)
 
-		space := testutil.RandomSigner(t)
+		space := testutil.RandomIssuer(t)
 		provisionSpace(t, deps, uploadService, space.DID())
 
 		// Register a storage provider with weight 0 — it'll be filtered out.
-		storageProvider := testutil.RandomSigner(t)
+		storageProvider := testutil.RandomIssuer(t)
 		endpoint := testutil.Must(url.Parse("https://piri.example.com"))(t)
 		err := deps.spStore.Put(ctx, storageProvider.DID(), *endpoint, 0, nil, container.New())
 		require.NoError(t, err)
@@ -254,7 +245,7 @@ func TestBlobAddHandler(t *testing.T) {
 		require.NoError(t, err)
 
 		req := execution.NewRequest(ctx, inv)
-		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
 		err = deps.handler.Handler(req, res)
@@ -267,10 +258,10 @@ func TestBlobAddHandler(t *testing.T) {
 	t.Run("successful allocation with address", func(t *testing.T) {
 		deps := newBlobAddTestDeps(t, uploadService, logger)
 
-		space := testutil.RandomSigner(t)
+		space := testutil.RandomIssuer(t)
 		provisionSpace(t, deps, uploadService, space.DID())
 
-		storageProvider := testutil.RandomSigner(t)
+		storageProvider := testutil.RandomIssuer(t)
 		putURL := testutil.Must(url.Parse("https://storage.example.com/put"))(t)
 		allocateOK := &blobcmds.AllocateOK{
 			Size: 1024,
@@ -309,7 +300,7 @@ func TestBlobAddHandler(t *testing.T) {
 		require.NoError(t, err)
 
 		req := execution.NewRequest(ctx, inv)
-		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
 		err = deps.handler.Handler(req, res)
@@ -326,10 +317,10 @@ func TestBlobAddHandler(t *testing.T) {
 	t.Run("successful allocation blob already stored", func(t *testing.T) {
 		deps := newBlobAddTestDeps(t, uploadService, logger)
 
-		space := testutil.RandomSigner(t)
+		space := testutil.RandomIssuer(t)
 		provisionSpace(t, deps, uploadService, space.DID())
 
-		storageProvider := testutil.RandomSigner(t)
+		storageProvider := testutil.RandomIssuer(t)
 		// No address signals the blob is already on the provider — the handler
 		// then issues the put receipt itself and proceeds to Accept on piri.
 		allocateOK := &blobcmds.AllocateOK{Size: 1024, Address: nil}
@@ -357,7 +348,7 @@ func TestBlobAddHandler(t *testing.T) {
 		require.NoError(t, err)
 
 		req := execution.NewRequest(ctx, inv)
-		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
 		err = deps.handler.Handler(req, res)
@@ -375,10 +366,10 @@ func TestBlobAddHandler(t *testing.T) {
 	t.Run("blob already registered in space", func(t *testing.T) {
 		deps := newBlobAddTestDeps(t, uploadService, logger)
 
-		space := testutil.RandomSigner(t)
+		space := testutil.RandomIssuer(t)
 		provisionSpace(t, deps, uploadService, space.DID())
 
-		storageProvider := testutil.RandomSigner(t)
+		storageProvider := testutil.RandomIssuer(t)
 		digest := testutil.RandomMultihash(t)
 		blob := blobcmds.Blob{Digest: digest, Size: 1024}
 
@@ -470,7 +461,7 @@ func TestBlobAddHandler(t *testing.T) {
 		))(t)
 
 		req := execution.NewRequest(ctx, inv)
-		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
 		err = deps.handler.Handler(req, res)
@@ -492,11 +483,11 @@ func TestBlobAddHandler(t *testing.T) {
 
 // deriveBlobProvider mirrors the production handler's logic for deriving a
 // signer from a blob's digest, used to sign /http/put invocations and receipts.
-func deriveBlobProvider(t *testing.T, digest multihash.Multihash) principal.Signer {
+func deriveBlobProvider(t *testing.T, digest multihash.Multihash) ucan.Issuer {
 	t.Helper()
 	require.GreaterOrEqual(t, len(digest), ed25519.SeedSize)
 	seed := digest[len(digest)-ed25519.SeedSize:]
 	s, err := ed25519signer.FromRaw(seed)
 	require.NoError(t, err)
-	return s
+	return multikey.KeyIssuer(s)
 }

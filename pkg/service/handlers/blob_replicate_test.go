@@ -7,7 +7,7 @@ package handlers_test
 // 	"testing"
 // 	"time"
 
-// 	"github.com/fil-forge/libforge/didmailto"
+// 	"github.com/fil-forge/libforge/attestation/didmailto"
 // 	"github.com/fil-forge/ucantone/did"
 // 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 // 	"github.com/storacha/go-libstoracha/capabilities/assert"
@@ -28,7 +28,7 @@ package handlers_test
 // 	"github.com/storacha/go-ucanto/validator"
 // 	"github.com/fil-forge/sprue/internal/config"
 // 	"github.com/fil-forge/sprue/internal/testutil"
-// 	"github.com/fil-forge/sprue/pkg/identity"
+//
 // 	"github.com/fil-forge/sprue/pkg/piriclient"
 // 	"github.com/fil-forge/sprue/pkg/routing"
 // 	"github.com/fil-forge/sprue/pkg/service/handlers"
@@ -60,7 +60,7 @@ package handlers_test
 // 		nodeProvider := piriclient.NewProvider(uploadService, logger)
 
 // 		handler := handlers.SpaceBlobReplicateHandler(
-// 			defaultCfg, &identity.Identity{Signer: uploadService},
+// 			defaultCfg, identity.Identity{Signer: uploadService},
 // 			router, blobReg, replicaStore, agentStore, nodeProvider, logger,
 // 		)
 
@@ -98,7 +98,7 @@ package handlers_test
 
 // 		cfg := config.DeploymentConfig{MaxReplicas: 2}
 // 		handler := handlers.SpaceBlobReplicateHandler(
-// 			cfg, &identity.Identity{Signer: uploadService},
+// 			cfg, identity.Identity{Signer: uploadService},
 // 			router, blobReg, replicaStore, agentStore, nodeProvider, logger,
 // 		)
 
@@ -136,7 +136,7 @@ package handlers_test
 // 		nodeProvider := piriclient.NewProvider(uploadService, logger)
 
 // 		handler := handlers.SpaceBlobReplicateHandler(
-// 			defaultCfg, &identity.Identity{Signer: uploadService},
+// 			defaultCfg, identity.Identity{Signer: uploadService},
 // 			router, blobReg, replicaStore, agentStore, nodeProvider, logger,
 // 		)
 
@@ -174,7 +174,7 @@ package handlers_test
 // 		nodeProvider := piriclient.NewProvider(uploadService, logger)
 
 // 		handler := handlers.SpaceBlobReplicateHandler(
-// 			defaultCfg, &identity.Identity{Signer: uploadService},
+// 			defaultCfg, identity.Identity{Signer: uploadService},
 // 			router, blobReg, replicaStore, agentStore, nodeProvider, logger,
 // 		)
 
@@ -279,7 +279,7 @@ package handlers_test
 // 		}
 
 // 		nodeProvider := newMultiMockReplicaNodeProvider(t, uploadService,
-// 			[]principal.Signer{replicaProviderA, replicaProviderB},
+// 			[]ucan.Signer{replicaProviderA, replicaProviderB},
 // 			replicaAllocHandler, logger,
 // 		)
 
@@ -386,7 +386,7 @@ package handlers_test
 // 		nodeProvider := piriclient.NewProvider(uploadService, logger)
 
 // 		handler := handlers.SpaceBlobReplicateHandler(
-// 			defaultCfg, &identity.Identity{Signer: uploadService},
+// 			defaultCfg, identity.Identity{Signer: uploadService},
 // 			router, blobReg, replicaStore, agentStore, nodeProvider, logger,
 // 		)
 
@@ -448,7 +448,7 @@ package handlers_test
 // func newMultiMockReplicaNodeProvider(
 // 	t *testing.T,
 // 	agentID ucan.Signer,
-// 	serviceIDs []principal.Signer,
+// 	serviceIDs []ucan.Signer,
 // 	allocHandler server.HandlerFunc[blobreplicacap.AllocateCaveats, blobreplicacap.AllocateOk, failure.IPLDBuilderFailure],
 // 	logger *zap.Logger,
 // ) *multiMockReplicaNodeProvider {
@@ -479,7 +479,7 @@ package handlers_test
 // }
 
 // // delegateReplicaProviderProof delegates blob/replica/allocate capability.
-// func delegateReplicaProviderProof(t *testing.T, issuer principal.Signer, audience ucan.Principal) delegation.Delegation {
+// func delegateReplicaProviderProof(t *testing.T, issuer ucan.Signer, audience ucan.Principal) delegation.Delegation {
 // 	t.Helper()
 // 	proof, err := delegation.Delegate(
 // 		issuer,

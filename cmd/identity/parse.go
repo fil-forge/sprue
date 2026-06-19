@@ -8,8 +8,8 @@ import (
 	"io"
 	"os"
 
-	signer "github.com/fil-forge/ucantone/principal/ed25519"
-	verifier "github.com/fil-forge/ucantone/principal/ed25519/verifier"
+	signer "github.com/fil-forge/ucantone/multikey/ed25519"
+	verifier "github.com/fil-forge/ucantone/multikey/ed25519/verifier"
 	"github.com/spf13/cobra"
 )
 
@@ -49,7 +49,7 @@ var parseCmd = &cobra.Command{
 			if err != nil {
 				return fmt.Errorf("decoding ed25519 public key: %w", err)
 			}
-			fmt.Printf("%s\n", key.DID())
+			fmt.Printf("%s\n", key.KeyDID())
 		case "PRIVATE KEY":
 			sk, err := x509.ParsePKCS8PrivateKey(blk.Bytes)
 			if err != nil {
@@ -65,7 +65,7 @@ var parseCmd = &cobra.Command{
 			if err != nil {
 				return fmt.Errorf("decoding ed25519 private key: %w", err)
 			}
-			fmt.Printf("%s\n", key.DID())
+			fmt.Printf("%s\n", key.KeyDID())
 		default:
 			return fmt.Errorf("unsupported PEM block type: %s", blk.Type)
 		}

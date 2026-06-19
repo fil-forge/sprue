@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/fil-forge/libforge/attestation/didmailto"
 	blobcmds "github.com/fil-forge/libforge/commands/blob"
-	"github.com/fil-forge/libforge/didmailto"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/service/handlers"
 	blob_registry "github.com/fil-forge/sprue/pkg/store/blob_registry/memory"
@@ -13,7 +13,7 @@ import (
 	metrics_store "github.com/fil-forge/sprue/pkg/store/metrics/memory"
 	spacediff_store "github.com/fil-forge/sprue/pkg/store/space_diff/memory"
 	"github.com/fil-forge/ucantone/execution"
-	"github.com/fil-forge/ucantone/principal"
+	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
@@ -35,9 +35,9 @@ func newBlobRegistry(t *testing.T) (*blob_registry.Store, *consumer_store.Store)
 func invokeBlobList(
 	t *testing.T,
 	ctx context.Context,
-	agent principal.Signer,
-	uploadService principal.Signer,
-	space principal.Signer,
+	agent ucan.Issuer,
+	uploadService ucan.Issuer,
+	space ucan.Principal,
 	args *blobcmds.ListArguments,
 ) (execution.Request, *execution.ExecResponse) {
 	t.Helper()
@@ -49,7 +49,7 @@ func invokeBlobList(
 	)
 	require.NoError(t, err)
 	req := execution.NewRequest(ctx, inv)
-	res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
+	res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 	require.NoError(t, err)
 	return req, res
 }
@@ -66,7 +66,7 @@ func TestBlobListHandler(t *testing.T) {
 		blobReg, _ := newBlobRegistry(t)
 		handler := handlers.NewBlobListHandler(blobReg, logger)
 
-		space := testutil.RandomSigner(t)
+		space := testutil.RandomIssuer(t)
 
 		req, res := invokeBlobList(t, ctx, alice, uploadService, space, &blobcmds.ListArguments{})
 
@@ -82,7 +82,7 @@ func TestBlobListHandler(t *testing.T) {
 		blobReg, consumerStore := newBlobRegistry(t)
 		handler := handlers.NewBlobListHandler(blobReg, logger)
 
-		space := testutil.RandomSigner(t)
+		space := testutil.RandomIssuer(t)
 		require.NoError(t, consumerStore.Add(ctx, uploadService.DID(), space.DID(), aliceAccount, "sub-1", testutil.RandomCID(t)))
 
 		blob1 := blobcmds.Blob{Digest: testutil.RandomMultihash(t), Size: 100}
@@ -104,7 +104,7 @@ func TestBlobListHandler(t *testing.T) {
 		blobReg, consumerStore := newBlobRegistry(t)
 		handler := handlers.NewBlobListHandler(blobReg, logger)
 
-		space := testutil.RandomSigner(t)
+		space := testutil.RandomIssuer(t)
 		require.NoError(t, consumerStore.Add(ctx, uploadService.DID(), space.DID(), aliceAccount, "sub-1", testutil.RandomCID(t)))
 
 		for i := range 3 {
@@ -131,7 +131,7 @@ func TestBlobListHandler(t *testing.T) {
 		blobReg, consumerStore := newBlobRegistry(t)
 		handler := handlers.NewBlobListHandler(blobReg, logger)
 
-		space := testutil.RandomSigner(t)
+		space := testutil.RandomIssuer(t)
 		require.NoError(t, consumerStore.Add(ctx, uploadService.DID(), space.DID(), aliceAccount, "sub-1", testutil.RandomCID(t)))
 
 		for i := range 3 {
@@ -166,8 +166,8 @@ func TestBlobListHandler(t *testing.T) {
 		blobReg, consumerStore := newBlobRegistry(t)
 		handler := handlers.NewBlobListHandler(blobReg, logger)
 
-		space1 := testutil.RandomSigner(t)
-		space2 := testutil.RandomSigner(t)
+		space1 := testutil.RandomIssuer(t)
+		space2 := testutil.RandomIssuer(t)
 		require.NoError(t, consumerStore.Add(ctx, uploadService.DID(), space1.DID(), aliceAccount, "sub-1", testutil.RandomCID(t)))
 
 		require.NoError(t, blobReg.Register(

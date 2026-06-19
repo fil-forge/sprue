@@ -7,7 +7,7 @@ import (
 	"slices"
 
 	ucancmds "github.com/fil-forge/libforge/commands/ucan"
-	"github.com/fil-forge/sprue/pkg/identity"
+	"github.com/fil-forge/libforge/identity"
 	"github.com/fil-forge/sprue/pkg/store/agent"
 	"github.com/fil-forge/ucantone/binding"
 	"github.com/fil-forge/ucantone/errors"
@@ -32,7 +32,7 @@ type ConclusionHandler struct {
 // This handler processes receipt conclusions from clients.
 // When it receives an /http/put receipt, it calls /blob/accept on piri
 // and stores the accept receipt for later retrieval.
-func NewUCANConcludeHandler(id *identity.Identity, agentStore agent.Store, handlers map[ucan.Command]ConclusionHandlerFunc, logger *zap.Logger) server.Route {
+func NewUCANConcludeHandler(id identity.Identity, agentStore agent.Store, handlers map[ucan.Command]ConclusionHandlerFunc, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", ucancmds.Conclude))
 	log.Info("registered conclude handlers", zap.Stringers("commands", slices.Collect(maps.Keys(handlers))))
 	return ucancmds.Conclude.Route(

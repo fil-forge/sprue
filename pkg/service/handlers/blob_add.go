@@ -10,8 +10,8 @@ import (
 	blobcmds "github.com/fil-forge/libforge/commands/blob"
 	httpcmds "github.com/fil-forge/libforge/commands/http"
 	"github.com/fil-forge/libforge/digestutil"
+	"github.com/fil-forge/libforge/identity"
 	ucanlib "github.com/fil-forge/libforge/ucan"
-	"github.com/fil-forge/sprue/pkg/identity"
 	"github.com/fil-forge/sprue/pkg/piriclient"
 	"github.com/fil-forge/sprue/pkg/provisioning"
 	"github.com/fil-forge/sprue/pkg/routing"
@@ -21,8 +21,8 @@ import (
 	"github.com/fil-forge/ucantone/did"
 	"github.com/fil-forge/ucantone/errors"
 	"github.com/fil-forge/ucantone/ipld/datamodel"
-	"github.com/fil-forge/ucantone/principal"
-	ed25519signer "github.com/fil-forge/ucantone/principal/ed25519"
+	"github.com/fil-forge/ucantone/multikey"
+	ed25519signer "github.com/fil-forge/ucantone/multikey/ed25519"
 	"github.com/fil-forge/ucantone/server"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/container"
@@ -34,7 +34,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func NewBlobAddHandler(id *identity.Identity, provisioningSvc *provisioning.Service, router *routing.Service, nodeProvider piriclient.Provider, agentStore agent.Store, blobRegistry blobregistry.Store, logger *zap.Logger) server.Route {
+func NewBlobAddHandler(id identity.Identity, provisioningSvc *provisioning.Service, router *routing.Service, nodeProvider piriclient.Provider, agentStore agent.Store, blobRegistry blobregistry.Store, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", blobcmds.Add))
 	return blobcmds.Add.Route(
 		func(req *binding.Request[*blobcmds.AddArguments], res *binding.Response[*blobcmds.AddOK]) error {
@@ -326,12 +326,16 @@ func genPut(blob blobcmds.Blob, allocInv ucan.Invocation, allocOK blobcmds.Alloc
 
 // Derives did:key principal from (blob) multihash that can be used to
 // sign ucan invocations/receipts for the the subject (blob) multihash.
-func deriveDID(digest multihash.Multihash) (principal.Signer, error) {
+func deriveDID(digest multihash.Multihash) (multikey.Issuer, error) {
 	if len(digest) < ed25519.SeedSize {
 		return nil, fmt.Errorf("expected []byte with length %d, got %d", ed25519.SeedSize, len(digest))
 	}
 	seed := digest[len(digest)-ed25519.SeedSize:]
-	return ed25519signer.FromRaw(seed)
+	key, err := ed25519signer.FromRaw(seed)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create ed25519 signer: %w", err)
+	}
+	return multikey.KeyIssuer(key), nil
 }
 
 // acceptExtras carries the additional invocations / receipts produced by
@@ -380,7 +384,7 @@ func maybeAccept(
 		Put:    putInv.Task().Link(),
 	}
 
-	accInv, _, _, err := c.AcceptInvocation(ctx, &accReq, proofStore, invocation.WithNoNonce())
+	accInv, _, err := c.AcceptInvocation(ctx, &accReq, proofStore, invocation.WithNoNonce())
 	if err != nil {
 		log.Error("failed to create accept invocation", zap.Error(err))
 		return nil, nil, acceptExtras{}, err

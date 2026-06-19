@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/fil-forge/libforge/attestation/didmailto"
 	providercmds "github.com/fil-forge/libforge/commands/provider"
-	"github.com/fil-forge/libforge/didmailto"
 	"github.com/fil-forge/sprue/internal/config"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/billing"
@@ -17,7 +17,7 @@ import (
 	"github.com/fil-forge/ucantone/did"
 	"github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
-	"github.com/fil-forge/ucantone/principal"
+	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
@@ -50,8 +50,8 @@ func setupProviderAdd(t *testing.T, providerDID did.DID) *providerAddDeps {
 func invokeProviderAdd(
 	t *testing.T,
 	ctx context.Context,
-	agent principal.Signer,
-	uploadService principal.Signer,
+	agent ucan.Issuer,
+	uploadService ucan.Issuer,
 	account did.DID,
 	args *providercmds.AddArguments,
 ) (execution.Request, *execution.ExecResponse) {
@@ -64,7 +64,7 @@ func invokeProviderAdd(
 	)
 	require.NoError(t, err)
 	req := execution.NewRequest(ctx, inv)
-	res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithSigner(uploadService))
+	res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 	require.NoError(t, err)
 	return req, res
 }
@@ -76,7 +76,7 @@ func TestProviderAddHandler(t *testing.T) {
 	uploadService := testutil.WebService
 
 	t.Run("success with payment plan", func(t *testing.T) {
-		serviceProvider := testutil.RandomSigner(t)
+		serviceProvider := testutil.RandomIssuer(t)
 		deps := setupProviderAdd(t, serviceProvider.DID())
 
 		account := testutil.Must(didmailto.New("alice@example.com"))(t)
@@ -88,8 +88,8 @@ func TestProviderAddHandler(t *testing.T) {
 			deps.provisioningSvc, deps.billingSvc, logger,
 		)
 
-		space := testutil.RandomSigner(t)
-		agent := testutil.RandomSigner(t)
+		space := testutil.RandomIssuer(t)
+		agent := testutil.RandomIssuer(t)
 		req, res := invokeProviderAdd(t, ctx, agent, uploadService, account,
 			&providercmds.AddArguments{
 				Provider: serviceProvider.DID(),
@@ -106,7 +106,7 @@ func TestProviderAddHandler(t *testing.T) {
 	})
 
 	t.Run("success skipping payment plan check", func(t *testing.T) {
-		serviceProvider := testutil.RandomSigner(t)
+		serviceProvider := testutil.RandomIssuer(t)
 		deps := setupProviderAdd(t, serviceProvider.DID())
 
 		// No customer added — but payment plan check is skipped.
@@ -116,8 +116,8 @@ func TestProviderAddHandler(t *testing.T) {
 		)
 
 		account := testutil.Must(didmailto.New("alice@example.com"))(t)
-		space := testutil.RandomSigner(t)
-		agent := testutil.RandomSigner(t)
+		space := testutil.RandomIssuer(t)
+		agent := testutil.RandomIssuer(t)
 		req, res := invokeProviderAdd(t, ctx, agent, uploadService, account,
 			&providercmds.AddArguments{
 				Provider: serviceProvider.DID(),
@@ -134,7 +134,7 @@ func TestProviderAddHandler(t *testing.T) {
 	})
 
 	t.Run("invalid account DID", func(t *testing.T) {
-		serviceProvider := testutil.RandomSigner(t)
+		serviceProvider := testutil.RandomIssuer(t)
 		deps := setupProviderAdd(t, serviceProvider.DID())
 
 		handler := handlers.NewProviderAddHandler(
@@ -143,9 +143,9 @@ func TestProviderAddHandler(t *testing.T) {
 		)
 
 		// Subject is a did:key (not a did:mailto), so didmailto.Parse rejects it.
-		notAMailto := testutil.RandomSigner(t)
-		space := testutil.RandomSigner(t)
-		agent := testutil.RandomSigner(t)
+		notAMailto := testutil.RandomIssuer(t)
+		space := testutil.RandomIssuer(t)
+		agent := testutil.RandomIssuer(t)
 		req, res := invokeProviderAdd(t, ctx, agent, uploadService, notAMailto.DID(),
 			&providercmds.AddArguments{
 				Provider: serviceProvider.DID(),
@@ -163,7 +163,7 @@ func TestProviderAddHandler(t *testing.T) {
 	})
 
 	t.Run("missing payment plan", func(t *testing.T) {
-		serviceProvider := testutil.RandomSigner(t)
+		serviceProvider := testutil.RandomIssuer(t)
 		deps := setupProviderAdd(t, serviceProvider.DID())
 
 		// No customer added — payment plan check fails with ErrMissingPaymentPlan.
@@ -173,8 +173,8 @@ func TestProviderAddHandler(t *testing.T) {
 		)
 
 		account := testutil.Must(didmailto.New("alice@example.com"))(t)
-		space := testutil.RandomSigner(t)
-		agent := testutil.RandomSigner(t)
+		space := testutil.RandomIssuer(t)
+		agent := testutil.RandomIssuer(t)
 		req, res := invokeProviderAdd(t, ctx, agent, uploadService, account,
 			&providercmds.AddArguments{
 				Provider: serviceProvider.DID(),
@@ -190,7 +190,7 @@ func TestProviderAddHandler(t *testing.T) {
 	})
 
 	t.Run("provider not allowed", func(t *testing.T) {
-		serviceProvider := testutil.RandomSigner(t)
+		serviceProvider := testutil.RandomIssuer(t)
 		deps := setupProviderAdd(t, serviceProvider.DID())
 
 		handler := handlers.NewProviderAddHandler(
@@ -199,10 +199,10 @@ func TestProviderAddHandler(t *testing.T) {
 		)
 
 		// Args reference a different provider than the one allowed in setup.
-		otherProvider := testutil.RandomSigner(t)
+		otherProvider := testutil.RandomIssuer(t)
 		account := testutil.Must(didmailto.New("alice@example.com"))(t)
-		space := testutil.RandomSigner(t)
-		agent := testutil.RandomSigner(t)
+		space := testutil.RandomIssuer(t)
+		agent := testutil.RandomIssuer(t)
 		req, res := invokeProviderAdd(t, ctx, agent, uploadService, account,
 			&providercmds.AddArguments{
 				Provider: otherProvider.DID(),

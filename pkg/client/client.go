@@ -20,30 +20,30 @@ import (
 type Client struct {
 	uploadServiceID did.DID
 	client          *client.HTTPClient
-	signer          ucan.Signer
+	issuer          ucan.Issuer
 	logger          *zap.Logger
 }
 
-func New(uploadServiceID did.DID, endpoint *url.URL, signer ucan.Signer, logger *zap.Logger) (*Client, error) {
+func New(uploadServiceID did.DID, endpoint *url.URL, issuer ucan.Issuer, logger *zap.Logger) (*Client, error) {
 	client, err := client.NewHTTP(endpoint)
 	if err != nil {
 		return nil, fmt.Errorf("creating HTTP client: %w", err)
 	}
-	return NewWithClient(uploadServiceID, client, signer, logger), nil
+	return NewWithClient(uploadServiceID, client, issuer, logger), nil
 }
 
-func NewWithClient(uploadServiceID did.DID, client *client.HTTPClient, signer ucan.Signer, logger *zap.Logger) *Client {
+func NewWithClient(uploadServiceID did.DID, client *client.HTTPClient, issuer ucan.Issuer, logger *zap.Logger) *Client {
 	return &Client{
 		uploadServiceID: uploadServiceID,
-		signer:          signer,
+		issuer:          issuer,
 		client:          client,
 		logger:          logger,
 	}
 }
 
 func (c *Client) AdminProviderRegister(ctx context.Context, providerID did.DID, endpoint string, proofs ucan.Container, options ...invocation.Option) (ucan.Receipt, error) {
-	if c.signer.DID() != c.uploadServiceID {
-		return nil, fmt.Errorf("admin operation not permitted: signer DID %s does not match upload service ID %s", c.signer.DID(), c.uploadServiceID)
+	if c.issuer.DID() != c.uploadServiceID {
+		return nil, fmt.Errorf("admin operation not permitted: issuer DID %s does not match upload service ID %s", c.issuer.DID(), c.uploadServiceID)
 	}
 
 	if proofs == nil {
@@ -62,7 +62,7 @@ func (c *Client) AdminProviderRegister(ctx context.Context, providerID did.DID, 
 	)
 
 	inv, err := providercap.Register.Invoke(
-		c.signer,
+		c.issuer,
 		c.uploadServiceID,
 		&providercap.RegisterArguments{
 			Provider: providerID,
@@ -83,8 +83,8 @@ func (c *Client) AdminProviderRegister(ctx context.Context, providerID did.DID, 
 }
 
 func (c *Client) AdminProviderDeregister(ctx context.Context, providerID did.DID, options ...invocation.Option) (ucan.Receipt, error) {
-	if c.signer.DID() != c.uploadServiceID {
-		return nil, fmt.Errorf("admin operation not permitted: signer DID %s does not match upload service ID %s", c.signer.DID(), c.uploadServiceID)
+	if c.issuer.DID() != c.uploadServiceID {
+		return nil, fmt.Errorf("admin operation not permitted: signer DID %s does not match upload service ID %s", c.issuer.DID(), c.uploadServiceID)
 	}
 
 	options = slices.Clone(options)
@@ -94,7 +94,7 @@ func (c *Client) AdminProviderDeregister(ctx context.Context, providerID did.DID
 	)
 
 	inv, err := providercap.Deregister.Invoke(
-		c.signer,
+		c.issuer,
 		c.uploadServiceID,
 		&providercap.DeregisterArguments{
 			Provider: providerID,
@@ -113,8 +113,8 @@ func (c *Client) AdminProviderDeregister(ctx context.Context, providerID did.DID
 }
 
 func (c *Client) AdminProviderList(ctx context.Context, options ...invocation.Option) (*providercap.ListOK, ucan.Receipt, error) {
-	if c.signer.DID() != c.uploadServiceID {
-		return nil, nil, fmt.Errorf("admin operation not permitted: signer DID %s does not match upload service ID %s", c.signer.DID(), c.uploadServiceID)
+	if c.issuer.DID() != c.uploadServiceID {
+		return nil, nil, fmt.Errorf("admin operation not permitted: signer DID %s does not match upload service ID %s", c.issuer.DID(), c.uploadServiceID)
 	}
 
 	options = slices.Clone(options)
@@ -124,7 +124,7 @@ func (c *Client) AdminProviderList(ctx context.Context, options ...invocation.Op
 	)
 
 	inv, err := providercap.List.Invoke(
-		c.signer,
+		c.issuer,
 		c.uploadServiceID,
 		&providercap.ListArguments{},
 		options...,
@@ -141,8 +141,8 @@ func (c *Client) AdminProviderList(ctx context.Context, options ...invocation.Op
 }
 
 func (c *Client) AdminProviderWeightSet(ctx context.Context, providerID did.DID, weight int, replicationWeight int, options ...invocation.Option) (ucan.Receipt, error) {
-	if c.signer.DID() != c.uploadServiceID {
-		return nil, fmt.Errorf("admin operation not permitted: signer DID %s does not match upload service ID %s", c.signer.DID(), c.uploadServiceID)
+	if c.issuer.DID() != c.uploadServiceID {
+		return nil, fmt.Errorf("admin operation not permitted: signer DID %s does not match upload service ID %s", c.issuer.DID(), c.uploadServiceID)
 	}
 
 	options = slices.Clone(options)
@@ -152,7 +152,7 @@ func (c *Client) AdminProviderWeightSet(ctx context.Context, providerID did.DID,
 	)
 
 	inv, err := weightcap.Set.Invoke(
-		c.signer,
+		c.issuer,
 		c.uploadServiceID,
 		&weightcap.SetArguments{
 			Provider:          providerID,

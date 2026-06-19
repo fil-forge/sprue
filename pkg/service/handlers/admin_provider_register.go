@@ -6,9 +6,9 @@ import (
 	blobcmds "github.com/fil-forge/libforge/commands/blob"
 	replicacmds "github.com/fil-forge/libforge/commands/blob/replica"
 	pdpcmds "github.com/fil-forge/libforge/commands/pdp"
+	"github.com/fil-forge/libforge/identity"
 	ucanlib "github.com/fil-forge/libforge/ucan"
 	"github.com/fil-forge/sprue/pkg/commands/admin/provider"
-	"github.com/fil-forge/sprue/pkg/identity"
 	storageprovider "github.com/fil-forge/sprue/pkg/store/storage_provider"
 	"github.com/fil-forge/ucantone/binding"
 	"github.com/fil-forge/ucantone/errors"
@@ -32,12 +32,12 @@ var requiredProofs = []ucan.Command{
 	pdpcmds.Info.Command,
 }
 
-func NewAdminProviderRegisterHandler(id *identity.Identity, providerStore storageprovider.Store, logger *zap.Logger) server.Route {
+func NewAdminProviderRegisterHandler(id identity.Identity, providerStore storageprovider.Store, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", provider.Register))
 	return provider.Register.Route(
 		func(req *binding.Request[*provider.RegisterArguments], res *binding.Response[*provider.RegisterOK]) error {
 			args := req.Task().Arguments()
-			if req.Invocation().Issuer() != id.Signer.DID() {
+			if req.Invocation().Issuer() != id.Issuer.DID() {
 				log.Warn("Unauthorized access attempt", zap.Stringer("issuer", req.Invocation().Issuer()))
 				return res.SetFailure(errors.New("Unauthorized", "only the service identity can register providers"))
 			}
@@ -58,7 +58,7 @@ func NewAdminProviderRegisterHandler(id *identity.Identity, providerStore storag
 			// provider (subject) to the service (audience).
 			proofStore := ucanlib.NewContainerProofStore(proofs)
 			for _, cmd := range requiredProofs {
-				chain, _, err := proofStore.ProofChain(req.Context(), id.Signer.DID(), cmd, args.Provider)
+				chain, _, err := proofStore.ProofChain(req.Context(), id.Issuer.DID(), cmd, args.Provider)
 				if err != nil {
 					log.Error("Failed to build proof chain", zap.Stringer("command", cmd), zap.Error(err))
 					return res.SetFailure(errors.New("InvalidProofs", "building proof chain for %s: %s", cmd, err.Error()))

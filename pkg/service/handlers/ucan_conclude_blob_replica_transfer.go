@@ -20,7 +20,7 @@ package handlers
 // 	"github.com/storacha/go-ucanto/server"
 // 	"github.com/storacha/go-ucanto/ucan"
 // 	"github.com/storacha/go-ucanto/validator"
-// 	"github.com/fil-forge/sprue/pkg/identity"
+//
 // 	"github.com/fil-forge/sprue/pkg/internal/ipldutil"
 // 	"github.com/fil-forge/sprue/pkg/store/agent"
 // 	"github.com/fil-forge/sprue/pkg/store/replica"
@@ -39,7 +39,7 @@ package handlers
 // var ErrInvalidTransferReceiptSignature = errors.New(InvalidTransferReceiptSignatureErrorName, "invalid transfer receipt signature")
 
 // func NewBlobReplicaTransferConcludeHandler(
-// 	id *identity.Identity,
+// 	id identity.Identity,
 // 	agentStore agent.Store,
 // 	replicaStore replica.Store,
 // 	logger *zap.Logger,
