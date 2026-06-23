@@ -1,10 +1,24 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+// emptyConfigFile writes an empty config file in a temporary directory and
+// returns its path. Passing an explicit file to Load isolates the test from any
+// real config.yaml in the current working directory or /etc/sprue/, keeping the
+// assertions focused on env/default behavior only.
+func emptyConfigFile(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	require.NoError(t, os.WriteFile(path, []byte("{}\n"), 0o600))
+	return path
+}
 
 // envOnlyCases covers keys that have no value in any config file and are set
 // purely via environment variables. These previously had no viper default, so
@@ -49,7 +63,7 @@ func TestLoadHonorsEnvOnlyKeys(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Setenv(tc.envKey, tc.envVal)
 
-			cfg, err := Load("")
+			cfg, err := Load(emptyConfigFile(t))
 			assert.NoError(t, err)
 			assert.Equal(t, tc.want, tc.get(cfg))
 		})
@@ -61,7 +75,7 @@ func TestLoadEmptyEnvOverridesDefault(t *testing.T) {
 	// e.g. the indexer can be disabled via env alone.
 	t.Setenv("SPRUE_INDEXER_ENDPOINT", "")
 
-	cfg, err := Load("")
+	cfg, err := Load(emptyConfigFile(t))
 	assert.NoError(t, err)
 	assert.Equal(t, "", cfg.Indexer.Endpoint)
 }
