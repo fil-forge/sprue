@@ -22,9 +22,9 @@ Sprue supports three store backends, selected by
 
 - `memory` — in-process only; all data is lost on restart. Dev/test only.
 - `postgres` — PostgreSQL for metadata + S3-compatible storage (MinIO, Ceph, AWS S3)
-  for blob payloads. Schema is managed by goose migrations embedded in
+  for storing payloads of invocations, receipts, and delegations. Schema is managed by goose migrations embedded in
   `internal/migrations/sql/` and applied on startup.
-- `aws` — DynamoDB for metadata + S3 for blob payloads.
+- `aws` — DynamoDB for metadata + S3 for storing payloads of invocations, receipts, and delegations.
 
 ## Notes
 
