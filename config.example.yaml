@@ -3,6 +3,8 @@
 # This file documents all configuration options. Copy to config.yaml and customize.
 # All values can also be set via environment variables with SPRUE_ prefix.
 # Environment variables take precedence over config file values.
+# An explicitly empty env var (e.g. SPRUE_INDEXER_ENDPOINT=) overrides a
+# non-empty default, so it can be used to clear a value (e.g. disable the indexer).
 #
 # Examples:
 #   server.host          -> SPRUE_SERVER_HOST
