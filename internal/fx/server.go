@@ -26,6 +26,7 @@ var ServerModule = fx.Module("server",
 func NewEchoServer(
 	id identity.Identity,
 	svc *service.Service,
+	logger *zap.Logger,
 ) *echo.Echo {
 	e := echo.New()
 	e.HideBanner = true
@@ -34,7 +35,7 @@ func NewEchoServer(
 	// Middleware
 	e.Use(middleware.Recover())
 	e.Use(middleware.RequestID())
-	e.Use(middleware.RequestLogger())
+	e.Use(requestLogger(logger))
 
 	// Routes
 	e.GET("/", infoHandler(id))
@@ -46,6 +47,45 @@ func NewEchoServer(
 	e.GET("/receipt/:cid", svc.HandleReceiptRequest)
 
 	return e
+}
+
+// requestLogger returns Echo's request logger middleware configured to emit
+// each request through the zap logger, keeping a single uniform JSON log stream.
+func requestLogger(logger *zap.Logger) echo.MiddlewareFunc {
+	return middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
+		LogLatency:       true,
+		LogRemoteIP:      true,
+		LogHost:          true,
+		LogMethod:        true,
+		LogURI:           true,
+		LogRequestID:     true,
+		LogUserAgent:     true,
+		LogStatus:        true,
+		LogError:         true,
+		LogContentLength: true,
+		LogResponseSize:  true,
+		HandleError:      true, // forwards error to the global error handler, so it can decide appropriate status code
+		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
+			fields := []zap.Field{
+				zap.String("method", v.Method),
+				zap.String("uri", v.URI),
+				zap.Int("status", v.Status),
+				zap.Duration("latency", v.Latency),
+				zap.String("host", v.Host),
+				zap.String("bytes_in", v.ContentLength),
+				zap.Int64("bytes_out", v.ResponseSize),
+				zap.String("user_agent", v.UserAgent),
+				zap.String("remote_ip", v.RemoteIP),
+				zap.String("request_id", v.RequestID),
+			}
+			if v.Error == nil {
+				logger.Info("REQUEST", fields...)
+			} else {
+				logger.Error("REQUEST_ERROR", append(fields, zap.Error(v.Error))...)
+			}
+			return nil
+		},
+	})
 }
 
 // RegisterServerLifecycle hooks server start/stop to fx lifecycle.

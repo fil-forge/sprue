@@ -26,6 +26,19 @@ Sprue supports three store backends, selected by
   `internal/migrations/sql/` and applied on startup.
 - `aws` — DynamoDB for metadata + S3 for storing payloads of invocations, receipts, and delegations.
 
+## Logging
+
+Sprue writes all logs to stdout/stderr as a single JSON stream produced by
+[zap](https://github.com/uber-go/zap). HTTP request logs are routed through the
+same zap logger (via Echo's `RequestLoggerWithConfig` middleware), so every log
+line — application and request alike — shares one uniform JSON format.
+
+This makes it straightforward to collect logs with a sidecar such as Grafana
+Alloy or Promtail: point the collector at the container's stdout/stderr and use
+a `json` pipeline stage to extract fields like `level`, `ts`, and `msg`. Request
+logs carry `method`, `uri`, `status`, `latency`, `request_id`, and related
+fields, and use the `REQUEST` / `REQUEST_ERROR` messages.
+
 ## Notes
 
 * Rate limits storage was not implemented. It has never been used in JS implementation, only supports blocking completely and can probably be applied at firewall.
