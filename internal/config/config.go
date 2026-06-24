@@ -168,13 +168,31 @@ type MailerConfig struct {
 }
 
 // SetDefaults configures default values for viper.
+//
+// Every configurable key must be registered here, even with a zero-value
+// default. viper's AutomaticEnv only binds an environment variable during
+// Unmarshal when the key is already known to viper (via a default or a config
+// file entry); keys with no default are silently ignored when set via env.
 func SetDefaults(v *viper.Viper) {
+	// Deployment defaults
+	v.SetDefault("deployment.environment", "development")
+	v.SetDefault("deployment.allow_provision_without_payment_plan", false)
+	v.SetDefault("deployment.max_replicas", 3)
+	v.SetDefault("deployment.insecure_did_resolution", false)
+
 	// Server defaults
 	v.SetDefault("server.host", "0.0.0.0")
 	v.SetDefault("server.port", 8080)
+	v.SetDefault("server.public_url", "")
+
+	// Identity defaults (registered so env vars bind; empty means auto-generate)
+	v.SetDefault("identity.key_file", "")
+	v.SetDefault("identity.private_key", "")
+	v.SetDefault("identity.service_did", "")
 
 	// Indexer defaults (port 80 for did:web resolution in Docker)
 	v.SetDefault("indexer.endpoint", "http://indexer:80")
+	v.SetDefault("indexer.did", "")
 
 	// Storage defaults — Postgres is the default backend.
 	v.SetDefault("storage.type", StorageTypePostgres)
@@ -210,12 +228,24 @@ func SetDefaults(v *viper.Viper) {
 
 	// Log defaults
 	v.SetDefault("log.level", "info")
+
+	// Mailer defaults
+	v.SetDefault("mailer.type", "nop")
+	v.SetDefault("mailer.sender", "dev@storacha.network")
+	v.SetDefault("mailer.subject", "")
+	v.SetDefault("mailer.postmark_token", "")
+	v.SetDefault("mailer.smtp_addr", "")
+	v.SetDefault("mailer.smtp_auth_user", "")
+	v.SetDefault("mailer.smtp_auth_secret", "")
 }
 
 // BindEnvVars sets up environment variable binding with SPRUE_ prefix.
 func BindEnvVars(v *viper.Viper) {
 	v.SetEnvPrefix("SPRUE")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	// Treat an explicitly-set empty env var as a real value, so a non-empty
+	// default (e.g. indexer.endpoint) can be cleared via the environment.
+	v.AllowEmptyEnv(true)
 	v.AutomaticEnv()
 }
 
