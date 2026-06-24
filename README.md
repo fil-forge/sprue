@@ -28,16 +28,22 @@ Sprue supports three store backends, selected by
 
 ## Logging
 
-Sprue writes all logs to stdout/stderr as a single JSON stream produced by
-[zap](https://github.com/uber-go/zap). HTTP request logs are routed through the
-same zap logger (via Echo's `RequestLoggerWithConfig` middleware), so every log
-line — application and request alike — shares one uniform JSON format.
+Sprue writes all logs to stdout/stderr through [zap](https://github.com/uber-go/zap).
+HTTP request logs are routed through the same zap logger (via Echo's
+`RequestLoggerWithConfig` middleware), so application and request logs share one
+output and format.
 
-This makes it straightforward to collect logs with a sidecar such as Grafana
-Alloy or Promtail: point the collector at the container's stdout/stderr and use
-a `json` pipeline stage to extract fields like `level`, `ts`, and `msg`. Request
-logs carry `method`, `uri`, `status`, `latency`, `request_id`, and related
-fields, and use the `REQUEST` / `REQUEST_ERROR` messages.
+The output format depends on the mode. By default sprue uses zap's production
+configuration, which emits a single JSON stream. When the log level is `debug` or
+the deployment environment is `development`/`test`, sprue uses zap's development
+configuration, which emits a human-readable console format (not JSON).
+
+The JSON output makes it straightforward to collect logs with a sidecar such as
+Grafana Alloy or Promtail: point the collector at the container's stdout/stderr
+and use a `json` pipeline stage to extract fields like `level`, `ts`, and `msg`.
+Request logs carry `method`, `uri`, `status`, `latency`, `request_id`,
+`content_length`, `response_size`, `headers`, and related fields, and use the
+`request completed` / `client error` / `server error` messages.
 
 ## Notes
 

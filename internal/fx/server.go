@@ -49,8 +49,9 @@ func NewEchoServer(
 	return e
 }
 
-// requestLogger returns Echo's request logger middleware configured to emit
-// each request through the zap logger, keeping a single uniform JSON log stream.
+// requestLogger returns Echo's request logger middleware configured to route
+// each request through the shared zap logger, so request and application logs
+// share the same output. Mirrors Piri's request logger setup.
 func requestLogger(logger *zap.Logger) echo.MiddlewareFunc {
 	return middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
 		LogLatency:       true,
@@ -64,24 +65,32 @@ func requestLogger(logger *zap.Logger) echo.MiddlewareFunc {
 		LogError:         true,
 		LogContentLength: true,
 		LogResponseSize:  true,
+		LogHeaders:       []string{"X-Agent-Message"},
 		HandleError:      true, // forwards error to the global error handler, so it can decide appropriate status code
 		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
 			fields := []zap.Field{
+				zap.Int("status", v.Status),
 				zap.String("method", v.Method),
 				zap.String("uri", v.URI),
-				zap.Int("status", v.Status),
-				zap.Duration("latency", v.Latency),
 				zap.String("host", v.Host),
-				zap.String("bytes_in", v.ContentLength),
-				zap.Int64("bytes_out", v.ResponseSize),
-				zap.String("user_agent", v.UserAgent),
 				zap.String("remote_ip", v.RemoteIP),
+				zap.Duration("latency", v.Latency),
+				zap.String("user_agent", v.UserAgent),
+				zap.String("content_length", v.ContentLength),
+				zap.Int64("response_size", v.ResponseSize),
 				zap.String("request_id", v.RequestID),
+				zap.Reflect("headers", v.Headers),
 			}
-			if v.Error == nil {
-				logger.Info("REQUEST", fields...)
-			} else {
-				logger.Error("REQUEST_ERROR", append(fields, zap.Error(v.Error))...)
+			if v.Error != nil {
+				fields = append(fields, zap.Error(v.Error))
+			}
+			switch {
+			case v.Status >= http.StatusInternalServerError:
+				logger.Error("server error", fields...)
+			case v.Status >= http.StatusBadRequest:
+				logger.Warn("client error", fields...)
+			default:
+				logger.Info("request completed", fields...)
 			}
 			return nil
 		},
