@@ -26,6 +26,7 @@ var ServerModule = fx.Module("server",
 func NewEchoServer(
 	id identity.Identity,
 	svc *service.Service,
+	logger *zap.Logger,
 ) *echo.Echo {
 	e := echo.New()
 	e.HideBanner = true
@@ -34,7 +35,7 @@ func NewEchoServer(
 	// Middleware
 	e.Use(middleware.Recover())
 	e.Use(middleware.RequestID())
-	e.Use(middleware.RequestLogger())
+	e.Use(requestLogger(logger))
 
 	// Routes
 	e.GET("/", infoHandler(id))
@@ -46,6 +47,54 @@ func NewEchoServer(
 	e.GET("/receipt/:cid", svc.HandleReceiptRequest)
 
 	return e
+}
+
+// requestLogger returns Echo's request logger middleware configured to route
+// each request through the shared zap logger, so request and application logs
+// share the same output. Mirrors Piri's request logger setup.
+func requestLogger(logger *zap.Logger) echo.MiddlewareFunc {
+	return middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
+		LogLatency:       true,
+		LogRemoteIP:      true,
+		LogHost:          true,
+		LogMethod:        true,
+		LogURI:           true,
+		LogRequestID:     true,
+		LogUserAgent:     true,
+		LogStatus:        true,
+		LogError:         true,
+		LogContentLength: true,
+		LogResponseSize:  true,
+		LogHeaders:       []string{"X-Agent-Message"},
+		HandleError:      true, // forwards error to the global error handler, so it can decide appropriate status code
+		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
+			fields := []zap.Field{
+				zap.Int("status", v.Status),
+				zap.String("method", v.Method),
+				zap.String("uri", v.URI),
+				zap.String("host", v.Host),
+				zap.String("remote_ip", v.RemoteIP),
+				zap.Duration("latency", v.Latency),
+				zap.String("user_agent", v.UserAgent),
+				zap.String("content_length", v.ContentLength),
+				zap.Int64("response_size", v.ResponseSize),
+				zap.String("request_id", v.RequestID),
+				zap.Reflect("headers", v.Headers),
+			}
+			if v.Error != nil {
+				fields = append(fields, zap.Error(v.Error))
+			}
+			switch {
+			case v.Status >= http.StatusInternalServerError:
+				logger.Error("server error", fields...)
+			case v.Status >= http.StatusBadRequest:
+				logger.Warn("client error", fields...)
+			default:
+				logger.Info("request completed", fields...)
+			}
+			return nil
+		},
+	})
 }
 
 // RegisterServerLifecycle hooks server start/stop to fx lifecycle.
