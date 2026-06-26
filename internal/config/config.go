@@ -145,6 +145,12 @@ type S3Config struct {
 	AccessKeyID     string `mapstructure:"access_key_id"`
 	SecretAccessKey string `mapstructure:"secret_access_key"`
 
+	// UsePathStyle selects path-style addressing (endpoint/bucket/key) over
+	// virtual-hosted style (bucket.endpoint/key). MinIO and most S3-compatible
+	// endpoints require path style, so this defaults to true. Set it to false for
+	// real AWS S3, which prefers virtual-hosted style.
+	UsePathStyle bool `mapstructure:"use_path_style"`
+
 	AgentMessageBucket string `mapstructure:"agent_message_bucket"`
 	DelegationBucket   string `mapstructure:"delegation_bucket"`
 	UploadShardsBucket string `mapstructure:"upload_shards_bucket"`
@@ -231,6 +237,7 @@ func SetDefaults(v *viper.Viper) {
 	v.SetDefault("storage.s3.region", "us-west-1")
 	v.SetDefault("storage.s3.access_key_id", "minioadmin")
 	v.SetDefault("storage.s3.secret_access_key", "minioadmin")
+	v.SetDefault("storage.s3.use_path_style", true)
 	v.SetDefault("storage.s3.agent_message_bucket", "agent-message")
 	v.SetDefault("storage.s3.delegation_bucket", "delegation")
 	v.SetDefault("storage.s3.upload_shards_bucket", "upload-shards")

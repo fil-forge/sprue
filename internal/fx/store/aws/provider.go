@@ -151,13 +151,12 @@ func NewS3Client(cfg config.S3Config, logger *zap.Logger) (*s3.Client, error) {
 	}
 
 	client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
-		if cfg.Endpoint != "" {
-			o.UsePathStyle = true
-		}
+		o.UsePathStyle = cfg.UsePathStyle
 	})
 	logger.Info("initialized S3 client",
 		zap.String("endpoint", cfg.Endpoint),
 		zap.String("region", cfg.Region),
+		zap.Bool("use_path_style", cfg.UsePathStyle),
 	)
 	return client, nil
 }
