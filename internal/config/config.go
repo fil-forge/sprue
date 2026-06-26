@@ -140,8 +140,9 @@ type S3Config struct {
 
 	// AccessKeyID and SecretAccessKey authenticate against a custom S3 endpoint
 	// (e.g. MinIO). They are only used when Endpoint is set; against real AWS S3
-	// (empty endpoint) the SDK default credential chain applies instead. Default
-	// to minioadmin/minioadmin so local development works out of the box.
+	// (empty endpoint) the SDK default credential chain applies instead. S3Config
+	// itself carries no defaults; SetDefaults seeds these with minioadmin/minioadmin
+	// via viper so local development works out of the box.
 	AccessKeyID     string `mapstructure:"access_key_id"`
 	SecretAccessKey string `mapstructure:"secret_access_key"`
 

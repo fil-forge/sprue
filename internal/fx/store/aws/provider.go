@@ -136,6 +136,9 @@ func NewS3Client(cfg config.S3Config, logger *zap.Logger) (*s3.Client, error) {
 	}
 
 	if cfg.Endpoint != "" {
+		if cfg.AccessKeyID == "" || cfg.SecretAccessKey == "" {
+			return nil, fmt.Errorf("storage.s3.access_key_id and storage.s3.secret_access_key are required when storage.s3.endpoint is set")
+		}
 		opts = append(opts, awsconfig.WithBaseEndpoint(cfg.Endpoint))
 		opts = append(opts, awsconfig.WithCredentialsProvider(credentials.StaticCredentialsProvider{
 			Value: aws.Credentials{

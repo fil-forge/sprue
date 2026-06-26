@@ -38,6 +38,26 @@ func TestNewS3ClientUsesConfiguredCredentials(t *testing.T) {
 	}
 }
 
+// A custom S3 endpoint requires explicit credentials, so an endpoint set without
+// access key or secret fails fast with a clear error rather than surfacing an
+// opaque auth failure on the first request.
+func TestNewS3ClientRequiresCredentialsForCustomEndpoint(t *testing.T) {
+	cases := map[string]config.S3Config{
+		"missing both credentials":  {Endpoint: "http://minio:9000"},
+		"missing access key id":     {Endpoint: "http://minio:9000", SecretAccessKey: "secret"},
+		"missing secret access key": {Endpoint: "http://minio:9000", AccessKeyID: "key"},
+	}
+
+	for desc, cfg := range cases {
+		t.Run(desc, func(t *testing.T) {
+			_, err := NewS3Client(cfg, zap.NewNop())
+			if err == nil {
+				t.Fatal("NewS3Client returned nil error, want error about missing credentials")
+			}
+		})
+	}
+}
+
 // Path-style addressing is controlled by storage.s3.use_path_style, decoupled
 // from the endpoint setting, so it can be disabled even against a custom endpoint
 // (and enabled against real AWS S3).
@@ -47,11 +67,11 @@ func TestNewS3ClientUsePathStyleFromConfig(t *testing.T) {
 		want bool
 	}{
 		"enabled against a custom endpoint": {
-			cfg:  config.S3Config{Endpoint: "http://minio:9000", UsePathStyle: true},
+			cfg:  config.S3Config{Endpoint: "http://minio:9000", AccessKeyID: "key", SecretAccessKey: "secret", UsePathStyle: true},
 			want: true,
 		},
 		"disabled against a custom endpoint": {
-			cfg:  config.S3Config{Endpoint: "http://minio:9000", UsePathStyle: false},
+			cfg:  config.S3Config{Endpoint: "http://minio:9000", AccessKeyID: "key", SecretAccessKey: "secret", UsePathStyle: false},
 			want: false,
 		},
 		"enabled against real AWS S3": {
