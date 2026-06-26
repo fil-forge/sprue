@@ -139,8 +139,8 @@ func NewS3Client(cfg config.S3Config, logger *zap.Logger) (*s3.Client, error) {
 		opts = append(opts, awsconfig.WithBaseEndpoint(cfg.Endpoint))
 		opts = append(opts, awsconfig.WithCredentialsProvider(credentials.StaticCredentialsProvider{
 			Value: aws.Credentials{
-				AccessKeyID:     "minioadmin",
-				SecretAccessKey: "minioadmin",
+				AccessKeyID:     cfg.AccessKeyID,
+				SecretAccessKey: cfg.SecretAccessKey,
 			},
 		}))
 	}
