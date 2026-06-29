@@ -70,6 +70,15 @@ func TestLoadHonorsEnvOnlyKeys(t *testing.T) {
 	}
 }
 
+func TestLoadS3UsePathStyleDefaultsToFalse(t *testing.T) {
+	// Path-style addressing defaults to false, matching the Go zero value and the
+	// AWS SDK convention where path style is opt-in. MinIO setups enable it
+	// explicitly via config.
+	cfg, err := Load(emptyConfigFile(t))
+	assert.NoError(t, err)
+	assert.False(t, cfg.Storage.S3.UsePathStyle)
+}
+
 func TestLoadEmptyEnvOverridesDefault(t *testing.T) {
 	// An explicitly empty env var must override the non-empty default, so that
 	// e.g. the indexer can be disabled via env alone.

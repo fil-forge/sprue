@@ -108,9 +108,10 @@ storage:
     # applies. Default to minioadmin/minioadmin for local development.
     access_key_id: "minioadmin"
     secret_access_key: "minioadmin"
-    # Use path-style addressing (endpoint/bucket/key). Required by MinIO and most
-    # S3-compatible endpoints. Set to false for real AWS S3, which prefers
-    # virtual-hosted style. Default: true.
+    # Use path-style addressing (endpoint/bucket/key). Defaults to false (real
+    # AWS S3 prefers virtual-hosted style). Set to true for MinIO and most
+    # S3-compatible endpoints, which require path style — as below for local
+    # development.
     use_path_style: true
     agent_message_bucket: "agent-message"
     delegation_bucket: "delegation"
