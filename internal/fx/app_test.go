@@ -73,6 +73,9 @@ func TestWireApp(t *testing.T) {
 						S3: config.S3Config{
 							Region:             "us-east-1",
 							Endpoint:           s3Endpoint.String(),
+							AccessKeyID:        "minioadmin",
+							SecretAccessKey:    "minioadmin",
+							UsePathStyle:       true,
 							AgentMessageBucket: "agent-message-" + appID,
 							DelegationBucket:   "delegation-" + appID,
 							UploadShardsBucket: "upload-shards-" + appID,
@@ -126,6 +129,9 @@ func TestWireApp(t *testing.T) {
 						S3: config.S3Config{
 							Region:             "us-east-1",
 							Endpoint:           s3Endpoint.String(),
+							AccessKeyID:        "minioadmin",
+							SecretAccessKey:    "minioadmin",
+							UsePathStyle:       true,
 							AgentMessageBucket: "agent-message-" + appID,
 							DelegationBucket:   "delegation-" + appID,
 							UploadShardsBucket: "upload-shards-" + appID,
