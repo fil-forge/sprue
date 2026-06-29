@@ -138,6 +138,21 @@ type S3Config struct {
 	// Region is the AWS region for S3.
 	Region string `mapstructure:"region"`
 
+	// AccessKeyID and SecretAccessKey authenticate against a custom S3 endpoint
+	// (e.g. MinIO). They are only used when Endpoint is set; against real AWS S3
+	// (empty endpoint) the SDK default credential chain applies instead. S3Config
+	// itself carries no defaults; SetDefaults seeds these with minioadmin/minioadmin
+	// via viper so local development works out of the box.
+	AccessKeyID     string `mapstructure:"access_key_id"`
+	SecretAccessKey string `mapstructure:"secret_access_key"`
+
+	// UsePathStyle selects path-style addressing (endpoint/bucket/key) over
+	// virtual-hosted style (bucket.endpoint/key). It defaults to false, matching
+	// the AWS SDK convention where path style is opt-in and real AWS S3 prefers
+	// virtual-hosted style. Set it to true for MinIO and most S3-compatible
+	// endpoints, which require path style.
+	UsePathStyle bool `mapstructure:"use_path_style"`
+
 	AgentMessageBucket string `mapstructure:"agent_message_bucket"`
 	DelegationBucket   string `mapstructure:"delegation_bucket"`
 	UploadShardsBucket string `mapstructure:"upload_shards_bucket"`
@@ -222,6 +237,9 @@ func SetDefaults(v *viper.Viper) {
 	// S3 defaults (used by the postgres and aws backends)
 	v.SetDefault("storage.s3.endpoint", "http://minio:9000")
 	v.SetDefault("storage.s3.region", "us-west-1")
+	v.SetDefault("storage.s3.access_key_id", "minioadmin")
+	v.SetDefault("storage.s3.secret_access_key", "minioadmin")
+	v.SetDefault("storage.s3.use_path_style", false)
 	v.SetDefault("storage.s3.agent_message_bucket", "agent-message")
 	v.SetDefault("storage.s3.delegation_bucket", "delegation")
 	v.SetDefault("storage.s3.upload_shards_bucket", "upload-shards")

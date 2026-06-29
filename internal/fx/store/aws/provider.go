@@ -136,11 +136,14 @@ func NewS3Client(cfg config.S3Config, logger *zap.Logger) (*s3.Client, error) {
 	}
 
 	if cfg.Endpoint != "" {
+		if cfg.AccessKeyID == "" || cfg.SecretAccessKey == "" {
+			return nil, fmt.Errorf("storage.s3.access_key_id and storage.s3.secret_access_key are required when storage.s3.endpoint is set")
+		}
 		opts = append(opts, awsconfig.WithBaseEndpoint(cfg.Endpoint))
 		opts = append(opts, awsconfig.WithCredentialsProvider(credentials.StaticCredentialsProvider{
 			Value: aws.Credentials{
-				AccessKeyID:     "minioadmin",
-				SecretAccessKey: "minioadmin",
+				AccessKeyID:     cfg.AccessKeyID,
+				SecretAccessKey: cfg.SecretAccessKey,
 			},
 		}))
 	}
@@ -151,13 +154,12 @@ func NewS3Client(cfg config.S3Config, logger *zap.Logger) (*s3.Client, error) {
 	}
 
 	client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
-		if cfg.Endpoint != "" {
-			o.UsePathStyle = true
-		}
+		o.UsePathStyle = cfg.UsePathStyle
 	})
 	logger.Info("initialized S3 client",
 		zap.String("endpoint", cfg.Endpoint),
 		zap.String("region", cfg.Region),
+		zap.Bool("use_path_style", cfg.UsePathStyle),
 	)
 	return client, nil
 }
