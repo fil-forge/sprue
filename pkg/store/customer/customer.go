@@ -40,7 +40,7 @@ type Record struct {
 	Customer did.DID
 	// Opaque identifier representing an account in the payment system
 	// e.g. Stripe customer ID (stripe:cus_9s6XKzkNRiz8i3)
-	Account *string
+	ExternalAccount *string
 	// Unique identifier of the product a.k.a plan.
 	Product did.DID
 	// Misc customer details

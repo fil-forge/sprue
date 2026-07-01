@@ -38,7 +38,7 @@ func (s *Store) Initialize(ctx context.Context) error { return nil }
 
 func (s *Store) Get(ctx context.Context, customerID did.DID) (customer.Record, error) {
 	row := s.pool.QueryRow(ctx, `
-		SELECT customer, account, product, details, reserved_capacity, inserted_at, updated_at
+		SELECT customer, external_account, product, details, reserved_capacity, inserted_at, updated_at
 		FROM customer
 		WHERE customer = $1
 	`, customerID.String())
@@ -52,7 +52,7 @@ func (s *Store) Get(ctx context.Context, customerID did.DID) (customer.Record, e
 	return rec, nil
 }
 
-func (s *Store) Add(ctx context.Context, customerID did.DID, account *string, product did.DID, details map[string]any, reservedCapacity *uint64) error {
+func (s *Store) Add(ctx context.Context, customerID did.DID, externalAccount *string, product did.DID, details map[string]any, reservedCapacity *uint64) error {
 	var detailsJSON []byte
 	if len(details) > 0 {
 		b, err := json.Marshal(details)
@@ -69,9 +69,9 @@ func (s *Store) Add(ctx context.Context, customerID did.DID, account *string, pr
 	}
 
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO customer (customer, account, product, details, reserved_capacity, inserted_at)
+		INSERT INTO customer (customer, external_account, product, details, reserved_capacity, inserted_at)
 		VALUES ($1, $2, $3, $4, $5, $6)
-	`, customerID.String(), account, product.String(), detailsJSON, capacity, time.Now().UTC())
+	`, customerID.String(), externalAccount, product.String(), detailsJSON, capacity, time.Now().UTC())
 
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -96,7 +96,7 @@ func (s *Store) List(ctx context.Context, options ...customer.ListOption) (store
 
 	args := []any{limit + 1}
 	query := `
-		SELECT customer, account, product, details, reserved_capacity, inserted_at, updated_at
+		SELECT customer, external_account, product, details, reserved_capacity, inserted_at, updated_at
 		FROM customer
 	`
 	if cfg.Cursor != nil {
@@ -154,15 +154,15 @@ type rowScanner interface {
 
 func scanRecord(row rowScanner) (customer.Record, error) {
 	var (
-		customerStr  string
-		account      *string
-		productStr   string
-		detailsJSON  []byte
-		capacity     *int64
-		insertedAt   time.Time
-		updatedAtRaw *time.Time
+		customerStr     string
+		externalAccount *string
+		productStr      string
+		detailsJSON     []byte
+		capacity        *int64
+		insertedAt      time.Time
+		updatedAtRaw    *time.Time
 	)
-	if err := row.Scan(&customerStr, &account, &productStr, &detailsJSON, &capacity, &insertedAt, &updatedAtRaw); err != nil {
+	if err := row.Scan(&customerStr, &externalAccount, &productStr, &detailsJSON, &capacity, &insertedAt, &updatedAtRaw); err != nil {
 		return customer.Record{}, err
 	}
 
@@ -176,10 +176,10 @@ func scanRecord(row rowScanner) (customer.Record, error) {
 	}
 
 	rec := customer.Record{
-		Customer:   customerID,
-		Account:    account,
-		Product:    product,
-		InsertedAt: insertedAt,
+		Customer:        customerID,
+		ExternalAccount: externalAccount,
+		Product:         product,
+		InsertedAt:      insertedAt,
 	}
 	if updatedAtRaw != nil {
 		rec.UpdatedAt = *updatedAtRaw

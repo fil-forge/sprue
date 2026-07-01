@@ -55,10 +55,10 @@ func TestCustomerAddHandler(t *testing.T) {
 
 		// Subject is the service DID, as set by the upload client.
 		req, res := invokeCustomerAdd(t, ctx, id, id.DID(), &customercmds.AddArguments{
-			Customer: customerDID,
-			Account:  &account,
-			Product:  product,
-			Details:  details,
+			Customer:        customerDID,
+			ExternalAccount: &account,
+			Product:         product,
+			Details:         details,
 		})
 
 		err := handler.Handler(req, res)
@@ -71,8 +71,8 @@ func TestCustomerAddHandler(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, customerDID, rec.Customer)
 		require.Equal(t, product, rec.Product)
-		require.NotNil(t, rec.Account)
-		require.Equal(t, account, *rec.Account)
+		require.NotNil(t, rec.ExternalAccount)
+		require.Equal(t, account, *rec.ExternalAccount)
 		require.Equal(t, map[string]any{"plan": "pro"}, rec.Details)
 	})
 

@@ -48,7 +48,7 @@ func NewCustomerAddHandler(id identity.Identity, customerStore customerstore.Sto
 				}
 			}
 
-			err := customerStore.Add(req.Context(), args.Customer, args.Account, args.Product, details, nil)
+			err := customerStore.Add(req.Context(), args.Customer, args.ExternalAccount, args.Product, details, nil)
 			if err != nil {
 				if errors.Is(err, customerstore.ErrCustomerExists) {
 					log.Warn("customer already exists")
