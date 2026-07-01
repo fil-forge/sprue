@@ -33,16 +33,16 @@ var DynamoCustomerTableProps = struct {
 			AttributeType: types.ScalarAttributeTypeS,
 		},
 		{
-			AttributeName: aws.String("account"),
+			AttributeName: aws.String("externalAccount"),
 			AttributeType: types.ScalarAttributeTypeS,
 		},
 	},
 	GSI: []types.GlobalSecondaryIndex{
 		{
-			IndexName: aws.String("account"),
+			IndexName: aws.String("externalAccount"),
 			KeySchema: []types.KeySchemaElement{
 				{
-					AttributeName: aws.String("account"),
+					AttributeName: aws.String("externalAccount"),
 					KeyType:       types.KeyTypeHash,
 				},
 			},
@@ -235,8 +235,8 @@ func itemToRecord(item map[string]types.AttributeValue) (customer.Record, error)
 		Product:  product,
 	}
 
-	if accountAttr, ok := item["account"].(*types.AttributeValueMemberS); ok {
-		rec.Account = &accountAttr.Value
+	if externalAccAttr, ok := item["externalAccount"].(*types.AttributeValueMemberS); ok {
+		rec.ExternalAccount = &externalAccAttr.Value
 	}
 
 	if capAttr, ok := item["reservedCapacity"].(*types.AttributeValueMemberN); ok {

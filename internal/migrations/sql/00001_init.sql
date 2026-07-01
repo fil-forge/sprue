@@ -2,7 +2,7 @@
 -- +goose StatementBegin
 CREATE TABLE customer (
     customer          TEXT        PRIMARY KEY,
-    account           TEXT,
+    external_account  TEXT,
     product           TEXT        NOT NULL,
     details           JSONB,
     reserved_capacity BIGINT,
@@ -10,7 +10,7 @@ CREATE TABLE customer (
     updated_at        TIMESTAMPTZ
 );
 
-CREATE INDEX customer_account_idx ON customer (account) WHERE account IS NOT NULL;
+CREATE INDEX customer_external_account_idx ON customer (external_account) WHERE external_account IS NOT NULL;
 
 CREATE TABLE storage_provider (
     provider           TEXT        PRIMARY KEY,
