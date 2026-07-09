@@ -16,9 +16,9 @@ import (
 // /customer/add invocation's subject is not the service DID.
 const InvalidCustomerSubjectErrorName = "InvalidCustomerSubject"
 
-// errInvalidCustomerSubject is returned when the invocation subject is not the
+// ErrInvalidCustomerSubject is returned when the invocation subject is not the
 // service DID.
-var errInvalidCustomerSubject = errors.New(InvalidCustomerSubjectErrorName, "invocation subject must be the service")
+var ErrInvalidCustomerSubject = errors.New(InvalidCustomerSubjectErrorName, "invocation subject must be the service")
 
 // NewCustomerAddHandler handles /customer/add invocations. It asserts that the
 // invocation subject is the service DID and registers the customer in the
@@ -29,7 +29,7 @@ func NewCustomerAddHandler(id identity.Identity, customerStore customerstore.Sto
 		func(req *binding.Request[*customercmds.AddArguments], res *binding.Response[*customercmds.AddOK]) error {
 			if req.Invocation().Subject() != id.DID() {
 				log.Warn("not a valid invocation", zap.Stringer("subject", req.Invocation().Subject()))
-				return res.SetFailure(errInvalidCustomerSubject)
+				return res.SetFailure(ErrInvalidCustomerSubject)
 			}
 
 			args := req.Task().Arguments()

@@ -93,7 +93,7 @@ func TestCustomerAddHandler(t *testing.T) {
 		require.NoError(t, err)
 
 		_, err = customercmds.Add.Unpack(res.Receipt())
-		require.ErrorIs(t, err, errInvalidCustomerSubject)
+		require.ErrorIs(t, err, ErrInvalidCustomerSubject)
 
 		// The customer must not have been written.
 		_, err = store.Get(ctx, customerDID)
