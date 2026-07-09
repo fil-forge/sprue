@@ -85,7 +85,7 @@ func TestCustomerStore(t *testing.T) {
 				require.NoError(t, err)
 				require.Equal(t, customerID, rec.Customer)
 				require.Equal(t, product, rec.Product)
-				require.Nil(t, rec.Account)
+				require.Nil(t, rec.ExternalAccount)
 				require.False(t, rec.InsertedAt.IsZero())
 			})
 
@@ -99,7 +99,7 @@ func TestCustomerStore(t *testing.T) {
 
 				rec, err := s.Get(t.Context(), customerID)
 				require.NoError(t, err)
-				require.Equal(t, &account, rec.Account)
+				require.Equal(t, &account, rec.ExternalAccount)
 				require.Equal(t, &capacity, rec.ReservedCapacity)
 			})
 

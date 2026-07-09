@@ -33,16 +33,16 @@ var DynamoCustomerTableProps = struct {
 			AttributeType: types.ScalarAttributeTypeS,
 		},
 		{
-			AttributeName: aws.String("account"),
+			AttributeName: aws.String("externalAccount"),
 			AttributeType: types.ScalarAttributeTypeS,
 		},
 	},
 	GSI: []types.GlobalSecondaryIndex{
 		{
-			IndexName: aws.String("account"),
+			IndexName: aws.String("externalAccount"),
 			KeySchema: []types.KeySchemaElement{
 				{
-					AttributeName: aws.String("account"),
+					AttributeName: aws.String("externalAccount"),
 					KeyType:       types.KeyTypeHash,
 				},
 			},
@@ -101,15 +101,15 @@ func (s *Store) Get(ctx context.Context, customerID did.DID) (customer.Record, e
 	return itemToRecord(out.Item)
 }
 
-func (s *Store) Add(ctx context.Context, customerID did.DID, account *string, product did.DID, details map[string]any, reservedCapacity *uint64) error {
+func (s *Store) Add(ctx context.Context, customerID did.DID, externalAccount *string, product did.DID, details map[string]any, reservedCapacity *uint64) error {
 	now := time.Now().UTC().Format(timeutil.SimplifiedISO8601)
 	item := map[string]types.AttributeValue{
 		"customer":   &types.AttributeValueMemberS{Value: customerID.String()},
 		"product":    &types.AttributeValueMemberS{Value: product.String()},
 		"insertedAt": &types.AttributeValueMemberS{Value: now},
 	}
-	if account != nil {
-		item["account"] = &types.AttributeValueMemberS{Value: *account}
+	if externalAccount != nil {
+		item["externalAccount"] = &types.AttributeValueMemberS{Value: *externalAccount}
 	}
 	if reservedCapacity != nil {
 		item["reservedCapacity"] = &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", *reservedCapacity)}
@@ -235,8 +235,8 @@ func itemToRecord(item map[string]types.AttributeValue) (customer.Record, error)
 		Product:  product,
 	}
 
-	if accountAttr, ok := item["account"].(*types.AttributeValueMemberS); ok {
-		rec.Account = &accountAttr.Value
+	if externalAccAttr, ok := item["externalAccount"].(*types.AttributeValueMemberS); ok {
+		rec.ExternalAccount = &externalAccAttr.Value
 	}
 
 	if capAttr, ok := item["reservedCapacity"].(*types.AttributeValueMemberN); ok {

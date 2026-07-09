@@ -67,7 +67,7 @@ func (s *Store) List(ctx context.Context, options ...customer.ListOption) (store
 	}, nil
 }
 
-func (s *Store) Add(ctx context.Context, customerID did.DID, account *string, product did.DID, details map[string]any, reservedCapacity *uint64) error {
+func (s *Store) Add(ctx context.Context, customerID did.DID, externalAccount *string, product did.DID, details map[string]any, reservedCapacity *uint64) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
@@ -78,7 +78,7 @@ func (s *Store) Add(ctx context.Context, customerID did.DID, account *string, pr
 	}
 	c := customer.Record{
 		Customer:         customerID,
-		Account:          account,
+		ExternalAccount:  externalAccount,
 		Product:          product,
 		Details:          details,
 		ReservedCapacity: reservedCapacity,
