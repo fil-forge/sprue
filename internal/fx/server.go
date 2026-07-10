@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/fil-forge/libforge/identity"
 	"github.com/fil-forge/sprue/internal/config"
+	"github.com/fil-forge/sprue/pkg/build"
 	"github.com/fil-forge/sprue/pkg/service"
 )
 
@@ -38,7 +40,7 @@ func NewEchoServer(
 	e.Use(requestLogger(logger))
 
 	// Routes
-	e.GET("/", infoHandler(id))
+	e.GET("/", serverInfoHandler(id))
 	e.GET("/health", healthHandler)
 	e.GET("/.well-known/did.json", didDocumentHandler(id))
 	e.POST("/", svc.HandleUCANRequest)
@@ -130,14 +132,35 @@ func RegisterServerLifecycle(
 	})
 }
 
-// infoHandler returns service information.
-func infoHandler(id identity.Identity) echo.HandlerFunc {
+// serverInfo identifies the service and its build, served on GET /.
+type serverInfo struct {
+	ID    string    `json:"id"`
+	Build buildInfo `json:"build"`
+}
+
+// buildInfo is the version and source repository of the running build.
+type buildInfo struct {
+	Version string `json:"version"`
+	Repo    string `json:"repo"`
+}
+
+// serverInfoHandler serves the service DID and build info: JSON when requested
+// via the Accept header, otherwise a plain-text banner. Mirrors Hilt's handler.
+func serverInfoHandler(id identity.Identity) echo.HandlerFunc {
+	info := serverInfo{
+		ID: id.DID().String(),
+		Build: buildInfo{
+			Version: build.Version,
+			Repo:    "https://github.com/fil-forge/sprue",
+		},
+	}
 	return func(c echo.Context) error {
-		return c.JSON(http.StatusOK, map[string]interface{}{
-			"service": "sprue",
-			"did":     id.DID(),
-			"version": "0.1.0",
-		})
+		// Media type tokens are case-insensitive.
+		if strings.Contains(strings.ToLower(c.Request().Header.Get("Accept")), "application/json") {
+			return c.JSON(http.StatusOK, info)
+		}
+		banner := fmt.Sprintf("⚒️ sprue %s\n- %s\n- %s", info.Build.Version, info.Build.Repo, info.ID)
+		return c.String(http.StatusOK, banner)
 	}
 }
 
