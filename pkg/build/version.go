@@ -34,7 +34,7 @@ const (
 
 func init() {
 	if version == "" {
-		// This is being ran in development, try to grab the latest known version from the version.json file
+		// This is being run in development, try to grab the latest known version from the version.json file
 		var err error
 		version, err = readVersionFromFile()
 		if err != nil {
