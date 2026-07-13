@@ -2,8 +2,10 @@ package service
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"slices"
 	"time"
 
@@ -14,11 +16,16 @@ import (
 	"github.com/fil-forge/sprue/pkg/service/ui"
 	"github.com/fil-forge/sprue/pkg/store/agent"
 	delegation_store "github.com/fil-forge/sprue/pkg/store/delegation"
+	"github.com/fil-forge/ucantone/did"
 	"github.com/fil-forge/ucantone/did/key"
+	"github.com/fil-forge/ucantone/did/plc"
 	"github.com/fil-forge/ucantone/did/resolver"
 	"github.com/fil-forge/ucantone/did/web"
 	"github.com/fil-forge/ucantone/ipld/codec/dagcbor"
 	"github.com/fil-forge/ucantone/multikey"
+	// Registers the secp256k1 verifier decoder: did:plc issuers (tenants)
+	// carry secp256k1 verification methods.
+	_ "github.com/fil-forge/ucantone/multikey/secp256k1/verifier"
 	"github.com/fil-forge/ucantone/server"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/container"
@@ -31,6 +38,7 @@ import (
 type serviceConfig struct {
 	serverOptions         []server.HTTPOption
 	insecureDIDResolution bool
+	plcDirectory          string
 }
 
 type Option func(*serviceConfig)
@@ -48,6 +56,50 @@ func WithInsecureDIDResolution(enabled bool) Option {
 	return func(c *serviceConfig) {
 		c.insecureDIDResolution = enabled
 	}
+}
+
+// WithPLCDirectory sets the did:plc directory endpoint used to resolve
+// did:plc issuers (e.g. tenants invoking /provider/add during bucket
+// provisioning). Empty leaves did:plc unresolvable.
+func WithPLCDirectory(directory string) Option {
+	return func(c *serviceConfig) {
+		c.plcDirectory = directory
+	}
+}
+
+// plcCapabilityResolver wraps a did:plc resolver, granting every verification
+// method the capability relationships the UCAN validator consults. PLC
+// directory documents list verificationMethod entries without relationship
+// arrays — a strict W3C read leaves them unusable for verification, but
+// did:plc consumers conventionally treat the listed methods as the DID's
+// signing keys.
+type plcCapabilityResolver struct {
+	inner did.Resolver
+}
+
+func (r plcCapabilityResolver) Resolve(ctx context.Context, d did.DID) (did.Document, error) {
+	doc, err := r.inner.Resolve(ctx, d)
+	if err != nil {
+		return doc, err
+	}
+	if doc.CapabilityInvocation != nil && len(doc.CapabilityInvocation.All()) > 0 {
+		return doc, nil
+	}
+	fixed := did.NewDocument(doc.ID)
+	fixed.Controller = doc.Controller
+	fixed.AlsoKnownAs = doc.AlsoKnownAs
+	fixed.Service = doc.Service
+	if doc.VerificationMethods != nil {
+		for _, vm := range *doc.VerificationMethods {
+			if err := fixed.CapabilityInvocation.Add(vm); err != nil {
+				return did.Document{}, fmt.Errorf("building did:plc document for %s: %w", d, err)
+			}
+			if err := fixed.CapabilityDelegation.Add(vm); err != nil {
+				return did.Document{}, fmt.Errorf("building did:plc document for %s: %w", d, err)
+			}
+		}
+	}
+	return fixed, nil
 }
 
 // Service implements the sprue upload service logic.
@@ -96,6 +148,22 @@ func createUCANServer(id multikey.Issuer, agentStore agent.Store, handlers []ser
 		return nil, fmt.Errorf("creating DID document for service identity: %w", err)
 	}
 
+	// did:plc resolution is enabled when a directory endpoint is configured —
+	// needed to verify did:plc issuers (e.g. tenants signing /provider/add
+	// invocations during bucket provisioning).
+	var plcResolver did.Resolver
+	if cfg.plcDirectory != "" {
+		u, err := url.Parse(cfg.plcDirectory)
+		if err != nil {
+			return nil, fmt.Errorf("parsing PLC directory URL %q: %w", cfg.plcDirectory, err)
+		}
+		p, err := plc.NewResolver(*u)
+		if err != nil {
+			return nil, fmt.Errorf("creating did:plc resolver: %w", err)
+		}
+		plcResolver = resolver.NewCached(plcCapabilityResolver{inner: p}, time.Hour*3)
+	}
+
 	resolver := resolver.ByMethod{
 		"key": key.Resolver,
 		"web": resolver.Tiered{
@@ -103,6 +171,9 @@ func createUCANServer(id multikey.Issuer, agentStore agent.Store, handlers []ser
 			resolver.NewCached(webResolver, time.Hour*3),
 		},
 		"mailto": didmailto.NewResolver(id.DID()),
+	}
+	if plcResolver != nil {
+		resolver["plc"] = plcResolver
 	}
 
 	factories := validator.DefaultFactories()
