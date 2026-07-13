@@ -22,6 +22,7 @@ import (
 	"github.com/fil-forge/ucantone/did/web"
 	"github.com/fil-forge/ucantone/ipld/codec/dagcbor"
 	"github.com/fil-forge/ucantone/multikey"
+
 	// Registers the secp256k1 verifier decoder: did:plc issuers (tenants)
 	// carry secp256k1 verification methods.
 	_ "github.com/fil-forge/ucantone/multikey/secp256k1/verifier"
@@ -65,7 +66,6 @@ func WithPLCDirectory(directory string) Option {
 		c.plcDirectory = directory
 	}
 }
-
 
 // Service implements the sprue upload service logic.
 type Service struct {
