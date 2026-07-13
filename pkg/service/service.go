@@ -2,7 +2,6 @@ package service
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -67,40 +66,6 @@ func WithPLCDirectory(directory string) Option {
 	}
 }
 
-// plcCapabilityResolver wraps a did:plc resolver, granting every verification
-// method the capability relationships the UCAN validator consults. PLC
-// directory documents list verificationMethod entries without relationship
-// arrays — a strict W3C read leaves them unusable for verification, but
-// did:plc consumers conventionally treat the listed methods as the DID's
-// signing keys.
-type plcCapabilityResolver struct {
-	inner did.Resolver
-}
-
-func (r plcCapabilityResolver) Resolve(ctx context.Context, d did.DID) (did.Document, error) {
-	doc, err := r.inner.Resolve(ctx, d)
-	if err != nil {
-		return doc, err
-	}
-	if doc.CapabilityInvocation != nil && len(doc.CapabilityInvocation.All()) > 0 {
-		return doc, nil
-	}
-	fixed := did.NewDocument(doc.ID)
-	fixed.Controller = doc.Controller
-	fixed.AlsoKnownAs = doc.AlsoKnownAs
-	fixed.Service = doc.Service
-	if doc.VerificationMethods != nil {
-		for _, vm := range *doc.VerificationMethods {
-			if err := fixed.CapabilityInvocation.Add(vm); err != nil {
-				return did.Document{}, fmt.Errorf("building did:plc document for %s: %w", d, err)
-			}
-			if err := fixed.CapabilityDelegation.Add(vm); err != nil {
-				return did.Document{}, fmt.Errorf("building did:plc document for %s: %w", d, err)
-			}
-		}
-	}
-	return fixed, nil
-}
 
 // Service implements the sprue upload service logic.
 type Service struct {
@@ -161,7 +126,7 @@ func createUCANServer(id multikey.Issuer, agentStore agent.Store, handlers []ser
 		if err != nil {
 			return nil, fmt.Errorf("creating did:plc resolver: %w", err)
 		}
-		plcResolver = resolver.NewCached(plcCapabilityResolver{inner: p}, time.Hour*3)
+		plcResolver = resolver.NewCached(p, time.Hour*3)
 	}
 
 	resolver := resolver.ByMethod{
