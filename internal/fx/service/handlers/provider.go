@@ -48,6 +48,10 @@ var Module = fx.Module("service-handlers",
 			handlers.NewBlobAddHandler,
 			fx.ResultTags(`group:"ucan_handlers"`),
 		),
+		fx.Annotate(
+			handlers.NewBlobListHandler,
+			fx.ResultTags(`group:"ucan_handlers"`),
+		),
 		// fx.Annotate(
 		// 	handlers.NewBlobReplicateHandler,
 		// 	fx.ResultTags(`group:"ucan_handlers"`),
