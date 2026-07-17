@@ -196,6 +196,142 @@ func (c *Client) AcceptInvocation(ctx context.Context, req *AcceptRequest, proof
 	return inv, prfs, nil
 }
 
+// RemoveRequest contains the parameters for a /blob/remove invocation.
+type RemoveRequest struct {
+	Space  did.DID
+	Digest []byte
+}
+
+// Remove sends a /blob/remove invocation to the piri node, releasing the
+// space's claim on the blob. Returns the response data, the invocation that
+// was sent, and the receipt from piri. Piri's handler is idempotent, so
+// removing an already-removed blob succeeds.
+func (c *Client) Remove(ctx context.Context, req *RemoveRequest, proofStore ucanlib.ProofStore, options ...invocation.Option) (*blobcmds.RemoveOK, ucan.Invocation, ucan.Receipt, error) {
+	inv, prfs, err := c.RemoveInvocation(ctx, req, proofStore, options...)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("creating remove invocation: %w", err)
+	}
+
+	c.logger.Debug("REMOVE invocation created",
+		zap.Stringer("issuer", inv.Issuer()),
+		zap.Stringer("audience", inv.Audience()),
+		zap.Int("proofs", len(prfs)),
+	)
+
+	removeOK, rcpt, _, err := ucan_client.Execute[*blobcmds.RemoveOK](
+		ctx,
+		c.client,
+		c.logger,
+		inv,
+		execution.WithDelegations(prfs...),
+	)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return removeOK, inv, rcpt, nil
+}
+
+// RemoveInvocation returns the invocation for the remove request.
+func (c *Client) RemoveInvocation(ctx context.Context, req *RemoveRequest, proofStore ucanlib.ProofStore, options ...invocation.Option) (ucan.Invocation, []ucan.Delegation, error) {
+	// As with allocate/accept, the proof chain is rooted at the storage
+	// provider, so the subject is the provider DID and the space travels in
+	// the arguments.
+	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.issuer.DID(), blobcmds.Remove.Command, c.piriDID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("building proof chain: %w", err)
+	}
+
+	options = slices.Clone(options)
+	options = append(
+		options,
+		invocation.WithAudience(c.piriDID),
+		invocation.WithProofs(prfLinks...),
+	)
+
+	inv, err := blobcmds.Remove.Invoke(
+		c.issuer,
+		c.piriDID,
+		&blobcmds.RemoveArguments{
+			Space:  req.Space,
+			Digest: req.Digest,
+		},
+		options...,
+	)
+	if err != nil {
+		return nil, nil, fmt.Errorf("creating remove invocation: %w", err)
+	}
+
+	return inv, prfs, nil
+}
+
+// RejectRequest contains the parameters for a /blob/reject invocation.
+type RejectRequest struct {
+	Space  did.DID
+	Digest []byte
+}
+
+// Reject sends a /blob/reject invocation to the piri node, retiring the
+// space's parked (never-accepted) blob. Piri refuses accepted blobs with a
+// BlobAccepted failure; otherwise the handler is idempotent.
+func (c *Client) Reject(ctx context.Context, req *RejectRequest, proofStore ucanlib.ProofStore, options ...invocation.Option) (*blobcmds.RejectOK, ucan.Invocation, ucan.Receipt, error) {
+	inv, prfs, err := c.RejectInvocation(ctx, req, proofStore, options...)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("creating reject invocation: %w", err)
+	}
+
+	c.logger.Debug("REJECT invocation created",
+		zap.Stringer("issuer", inv.Issuer()),
+		zap.Stringer("audience", inv.Audience()),
+		zap.Int("proofs", len(prfs)),
+	)
+
+	rejectOK, rcpt, _, err := ucan_client.Execute[*blobcmds.RejectOK](
+		ctx,
+		c.client,
+		c.logger,
+		inv,
+		execution.WithDelegations(prfs...),
+	)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return rejectOK, inv, rcpt, nil
+}
+
+// RejectInvocation returns the invocation for the reject request.
+func (c *Client) RejectInvocation(ctx context.Context, req *RejectRequest, proofStore ucanlib.ProofStore, options ...invocation.Option) (ucan.Invocation, []ucan.Delegation, error) {
+	// As with allocate/accept/remove, the proof chain is rooted at the
+	// storage provider, so the subject is the provider DID and the space
+	// travels in the arguments. Cause is not forwarded — it is upload-service
+	// routing metadata, meaningless to the node.
+	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.issuer.DID(), blobcmds.Reject.Command, c.piriDID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("building proof chain: %w", err)
+	}
+
+	options = slices.Clone(options)
+	options = append(
+		options,
+		invocation.WithAudience(c.piriDID),
+		invocation.WithProofs(prfLinks...),
+	)
+
+	inv, err := blobcmds.Reject.Invoke(
+		c.issuer,
+		c.piriDID,
+		&blobcmds.RejectArguments{
+			Space:  req.Space,
+			Digest: req.Digest,
+		},
+		options...,
+	)
+	if err != nil {
+		return nil, nil, fmt.Errorf("creating reject invocation: %w", err)
+	}
+
+	return inv, prfs, nil
+}
+
 // ReplicaAllocateRequest contains the parameters for a /blob/replica/allocate invocation.
 type ReplicaAllocateRequest struct {
 	Space  did.DID
