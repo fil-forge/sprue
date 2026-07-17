@@ -39,6 +39,10 @@ type DeploymentConfig struct {
 	// InsecureDIDResolution enables HTTP (instead of HTTPS) for did:web
 	// resolution, which should only be used for development purposes.
 	InsecureDIDResolution bool `mapstructure:"insecure_did_resolution" toml:"insecure_did_resolution,omitempty"`
+	// PLCDirectory is the did:plc directory endpoint used to resolve did:plc
+	// issuers (e.g. tenants invoking /provider/add during bucket
+	// provisioning). Empty disables did:plc resolution.
+	PLCDirectory string `mapstructure:"plc_directory" toml:"plc_directory,omitempty"`
 }
 
 // ServerConfig holds HTTP server settings.
@@ -194,6 +198,7 @@ func SetDefaults(v *viper.Viper) {
 	v.SetDefault("deployment.allow_provision_without_payment_plan", false)
 	v.SetDefault("deployment.max_replicas", 3)
 	v.SetDefault("deployment.insecure_did_resolution", false)
+	v.SetDefault("deployment.plc_directory", "")
 
 	// Server defaults
 	v.SetDefault("server.host", "0.0.0.0")

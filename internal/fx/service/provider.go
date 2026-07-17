@@ -40,5 +40,6 @@ func NewService(p ServiceParams) (*service.Service, error) {
 		p.Logger,
 		service.WithServerOptions(p.Options...),
 		service.WithInsecureDIDResolution(p.DeploymentConfig.InsecureDIDResolution),
+		service.WithPLCDirectory(p.DeploymentConfig.PLCDirectory),
 	)
 }

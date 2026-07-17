@@ -10,6 +10,7 @@ import (
 	"github.com/fil-forge/sprue/pkg/provisioning"
 	"github.com/fil-forge/sprue/pkg/store/consumer"
 	"github.com/fil-forge/ucantone/binding"
+	"github.com/fil-forge/ucantone/did/plc"
 	"github.com/fil-forge/ucantone/errors"
 	"github.com/fil-forge/ucantone/server"
 	"go.uber.org/zap"
@@ -20,10 +21,16 @@ func NewProviderAddHandler(deploymentCfg config.DeploymentConfig, provisioningSv
 	return providercmds.Add.Route(
 		func(req *binding.Request[*providercmds.AddArguments], res *binding.Response[*providercmds.AddOK]) error {
 			args := req.Task().Arguments()
-			account, err := didmailto.Parse(req.Invocation().Subject().String())
+			// Accounts are did:mailto (email-verified users) or did:plc
+			// (Fil One tenants provisioning bucket spaces via hilt).
+			subject := req.Invocation().Subject()
+			account, err := didmailto.Parse(subject.String())
 			if err != nil {
-				log.Warn("invalid account", zap.Stringer("account", req.Invocation().Subject()))
-				return res.SetFailure(errors.New(providercmds.InvalidAccountErrorName, "invalid account DID: %v", err))
+				account, err = plc.Parse(subject.String())
+				if err != nil {
+					log.Warn("invalid account", zap.Stringer("account", subject))
+					return res.SetFailure(errors.New(providercmds.InvalidAccountErrorName, "invalid account DID: %v", err))
+				}
 			}
 			serviceProvider := args.Provider
 			space := args.Consumer

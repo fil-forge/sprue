@@ -15,6 +15,7 @@ import (
 	customer_store "github.com/fil-forge/sprue/pkg/store/customer/memory"
 	subscription_store "github.com/fil-forge/sprue/pkg/store/subscription/memory"
 	"github.com/fil-forge/ucantone/did"
+	"github.com/fil-forge/ucantone/did/plc"
 	"github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
 	"github.com/fil-forge/ucantone/ucan"
@@ -116,6 +117,36 @@ func TestProviderAddHandler(t *testing.T) {
 		)
 
 		account := testutil.Must(didmailto.New("alice@example.com"))(t)
+		space := testutil.RandomIssuer(t)
+		agent := testutil.RandomIssuer(t)
+		req, res := invokeProviderAdd(t, ctx, agent, uploadService, account,
+			&providercmds.AddArguments{
+				Provider: serviceProvider.DID(),
+				Consumer: space.DID(),
+			},
+		)
+
+		err := handler.Handler(req, res)
+		require.NoError(t, err)
+
+		ok, err := providercmds.Add.Unpack(res.Receipt())
+		require.NoError(t, err)
+		require.NotEmpty(t, ok.ID)
+	})
+
+	t.Run("success with did:plc account", func(t *testing.T) {
+		serviceProvider := testutil.RandomIssuer(t)
+		deps := setupProviderAdd(t, serviceProvider.DID())
+
+		account := testutil.Must(plc.Parse("did:plc:z72i7hdynmk6r22z27h6tvur"))(t)
+		product := testutil.Must(did.Parse("did:web:free.web3.storage"))(t)
+		require.NoError(t, deps.customerStore.Add(ctx, account, nil, product, nil, nil))
+
+		handler := handlers.NewProviderAddHandler(
+			config.DeploymentConfig{AllowProvisionWithoutPaymentPlan: false},
+			deps.provisioningSvc, deps.billingSvc, logger,
+		)
+
 		space := testutil.RandomIssuer(t)
 		agent := testutil.RandomIssuer(t)
 		req, res := invokeProviderAdd(t, ctx, agent, uploadService, account,

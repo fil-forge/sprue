@@ -23,6 +23,10 @@ deployment:
   # includes the original blob that was uploaded, so only values above 1 will
   # allow users to have multiple copies of their data.
   max_replicas: 3
+  # did:plc directory endpoint used to resolve did:plc issuers (e.g. tenants
+  # invoking /provider/add during bucket provisioning). Empty disables
+  # did:plc resolution.
+  # plc_directory: "https://plc.directory"
 
 server:
   # Host address to bind the HTTP server to
