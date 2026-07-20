@@ -38,6 +38,8 @@ var envOnlyCases = []struct {
 		func(c *Config) any { return c.Deployment.MaxReplicas }, uint(7)},
 	{"deployment.insecure_did_resolution", "SPRUE_DEPLOYMENT_INSECURE_DID_RESOLUTION", "true",
 		func(c *Config) any { return c.Deployment.InsecureDIDResolution }, true},
+	{"deployment.plc_directory", "SPRUE_DEPLOYMENT_PLC_DIRECTORY", "https://plc.example.com",
+		func(c *Config) any { return c.Deployment.PLCDirectory }, "https://plc.example.com"},
 	{"identity.service_did", "SPRUE_IDENTITY_SERVICE_DID", "did:web:upload",
 		func(c *Config) any { return c.Identity.ServiceDID }, "did:web:upload"},
 	{"identity.private_key", "SPRUE_IDENTITY_PRIVATE_KEY", "YOUR_KEY_HERE",

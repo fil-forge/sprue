@@ -15,7 +15,6 @@ import (
 	"github.com/fil-forge/sprue/pkg/service/ui"
 	"github.com/fil-forge/sprue/pkg/store/agent"
 	delegation_store "github.com/fil-forge/sprue/pkg/store/delegation"
-	"github.com/fil-forge/ucantone/did"
 	"github.com/fil-forge/ucantone/did/key"
 	"github.com/fil-forge/ucantone/did/plc"
 	"github.com/fil-forge/ucantone/did/resolver"
@@ -34,6 +33,10 @@ import (
 	"github.com/labstack/echo/v4"
 	"go.uber.org/zap"
 )
+
+// DefaultPLCDirectory is the did:plc directory endpoint used when none is
+// configured.
+const DefaultPLCDirectory = "https://plc.directory"
 
 type serviceConfig struct {
 	serverOptions         []server.HTTPOption
@@ -60,7 +63,7 @@ func WithInsecureDIDResolution(enabled bool) Option {
 
 // WithPLCDirectory sets the did:plc directory endpoint used to resolve
 // did:plc issuers (e.g. tenants invoking /provider/add during bucket
-// provisioning). Empty leaves did:plc unresolvable.
+// provisioning). Empty uses DefaultPLCDirectory.
 func WithPLCDirectory(directory string) Option {
 	return func(c *serviceConfig) {
 		c.plcDirectory = directory
@@ -113,21 +116,22 @@ func createUCANServer(id multikey.Issuer, agentStore agent.Store, handlers []ser
 		return nil, fmt.Errorf("creating DID document for service identity: %w", err)
 	}
 
-	// did:plc resolution is enabled when a directory endpoint is configured —
-	// needed to verify did:plc issuers (e.g. tenants signing /provider/add
-	// invocations during bucket provisioning).
-	var plcResolver did.Resolver
-	if cfg.plcDirectory != "" {
-		u, err := url.Parse(cfg.plcDirectory)
-		if err != nil {
-			return nil, fmt.Errorf("parsing PLC directory URL %q: %w", cfg.plcDirectory, err)
-		}
-		p, err := plc.NewResolver(*u)
-		if err != nil {
-			return nil, fmt.Errorf("creating did:plc resolver: %w", err)
-		}
-		plcResolver = resolver.NewCached(p, time.Hour*3)
+	// did:plc resolution is always enabled — needed to verify did:plc issuers
+	// (e.g. tenants signing /provider/add invocations during bucket
+	// provisioning). An empty configured directory falls back to the default.
+	plcDirectory := cfg.plcDirectory
+	if plcDirectory == "" {
+		plcDirectory = DefaultPLCDirectory
 	}
+	u, err := url.Parse(plcDirectory)
+	if err != nil {
+		return nil, fmt.Errorf("parsing PLC directory URL %q: %w", plcDirectory, err)
+	}
+	p, err := plc.NewResolver(*u)
+	if err != nil {
+		return nil, fmt.Errorf("creating did:plc resolver: %w", err)
+	}
+	plcResolver := resolver.NewCached(p, time.Hour*3)
 
 	resolver := resolver.ByMethod{
 		"key": key.Resolver,
@@ -136,9 +140,7 @@ func createUCANServer(id multikey.Issuer, agentStore agent.Store, handlers []ser
 			resolver.NewCached(webResolver, time.Hour*3),
 		},
 		"mailto": didmailto.NewResolver(id.DID()),
-	}
-	if plcResolver != nil {
-		resolver["plc"] = plcResolver
+		"plc":    plcResolver,
 	}
 
 	factories := validator.DefaultFactories()

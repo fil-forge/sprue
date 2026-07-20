@@ -24,8 +24,8 @@ deployment:
   # allow users to have multiple copies of their data.
   max_replicas: 3
   # did:plc directory endpoint used to resolve did:plc issuers (e.g. tenants
-  # invoking /provider/add during bucket provisioning). Empty disables
-  # did:plc resolution.
+  # invoking /provider/add during bucket provisioning). Defaults to
+  # https://plc.directory when omitted or empty.
   # plc_directory: "https://plc.directory"
 
 server:
