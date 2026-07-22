@@ -5,6 +5,8 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"maps"
+	"slices"
 
 	"github.com/fil-forge/sprue/pkg/store/metrics"
 	"github.com/fil-forge/ucantone/did"
@@ -61,12 +63,15 @@ func (s *Store) IncrementTotals(ctx context.Context, inc map[string]uint64) erro
 // IncrementAdminWith increments the admin metrics via the provided querier,
 // enabling inclusion in an external transaction.
 func IncrementAdminWith(ctx context.Context, q pgxExec, inc map[string]uint64) error {
-	for metric, delta := range inc {
+	// Upsert in a deterministic key order so concurrent transactions acquire the
+	// metric row locks in the same order — ranging the map directly would use
+	// Go's randomized iteration order and can deadlock (SQLSTATE 40P01).
+	for _, metric := range slices.Sorted(maps.Keys(inc)) {
 		if _, err := q.Exec(ctx, `
 			INSERT INTO admin_metrics (name, value)
 			VALUES ($1, $2)
 			ON CONFLICT (name) DO UPDATE SET value = admin_metrics.value + EXCLUDED.value
-		`, metric, int64(delta)); err != nil {
+		`, metric, int64(inc[metric])); err != nil {
 			return fmt.Errorf("incrementing admin metric %q: %w", metric, err)
 		}
 	}
@@ -117,12 +122,15 @@ func (s *SpaceStore) IncrementTotals(ctx context.Context, space did.DID, inc map
 // IncrementSpaceWith increments per-space metrics via the provided querier,
 // enabling inclusion in an external transaction.
 func IncrementSpaceWith(ctx context.Context, q pgxExec, space did.DID, inc map[string]uint64) error {
-	for metric, delta := range inc {
+	// Upsert in a deterministic key order so concurrent transactions acquire the
+	// metric row locks in the same order — ranging the map directly would use
+	// Go's randomized iteration order and can deadlock (SQLSTATE 40P01).
+	for _, metric := range slices.Sorted(maps.Keys(inc)) {
 		if _, err := q.Exec(ctx, `
 			INSERT INTO space_metrics (space, name, value)
 			VALUES ($1, $2, $3)
 			ON CONFLICT (space, name) DO UPDATE SET value = space_metrics.value + EXCLUDED.value
-		`, space.String(), metric, int64(delta)); err != nil {
+		`, space.String(), metric, int64(inc[metric])); err != nil {
 			return fmt.Errorf("incrementing space metric %q: %w", metric, err)
 		}
 	}
