@@ -16,20 +16,19 @@ import (
 	"go.uber.org/zap"
 )
 
-// MissingCauseErrorName is the stable receipt-failure name when a
-// /blob/abort invocation carries no Cause — without the /space/blob/add
-// task link there is no way to recover which storage node holds the parked
-// blob (it has no registration or acceptance to look up by).
-const MissingCauseErrorName = "MissingCause"
-
 // NewBlobAbortHandler abandons a space's in-flight upload of a parked
 // (never-accepted) blob: it recovers the storage node holding it from the
 // Cause receipt chain and forwards a /blob/reject there. Nothing is
 // deregistered — registration happens only at accept, which a parked blob
 // never reached.
 //
-// Forward errors are propagated as receipt failures: abort mutates no
-// local state, so the caller can simply retry.
+// A cause that does not resolve to a known /blob/add task fails with
+// the named error MissingCause; a node refusing the translated reject
+// because the space has accepted the blob surfaces the node's BlobAccepted
+// as a named failure, so the client can distinguish "use /blob/remove"
+// from a retryable fault. Other forward errors are propagated as generic
+// receipt failures: abort mutates no local state, so the caller can simply
+// retry.
 func NewBlobAbortHandler(router *routing.Service, nodeProvider piriclient.Provider, agentStore agent.Store, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", blobcmds.Abort))
 	return blobcmds.Abort.Route(
@@ -43,12 +42,19 @@ func NewBlobAbortHandler(router *routing.Service, nodeProvider piriclient.Provid
 			log.Debug("aborting blob upload")
 
 			if !args.Cause.Defined() {
-				return res.SetFailure(errors.New(MissingCauseErrorName,
-					"abort requires the /space/blob/add task link (cause) to locate the provider"))
+				return res.SetFailure(blobcmds.ErrMissingCause)
 			}
 
 			provider, err := primaryProviderForBlob(req.Context(), agentStore, args.Cause)
 			if err != nil {
+				// An unknown cause — one whose receipt chain we don't hold —
+				// cannot route to a node; per the RFC it is the named error
+				// MissingCause, not a retryable execution fault.
+				if errors.Is(err, agent.ErrReceiptNotFound) || errors.Is(err, agent.ErrInvocationNotFound) {
+					log.Debug("cause does not resolve to a known blob add task", zap.Error(err))
+					return res.SetFailure(errors.New(blobcmds.MissingCauseErrorName,
+						"cause does not resolve to a known /blob/add task"))
+				}
 				log.Error("failed to recover provider from receipt chain", zap.Error(err))
 				return fmt.Errorf("recovering provider for parked blob: %w", err)
 			}
@@ -72,6 +78,15 @@ func NewBlobAbortHandler(router *routing.Service, nodeProvider piriclient.Provid
 				Digest: args.Digest,
 			}, proofStore)
 			if err != nil {
+				// The node refuses to reject a blob this space has accepted.
+				// Surface the named failure rather than a generic fault so
+				// the client knows to use /blob/remove instead of retrying.
+				var named errors.Named
+				if errors.As(err, &named) && named.Name() == blobcmds.BlobAcceptedErrorName {
+					log.Debug("provider refused reject: blob accepted by space",
+						zap.Stringer("provider", provider))
+					return res.SetFailure(named)
+				}
 				log.Error("failed to execute reject on provider",
 					zap.Stringer("provider", provider), zap.Error(err))
 				return fmt.Errorf("executing reject on provider: %w", err)

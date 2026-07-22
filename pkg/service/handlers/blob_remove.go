@@ -23,7 +23,7 @@ import (
 )
 
 // NewBlobRemoveHandler removes a blob from a space: it deregisters the blob
-// and forwards /blob/remove to every storage node holding it (the primary
+// and forwards /blob/release to every storage node holding it (the primary
 // provider recovered via the registration's receipt chain, plus replicas).
 //
 // Forwarding is best-effort: a node that cannot be reached is logged and
@@ -79,8 +79,8 @@ func NewBlobRemoveHandler(router *routing.Service, nodeProvider piriclient.Provi
 			// with it the receipt chain to the primary — available for a
 			// retry if every forward fails.
 			for provider := range providers {
-				if err := forwardBlobRemove(req.Context(), router, nodeProvider, agentStore, provider, space, args.Digest); err != nil {
-					log.Warn("failed to forward blob removal to provider",
+				if err := forwardBlobRelease(req.Context(), router, nodeProvider, agentStore, provider, space, args.Digest); err != nil {
+					log.Warn("failed to forward blob release to provider",
 						zap.Stringer("provider", provider), zap.Error(err))
 				}
 			}
@@ -97,7 +97,7 @@ func NewBlobRemoveHandler(router *routing.Service, nodeProvider piriclient.Provi
 
 // primaryProviderForBlob recovers the storage provider that holds the primary
 // copy of a registered blob by walking the registration's receipt chain: the
-// registration cause is the /space/blob/add task, whose receipt's Site
+// registration cause is the /blob/add task, whose receipt's Site
 // promise points at the /blob/accept invocation, whose subject is the
 // provider. (Mirrors the chain walk in NewBlobAddHandler's already-registered
 // branch.)
@@ -123,9 +123,9 @@ func primaryProviderForBlob(ctx context.Context, agentStore agent.Store, cause c
 	return accInv.Subject(), nil
 }
 
-// forwardBlobRemove sends /blob/remove {space, digest} to a single provider
+// forwardBlobRelease sends /blob/release {space, digest} to a single provider
 // and records the exchanged invocation + receipt in the agent store.
-func forwardBlobRemove(
+func forwardBlobRelease(
 	ctx context.Context,
 	router *routing.Service,
 	nodeProvider piriclient.Provider,
@@ -143,15 +143,15 @@ func forwardBlobRemove(
 		return fmt.Errorf("creating piri client: %w", err)
 	}
 
-	// The proof chain for /blob/remove comes from the proofs the provider
+	// The proof chain for /blob/release comes from the proofs the provider
 	// granted the upload service at registration.
 	proofStore := ucanlib.NewContainerProofStore(info.Proofs)
-	_, inv, rcpt, err := client.Remove(ctx, &piriclient.RemoveRequest{
+	_, inv, rcpt, err := client.Release(ctx, &piriclient.ReleaseRequest{
 		Space:  space,
 		Digest: digest,
 	}, proofStore)
 	if err != nil {
-		return fmt.Errorf("executing remove on provider: %w", err)
+		return fmt.Errorf("executing release on provider: %w", err)
 	}
 
 	if err := writeAgentMessage(ctx, agentStore, []ucan.Invocation{inv}, []ucan.Receipt{rcpt}); err != nil {

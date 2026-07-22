@@ -196,29 +196,29 @@ func (c *Client) AcceptInvocation(ctx context.Context, req *AcceptRequest, proof
 	return inv, prfs, nil
 }
 
-// RemoveRequest contains the parameters for a /blob/remove invocation.
-type RemoveRequest struct {
+// ReleaseRequest contains the parameters for a /blob/release invocation.
+type ReleaseRequest struct {
 	Space  did.DID
 	Digest []byte
 }
 
-// Remove sends a /blob/remove invocation to the piri node, releasing the
+// Release sends a /blob/release invocation to the piri node, releasing the
 // space's claim on the blob. Returns the response data, the invocation that
 // was sent, and the receipt from piri. Piri's handler is idempotent, so
-// removing an already-removed blob succeeds.
-func (c *Client) Remove(ctx context.Context, req *RemoveRequest, proofStore ucanlib.ProofStore, options ...invocation.Option) (*blobcmds.RemoveOK, ucan.Invocation, ucan.Receipt, error) {
-	inv, prfs, err := c.RemoveInvocation(ctx, req, proofStore, options...)
+// releasing an already-released blob succeeds.
+func (c *Client) Release(ctx context.Context, req *ReleaseRequest, proofStore ucanlib.ProofStore, options ...invocation.Option) (*blobcmds.ReleaseOK, ucan.Invocation, ucan.Receipt, error) {
+	inv, prfs, err := c.ReleaseInvocation(ctx, req, proofStore, options...)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("creating remove invocation: %w", err)
+		return nil, nil, nil, fmt.Errorf("creating release invocation: %w", err)
 	}
 
-	c.logger.Debug("REMOVE invocation created",
+	c.logger.Debug("RELEASE invocation created",
 		zap.Stringer("issuer", inv.Issuer()),
 		zap.Stringer("audience", inv.Audience()),
 		zap.Int("proofs", len(prfs)),
 	)
 
-	removeOK, rcpt, _, err := ucan_client.Execute[*blobcmds.RemoveOK](
+	releaseOK, rcpt, _, err := ucan_client.Execute[*blobcmds.ReleaseOK](
 		ctx,
 		c.client,
 		c.logger,
@@ -228,15 +228,15 @@ func (c *Client) Remove(ctx context.Context, req *RemoveRequest, proofStore ucan
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	return removeOK, inv, rcpt, nil
+	return releaseOK, inv, rcpt, nil
 }
 
-// RemoveInvocation returns the invocation for the remove request.
-func (c *Client) RemoveInvocation(ctx context.Context, req *RemoveRequest, proofStore ucanlib.ProofStore, options ...invocation.Option) (ucan.Invocation, []ucan.Delegation, error) {
+// ReleaseInvocation returns the invocation for the release request.
+func (c *Client) ReleaseInvocation(ctx context.Context, req *ReleaseRequest, proofStore ucanlib.ProofStore, options ...invocation.Option) (ucan.Invocation, []ucan.Delegation, error) {
 	// As with allocate/accept, the proof chain is rooted at the storage
 	// provider, so the subject is the provider DID and the space travels in
 	// the arguments.
-	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.issuer.DID(), blobcmds.Remove.Command, c.piriDID)
+	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.issuer.DID(), blobcmds.Release.Command, c.piriDID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("building proof chain: %w", err)
 	}
@@ -248,17 +248,17 @@ func (c *Client) RemoveInvocation(ctx context.Context, req *RemoveRequest, proof
 		invocation.WithProofs(prfLinks...),
 	)
 
-	inv, err := blobcmds.Remove.Invoke(
+	inv, err := blobcmds.Release.Invoke(
 		c.issuer,
 		c.piriDID,
-		&blobcmds.RemoveArguments{
+		&blobcmds.ReleaseArguments{
 			Space:  req.Space,
 			Digest: req.Digest,
 		},
 		options...,
 	)
 	if err != nil {
-		return nil, nil, fmt.Errorf("creating remove invocation: %w", err)
+		return nil, nil, fmt.Errorf("creating release invocation: %w", err)
 	}
 
 	return inv, prfs, nil
@@ -300,7 +300,7 @@ func (c *Client) Reject(ctx context.Context, req *RejectRequest, proofStore ucan
 
 // RejectInvocation returns the invocation for the reject request.
 func (c *Client) RejectInvocation(ctx context.Context, req *RejectRequest, proofStore ucanlib.ProofStore, options ...invocation.Option) (ucan.Invocation, []ucan.Delegation, error) {
-	// As with allocate/accept/remove, the proof chain is rooted at the
+	// As with allocate/accept/release, the proof chain is rooted at the
 	// storage provider, so the subject is the provider DID and the space
 	// travels in the arguments. Cause is not forwarded — it is upload-service
 	// routing metadata, meaningless to the node.

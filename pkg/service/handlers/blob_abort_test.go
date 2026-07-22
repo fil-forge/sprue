@@ -19,6 +19,7 @@ import (
 	"github.com/fil-forge/ucantone/binding"
 	"github.com/fil-forge/ucantone/did"
 	"github.com/fil-forge/ucantone/did/key"
+	"github.com/fil-forge/ucantone/errors"
 	"github.com/fil-forge/ucantone/did/resolver"
 	"github.com/fil-forge/ucantone/execution"
 	"github.com/fil-forge/ucantone/multikey"
@@ -56,9 +57,11 @@ func newBlobAbortTestDeps(t *testing.T, uploadService multikey.Issuer, logger *z
 	}
 }
 
-// mockPiriRejectServer serves /blob/reject and records each call.
+// mockPiriRejectServer serves /blob/reject and records each call. Set fail
+// to make it refuse every reject with that named failure.
 type mockPiriRejectServer struct {
-	srv *httptest.Server
+	srv  *httptest.Server
+	fail error
 
 	mu    sync.Mutex
 	calls []blobcmds.RejectArguments
@@ -82,6 +85,9 @@ func newMockPiriRejectServer(t *testing.T, storageProvider ucan.Issuer, uploadSe
 		m.mu.Lock()
 		m.calls = append(m.calls, *req.Task().Arguments())
 		m.mu.Unlock()
+		if m.fail != nil {
+			return res.SetFailure(m.fail)
+		}
 		return res.SetSuccess(&blobcmds.RejectOK{})
 	}))
 
@@ -97,7 +103,7 @@ func (m *mockPiriRejectServer) Calls() []blobcmds.RejectArguments {
 }
 
 // seedParkedBlobChain persists the receipt chain a PARKED blob leaves behind:
-// the /space/blob/add invocation + receipt (whose Site promise points at the
+// the /blob/add invocation + receipt (whose Site promise points at the
 // accept invocation, subject = provider) and the accept/put/alloc
 // invocations — but NO accept receipt and NO registry entry, exactly the
 // deferred-conclude state. Returns the add task link (the abort Cause).
@@ -169,7 +175,7 @@ func invokeBlobAbort(
 	inv := testutil.Must(blobcmds.Abort.Invoke(
 		testutil.Alice,
 		space.DID(),
-		&blobcmds.AbortArguments{Space: space.DID(), Digest: digest, Cause: cause},
+		&blobcmds.AbortArguments{Digest: digest, Cause: cause},
 		invocation.WithAudience(uploadService.DID()),
 	))(t)
 	req := execution.NewRequest(t.Context(), inv)
@@ -219,18 +225,47 @@ func TestBlobAbortHandler(t *testing.T) {
 		_, err := blobcmds.Abort.Invoke(
 			testutil.Alice,
 			space.DID(),
-			&blobcmds.AbortArguments{Space: space.DID(), Digest: testutil.RandomMultihash(t), Cause: cid.Undef},
+			&blobcmds.AbortArguments{Digest: testutil.RandomMultihash(t), Cause: cid.Undef},
 			invocation.WithAudience(uploadService.DID()),
 		)
 		require.ErrorContains(t, err, "undefined cid")
 	})
 
-	t.Run("unknown cause propagates the error", func(t *testing.T) {
+	t.Run("unknown cause fails with MissingCause", func(t *testing.T) {
 		deps := newBlobAbortTestDeps(t, uploadService, logger)
 		space := testutil.RandomIssuer(t)
 		cause := testutil.RandomCID(t)
 
-		_, herr := invokeBlobAbort(t, deps, uploadService, space, testutil.RandomMultihash(t), cause)
-		require.Error(t, herr, "no receipt chain for the cause — caller can retry")
+		rcpt, herr := invokeBlobAbort(t, deps, uploadService, space, testutil.RandomMultihash(t), cause)
+		require.NoError(t, herr)
+		_, err := blobcmds.Abort.Unpack(rcpt)
+		var named errors.Named
+		require.ErrorAs(t, err, &named)
+		require.Equal(t, blobcmds.MissingCauseErrorName, named.Name(),
+			"a cause with no receipt chain cannot route to a node")
+	})
+
+	t.Run("surfaces the node's BlobAccepted refusal", func(t *testing.T) {
+		deps := newBlobAbortTestDeps(t, uploadService, logger)
+		space := testutil.RandomIssuer(t)
+		blob := blobcmds.Blob{Digest: testutil.RandomMultihash(t), Size: 1024}
+
+		storageProvider := testutil.RandomIssuer(t)
+		piriSrv := newMockPiriRejectServer(t, storageProvider, identity.Identity{Issuer: uploadService})
+		piriSrv.fail = blobcmds.ErrBlobAccepted
+		piriURL := testutil.Must(url.Parse(piriSrv.srv.URL))(t)
+		rejectProof := testutil.Must(blobcmds.Reject.Delegate(storageProvider, uploadService.DID(), storageProvider.DID()))(t)
+		require.NoError(t, deps.spStore.Put(t.Context(), storageProvider.DID(), *piriURL, 100, nil,
+			container.New(container.WithDelegations(rejectProof))))
+
+		cause := seedParkedBlobChain(t, deps.agentStore, uploadService, storageProvider, space.DID(), blob)
+
+		rcpt, herr := invokeBlobAbort(t, deps, uploadService, space, blob.Digest, cause)
+		require.NoError(t, herr)
+		_, err := blobcmds.Abort.Unpack(rcpt)
+		var named errors.Named
+		require.ErrorAs(t, err, &named)
+		require.Equal(t, blobcmds.BlobAcceptedErrorName, named.Name(),
+			"the node's refusal is surfaced by name so the client knows to use /blob/remove")
 	})
 }

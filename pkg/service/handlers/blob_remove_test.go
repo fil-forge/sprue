@@ -84,18 +84,18 @@ func newBlobRemoveTestDeps(t *testing.T, uploadService multikey.Issuer, logger *
 	}
 }
 
-// mockPiriRemoveServer serves /blob/remove and records the arguments of each
-// call.
-type mockPiriRemoveServer struct {
+// mockPiriReleaseServer serves /blob/release and records the arguments of
+// each call.
+type mockPiriReleaseServer struct {
 	srv *httptest.Server
 
 	mu    sync.Mutex
-	calls []blobcmds.RemoveArguments
+	calls []blobcmds.ReleaseArguments
 }
 
-func newMockPiriRemoveServer(t *testing.T, storageProvider ucan.Issuer, uploadService identity.Identity) *mockPiriRemoveServer {
+func newMockPiriReleaseServer(t *testing.T, storageProvider ucan.Issuer, uploadService identity.Identity) *mockPiriReleaseServer {
 	t.Helper()
-	m := &mockPiriRemoveServer{}
+	m := &mockPiriReleaseServer{}
 
 	srv := server.NewHTTP(
 		storageProvider,
@@ -104,14 +104,14 @@ func newMockPiriRemoveServer(t *testing.T, storageProvider ucan.Issuer, uploadSe
 			key.Resolver,
 		})),
 	)
-	srv.Handle(blobcmds.Remove.Command, blobcmds.Remove.Handler(func(
-		req *binding.Request[*blobcmds.RemoveArguments],
-		res *binding.Response[*blobcmds.RemoveOK],
+	srv.Handle(blobcmds.Release.Command, blobcmds.Release.Handler(func(
+		req *binding.Request[*blobcmds.ReleaseArguments],
+		res *binding.Response[*blobcmds.ReleaseOK],
 	) error {
 		m.mu.Lock()
 		m.calls = append(m.calls, *req.Task().Arguments())
 		m.mu.Unlock()
-		return res.SetSuccess(&blobcmds.RemoveOK{})
+		return res.SetSuccess(&blobcmds.ReleaseOK{})
 	}))
 
 	m.srv = httptest.NewServer(srv)
@@ -119,18 +119,18 @@ func newMockPiriRemoveServer(t *testing.T, storageProvider ucan.Issuer, uploadSe
 	return m
 }
 
-func (m *mockPiriRemoveServer) Calls() []blobcmds.RemoveArguments {
+func (m *mockPiriReleaseServer) Calls() []blobcmds.ReleaseArguments {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return append([]blobcmds.RemoveArguments(nil), m.calls...)
+	return append([]blobcmds.ReleaseArguments(nil), m.calls...)
 }
 
-// removeProviderProofs builds the registration proof container including the
-// /blob/remove capability.
-func removeProviderProofs(t *testing.T, storageProvider, uploadService ucan.Issuer) ucan.Container {
+// releaseProviderProofs builds the registration proof container including the
+// /blob/release capability.
+func releaseProviderProofs(t *testing.T, storageProvider, uploadService ucan.Issuer) ucan.Container {
 	t.Helper()
-	removeProof := testutil.Must(blobcmds.Remove.Delegate(storageProvider, uploadService.DID(), storageProvider.DID()))(t)
-	return container.New(container.WithDelegations(removeProof))
+	releaseProof := testutil.Must(blobcmds.Release.Delegate(storageProvider, uploadService.DID(), storageProvider.DID()))(t)
+	return container.New(container.WithDelegations(releaseProof))
 }
 
 // registerStoredBlob persists the receipt chain a stored blob leaves behind
@@ -211,7 +211,7 @@ func invokeBlobRemove(
 	inv := testutil.Must(blobcmds.Remove.Invoke(
 		testutil.Alice,
 		space.DID(),
-		&blobcmds.RemoveArguments{Space: space.DID(), Digest: digest},
+		&blobcmds.RemoveArguments{Digest: digest},
 		invocation.WithAudience(uploadService.DID()),
 	))(t)
 	req := execution.NewRequest(t.Context(), inv)
@@ -240,10 +240,10 @@ func TestBlobRemoveHandler(t *testing.T) {
 		blob := blobcmds.Blob{Digest: testutil.RandomMultihash(t), Size: 1024}
 
 		storageProvider := testutil.RandomIssuer(t)
-		piriSrv := newMockPiriRemoveServer(t, storageProvider, identity.Identity{Issuer: uploadService})
+		piriSrv := newMockPiriReleaseServer(t, storageProvider, identity.Identity{Issuer: uploadService})
 		piriURL := testutil.Must(url.Parse(piriSrv.srv.URL))(t)
 		require.NoError(t, deps.spStore.Put(t.Context(), storageProvider.DID(), *piriURL, 100, nil,
-			removeProviderProofs(t, storageProvider, uploadService)))
+			releaseProviderProofs(t, storageProvider, uploadService)))
 
 		registerStoredBlob(t, deps, uploadService, storageProvider, space.DID(), blob)
 
@@ -252,7 +252,7 @@ func TestBlobRemoveHandler(t *testing.T) {
 		require.NoError(t, err)
 
 		calls := piriSrv.Calls()
-		require.Len(t, calls, 1, "removal forwarded to the primary provider")
+		require.Len(t, calls, 1, "release forwarded to the primary provider")
 		require.Equal(t, space.DID(), calls[0].Space)
 		require.Equal(t, blob.Digest, calls[0].Digest)
 
@@ -272,16 +272,16 @@ func TestBlobRemoveHandler(t *testing.T) {
 		blob := blobcmds.Blob{Digest: testutil.RandomMultihash(t), Size: 1024}
 
 		primary := testutil.RandomIssuer(t)
-		primarySrv := newMockPiriRemoveServer(t, primary, identity.Identity{Issuer: uploadService})
+		primarySrv := newMockPiriReleaseServer(t, primary, identity.Identity{Issuer: uploadService})
 		primaryURL := testutil.Must(url.Parse(primarySrv.srv.URL))(t)
 		require.NoError(t, deps.spStore.Put(t.Context(), primary.DID(), *primaryURL, 100, nil,
-			removeProviderProofs(t, primary, uploadService)))
+			releaseProviderProofs(t, primary, uploadService)))
 
 		replicaNode := testutil.RandomIssuer(t)
-		replicaSrv := newMockPiriRemoveServer(t, replicaNode, identity.Identity{Issuer: uploadService})
+		replicaSrv := newMockPiriReleaseServer(t, replicaNode, identity.Identity{Issuer: uploadService})
 		replicaURL := testutil.Must(url.Parse(replicaSrv.srv.URL))(t)
 		require.NoError(t, deps.spStore.Put(t.Context(), replicaNode.DID(), *replicaURL, 100, nil,
-			removeProviderProofs(t, replicaNode, uploadService)))
+			releaseProviderProofs(t, replicaNode, uploadService)))
 
 		registerStoredBlob(t, deps, uploadService, primary, space.DID(), blob)
 		require.NoError(t, deps.replicaStore.Add(t.Context(), space.DID(), blob.Digest,
@@ -305,7 +305,7 @@ func TestBlobRemoveHandler(t *testing.T) {
 		storageProvider := testutil.RandomIssuer(t)
 		deadURL := testutil.Must(url.Parse("http://127.0.0.1:1"))(t)
 		require.NoError(t, deps.spStore.Put(t.Context(), storageProvider.DID(), *deadURL, 100, nil,
-			removeProviderProofs(t, storageProvider, uploadService)))
+			releaseProviderProofs(t, storageProvider, uploadService)))
 
 		registerStoredBlob(t, deps, uploadService, storageProvider, space.DID(), blob)
 
