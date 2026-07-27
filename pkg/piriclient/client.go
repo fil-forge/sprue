@@ -18,6 +18,7 @@ import (
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/fil-forge/ucantone/ucan/promise"
 	"github.com/ipfs/go-cid"
+	"github.com/multiformats/go-multihash"
 	"go.uber.org/zap"
 )
 
@@ -58,7 +59,7 @@ func NewWithClient(piriDID did.DID, issuer ucan.Issuer, client *client.HTTPClien
 // AllocateRequest contains the parameters for a /blob/allocate invocation.
 type AllocateRequest struct {
 	Space  did.DID
-	Digest []byte
+	Digest multihash.Multihash
 	Size   uint64
 	Cause  cid.Cid
 }
@@ -132,7 +133,7 @@ func (c *Client) PiriDID() did.DID {
 // AcceptRequest contains the parameters for a /blob/accept invocation.
 type AcceptRequest struct {
 	Space  did.DID
-	Digest []byte
+	Digest multihash.Multihash
 	Size   uint64
 	Put    cid.Cid // Link to the /http/put task that uploaded the blob
 }
@@ -199,7 +200,7 @@ func (c *Client) AcceptInvocation(ctx context.Context, req *AcceptRequest, proof
 // ReleaseRequest contains the parameters for a /blob/release invocation.
 type ReleaseRequest struct {
 	Space  did.DID
-	Digest []byte
+	Digest multihash.Multihash
 }
 
 // Release sends a /blob/release invocation to the piri node, releasing the
@@ -267,7 +268,7 @@ func (c *Client) ReleaseInvocation(ctx context.Context, req *ReleaseRequest, pro
 // RejectRequest contains the parameters for a /blob/reject invocation.
 type RejectRequest struct {
 	Space  did.DID
-	Digest []byte
+	Digest multihash.Multihash
 }
 
 // Reject sends a /blob/reject invocation to the piri node, retiring the
@@ -335,7 +336,7 @@ func (c *Client) RejectInvocation(ctx context.Context, req *RejectRequest, proof
 // ReplicaAllocateRequest contains the parameters for a /blob/replica/allocate invocation.
 type ReplicaAllocateRequest struct {
 	Space  did.DID
-	Digest []byte
+	Digest multihash.Multihash
 	Size   uint64
 	Site   ucan.Invocation // Location commitment
 	Cause  cid.Cid

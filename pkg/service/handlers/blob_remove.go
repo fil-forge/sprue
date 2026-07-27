@@ -19,6 +19,7 @@ import (
 	"github.com/fil-forge/ucantone/server"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/ipfs/go-cid"
+	"github.com/multiformats/go-multihash"
 	"go.uber.org/zap"
 )
 
@@ -132,7 +133,7 @@ func forwardBlobRelease(
 	agentStore agent.Store,
 	provider did.DID,
 	space did.DID,
-	digest []byte,
+	digest multihash.Multihash,
 ) error {
 	info, err := router.GetProviderInfo(ctx, provider)
 	if err != nil {
