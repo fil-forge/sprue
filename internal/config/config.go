@@ -41,7 +41,7 @@ type DeploymentConfig struct {
 	InsecureDIDResolution bool `mapstructure:"insecure_did_resolution" toml:"insecure_did_resolution,omitempty"`
 	// PLCDirectory is the did:plc directory endpoint used to resolve did:plc
 	// issuers (e.g. tenants invoking /provider/add during bucket
-	// provisioning). Empty disables did:plc resolution.
+	// provisioning). Empty or omitted uses the default (https://plc.directory).
 	PLCDirectory string `mapstructure:"plc_directory" toml:"plc_directory,omitempty"`
 }
 
