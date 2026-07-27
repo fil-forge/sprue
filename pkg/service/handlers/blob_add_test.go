@@ -425,7 +425,7 @@ func TestBlobAddHandler(t *testing.T) {
 			},
 		))(t)
 
-		// The original /space/blob/add invocation and receipt — its receipt's
+		// The original /blob/add invocation and receipt — its receipt's
 		// task CID is what gets stored in the registry as the cause.
 		prevAddInv := testutil.Must(blobcmds.Add.Invoke(
 			testutil.Alice,

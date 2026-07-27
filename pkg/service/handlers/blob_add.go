@@ -77,7 +77,7 @@ func NewBlobAddHandler(id identity.Identity, provisioningSvc *provisioning.Servi
 			if err == nil {
 				log.Debug("blob already registered in space")
 
-				// blob registration cause is the CID of the `/space/blob/add` task
+				// blob registration cause is the CID of the `/blob/add` task
 				addRcpt, err := agentStore.GetReceipt(req.Context(), reg.Cause)
 				if err != nil {
 					log.Error("failed to get receipt for blob registration", zap.Error(err))
@@ -359,7 +359,7 @@ func maybeAccept(
 	providerInfo routing.StorageProviderInfo,
 	space did.DID,
 	blob blobcmds.Blob,
-	cause cid.Cid, // original /space/blob/add task
+	cause cid.Cid, // original /blob/add task
 	putInv ucan.Invocation,
 	putRcpt ucan.Receipt,
 	logger *zap.Logger,
