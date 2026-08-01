@@ -25,7 +25,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go v0.43.0
 	github.com/testcontainers/testcontainers-go/modules/dynamodb v0.41.0
-	github.com/testcontainers/testcontainers-go/modules/minio v0.40.0
+	github.com/testcontainers/testcontainers-go/modules/minio v0.43.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.43.0
 	github.com/whyrusleeping/cbor-gen v0.3.1
 	go.uber.org/fx v1.24.0
