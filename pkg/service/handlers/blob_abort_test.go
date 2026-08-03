@@ -17,6 +17,9 @@ import (
 	agent_store "github.com/fil-forge/sprue/pkg/store/agent/memory"
 	"github.com/fil-forge/sprue/pkg/store/allocation"
 	allocation_store "github.com/fil-forge/sprue/pkg/store/allocation/memory"
+	consumer_store "github.com/fil-forge/sprue/pkg/store/consumer/memory"
+	metrics_store "github.com/fil-forge/sprue/pkg/store/metrics/memory"
+	spacediff_store "github.com/fil-forge/sprue/pkg/store/space_diff/memory"
 	storage_provider_store "github.com/fil-forge/sprue/pkg/store/storage_provider/memory"
 	"github.com/fil-forge/ucantone/binding"
 	"github.com/fil-forge/ucantone/did"
@@ -40,10 +43,11 @@ import (
 )
 
 type blobAbortTestDeps struct {
-	handler     server.Route
-	spStore     *storage_provider_store.Store
-	agentStore  *agent_store.Store
-	allocations *allocation_store.Store
+	handler       server.Route
+	spStore       *storage_provider_store.Store
+	agentStore    *agent_store.Store
+	consumerStore *consumer_store.Store
+	allocations   *allocation_store.Store
 }
 
 func newBlobAbortTestDeps(t *testing.T, uploadService multikey.Issuer, logger *zap.Logger) *blobAbortTestDeps {
@@ -51,15 +55,29 @@ func newBlobAbortTestDeps(t *testing.T, uploadService multikey.Issuer, logger *z
 	spStore := storage_provider_store.New()
 	router := routing.NewService(spStore, logger)
 	agentStore := agent_store.New()
-	allocations := allocation_store.New()
+	consumerStore := consumer_store.New()
+	allocations := allocation_store.New(
+		spacediff_store.New(),
+		consumerStore,
+		metrics_store.NewSpaceStore(),
+		metrics_store.New(),
+	)
 	nodeProvider := piriclient.NewProvider(uploadService, logger)
 	handler := handlers.NewBlobAbortHandler(router, nodeProvider, agentStore, allocations, logger)
 	return &blobAbortTestDeps{
-		handler:     handler,
-		spStore:     spStore,
-		agentStore:  agentStore,
-		allocations: allocations,
+		handler:       handler,
+		spStore:       spStore,
+		agentStore:    agentStore,
+		consumerStore: consumerStore,
+		allocations:   allocations,
 	}
+}
+
+// provisionAbortSpace adds a consumer record so the allocation store's
+// billing writes have a subscription to attribute diffs to.
+func provisionAbortSpace(t *testing.T, deps *blobAbortTestDeps, uploadService ucan.Issuer, space did.DID) {
+	t.Helper()
+	require.NoError(t, deps.consumerStore.Add(t.Context(), uploadService.DID(), space, testutil.RandomDID(t), "sub-1", testutil.RandomCID(t)))
 }
 
 // mockPiriRejectServer serves /blob/reject and records each call. Set fail
@@ -210,6 +228,7 @@ func TestBlobAbortHandler(t *testing.T) {
 
 		cause := seedParkedBlobChain(t, deps.agentStore, uploadService, storageProvider, space.DID(), blob)
 		// The parked blob was allocated, so it carries an allocation record.
+		provisionAbortSpace(t, deps, uploadService, space.DID())
 		require.NoError(t, deps.allocations.Add(t.Context(), space.DID(), blob, cause))
 
 		rcpt, herr := invokeBlobAbort(t, deps, uploadService, space, blob.Digest, cause)
@@ -275,6 +294,7 @@ func TestBlobAbortHandler(t *testing.T) {
 			container.New(container.WithDelegations(rejectProof))))
 
 		cause := seedParkedBlobChain(t, deps.agentStore, uploadService, storageProvider, space.DID(), blob)
+		provisionAbortSpace(t, deps, uploadService, space.DID())
 		require.NoError(t, deps.allocations.Add(t.Context(), space.DID(), blob, cause))
 
 		rcpt, herr := invokeBlobAbort(t, deps, uploadService, space, blob.Digest, cause)

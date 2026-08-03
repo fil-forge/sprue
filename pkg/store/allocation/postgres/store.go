@@ -1,5 +1,6 @@
 // Package postgres provides a PostgreSQL-backed implementation of
-// allocation.Store.
+// allocation.Store. Add and Remove coordinate writes to allocation,
+// space_diff, and the metrics stores in a single transaction.
 package postgres
 
 import (
@@ -11,6 +12,10 @@ import (
 	"github.com/fil-forge/libforge/digestutil"
 	"github.com/fil-forge/sprue/pkg/store"
 	"github.com/fil-forge/sprue/pkg/store/allocation"
+	"github.com/fil-forge/sprue/pkg/store/consumer"
+	"github.com/fil-forge/sprue/pkg/store/metrics"
+	pgmetrics "github.com/fil-forge/sprue/pkg/store/metrics/postgres"
+	pgspacediff "github.com/fil-forge/sprue/pkg/store/space_diff/postgres"
 	"github.com/fil-forge/ucantone/did"
 	"github.com/ipfs/go-cid"
 	"github.com/jackc/pgx/v5"
@@ -25,19 +30,35 @@ const (
 )
 
 type Store struct {
-	pool *pgxpool.Pool
+	pool          *pgxpool.Pool
+	consumerStore consumer.Store
 }
 
 var _ allocation.Store = (*Store)(nil)
 
-func New(pool *pgxpool.Pool) *Store {
-	return &Store{pool: pool}
+// New returns a Postgres-backed allocation store. The consumerStore is used
+// to fetch subscriptions for space_diff writes; the metrics and space_diff
+// writes flow through package-level helpers from the metrics/postgres and
+// space_diff/postgres packages.
+func New(pool *pgxpool.Pool, consumerStore consumer.Store) *Store {
+	return &Store{pool: pool, consumerStore: consumerStore}
 }
 
 func (s *Store) Initialize(ctx context.Context) error { return nil }
 
 func (s *Store) Add(ctx context.Context, space did.DID, blob allocation.Blob, cause cid.Cid) error {
-	if _, err := s.pool.Exec(ctx, `
+	consumers, err := consumer.CollectForSpace(ctx, s.consumerStore, space)
+	if err != nil {
+		return err
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("beginning transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if _, err := tx.Exec(ctx, `
 		INSERT INTO allocation (space, digest, size, cause, inserted_at)
 		VALUES ($1, $2, $3, $4, $5)
 	`, space.String(), digestutil.Format(blob.Digest), int64(blob.Size), cause.String(), time.Now().UTC()); err != nil {
@@ -46,6 +67,28 @@ func (s *Store) Add(ctx context.Context, space did.DID, blob allocation.Blob, ca
 			return allocation.ErrEntryExists
 		}
 		return fmt.Errorf("inserting allocation entry: %w", err)
+	}
+
+	receiptAt := time.Now()
+	for _, c := range consumers {
+		if err := pgspacediff.PutWith(ctx, tx, c.Provider, space, c.Subscription, cause, int64(blob.Size), receiptAt); err != nil {
+			return err
+		}
+	}
+
+	inc := map[string]uint64{
+		metrics.BlobAddTotalMetric:     1,
+		metrics.BlobAddSizeTotalMetric: blob.Size,
+	}
+	if err := pgmetrics.IncrementSpaceWith(ctx, tx, space, inc); err != nil {
+		return err
+	}
+	if err := pgmetrics.IncrementAdminWith(ctx, tx, inc); err != nil {
+		return err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("committing allocation add: %w", err)
 	}
 	return nil
 }
@@ -116,7 +159,23 @@ func (s *Store) List(ctx context.Context, space did.DID, options ...allocation.L
 }
 
 func (s *Store) Remove(ctx context.Context, space did.DID, digest multihash.Multihash, cause cid.Cid) error {
-	tag, err := s.pool.Exec(ctx, `
+	existing, err := s.Get(ctx, space, digest)
+	if err != nil {
+		return err
+	}
+
+	consumers, err := consumer.CollectForSpace(ctx, s.consumerStore, space)
+	if err != nil {
+		return err
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("beginning transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	tag, err := tx.Exec(ctx, `
 		DELETE FROM allocation WHERE space = $1 AND digest = $2
 	`, space.String(), digestutil.Format(digest))
 	if err != nil {
@@ -124,6 +183,28 @@ func (s *Store) Remove(ctx context.Context, space did.DID, digest multihash.Mult
 	}
 	if tag.RowsAffected() == 0 {
 		return allocation.ErrEntryNotFound
+	}
+
+	receiptAt := time.Now()
+	for _, c := range consumers {
+		if err := pgspacediff.PutWith(ctx, tx, c.Provider, space, c.Subscription, cause, -int64(existing.Blob.Size), receiptAt); err != nil {
+			return err
+		}
+	}
+
+	inc := map[string]uint64{
+		metrics.BlobRemoveTotalMetric:     1,
+		metrics.BlobRemoveSizeTotalMetric: existing.Blob.Size,
+	}
+	if err := pgmetrics.IncrementSpaceWith(ctx, tx, space, inc); err != nil {
+		return err
+	}
+	if err := pgmetrics.IncrementAdminWith(ctx, tx, inc); err != nil {
+		return err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("committing allocation remove: %w", err)
 	}
 	return nil
 }

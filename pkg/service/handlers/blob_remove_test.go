@@ -61,13 +61,13 @@ func newBlobRemoveTestDeps(t *testing.T, uploadService multikey.Issuer, logger *
 	router := routing.NewService(spStore, logger)
 	agentStore := agent_store.New()
 	consumerStore := consumer_store.New()
-	blobReg := blob_registry.New(
+	blobReg := blob_registry.New()
+	allocations := allocation_store.New(
 		spacediff_store.New(),
 		consumerStore,
 		metrics_store.NewSpaceStore(),
 		metrics_store.New(),
 	)
-	allocations := allocation_store.New()
 	replicaStore := replica_store.New()
 	nodeProvider := piriclient.NewProvider(uploadService, logger)
 	handler := handlers.NewBlobRemoveHandler(
@@ -162,8 +162,8 @@ func registerStoredBlob(
 	t.Helper()
 	ctx := t.Context()
 
-	// The registry's metrics accounting requires a consumer record for the
-	// space.
+	// The allocation store's billing writes require a consumer record for
+	// the space.
 	account := testutil.Must(didmailto.New("alice@example.com"))(t)
 	require.NoError(t, deps.consumerStore.Add(ctx, uploadService.DID(), space, account, "sub-1", testutil.RandomCID(t)))
 
@@ -255,6 +255,10 @@ func TestBlobRemoveHandler(t *testing.T) {
 		deps := newBlobRemoveTestDeps(t, uploadService, logger)
 		space := testutil.RandomIssuer(t)
 		blob := blobcmds.Blob{Digest: testutil.RandomMultihash(t), Size: 1024}
+
+		// The allocation store's billing writes require a consumer record.
+		account := testutil.Must(didmailto.New("alice@example.com"))(t)
+		require.NoError(t, deps.consumerStore.Add(t.Context(), uploadService.DID(), space.DID(), account, "sub-1", testutil.RandomCID(t)))
 
 		// The blob was allocated but never accepted: remove must not release
 		// the allocation — that is /blob/abort's job.

@@ -185,13 +185,14 @@ func NewAgentStore(lc fx.Lifecycle, dynamoCfg config.DynamoDBConfig, s3Cfg confi
 
 // NewAllocationStore wires the in-memory allocation store. The AWS backend is
 // being phased out, so no DynamoDB implementation exists; allocation records
-// on this backend do not survive restarts.
-func NewAllocationStore() allocation.Store {
-	return memallocation.New()
+// on this backend do not survive restarts, and the billing (space_diff +
+// metrics) writes it performs are not transactional with the record.
+func NewAllocationStore(spaceDiff spacediff.Store, consumerStore consumer.Store, spaceMetrics metrics.SpaceStore, adminMetrics metrics.Store) allocation.Store {
+	return memallocation.New(spaceDiff, consumerStore, spaceMetrics, adminMetrics)
 }
 
-func NewBlobRegistry(lc fx.Lifecycle, dynamoCfg config.DynamoDBConfig, dynamo *dynamodb.Client, consumerStore consumer.Store, spaceDiff *awsspacediff.Store, spaceMetrics *awsmetrics.SpaceStore, adminMetrics *awsmetrics.Store) *awsblobregistry.Store {
-	store := awsblobregistry.New(dynamo, dynamoCfg.BlobRegistryTable, consumerStore, spaceDiff, spaceMetrics, adminMetrics)
+func NewBlobRegistry(lc fx.Lifecycle, dynamoCfg config.DynamoDBConfig, dynamo *dynamodb.Client) *awsblobregistry.Store {
+	store := awsblobregistry.New(dynamo, dynamoCfg.BlobRegistryTable)
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
 			return store.Initialize(ctx)

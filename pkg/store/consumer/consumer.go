@@ -2,6 +2,7 @@ package consumer
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/fil-forge/sprue/pkg/store"
 	"github.com/fil-forge/ucantone/did"
@@ -78,4 +79,23 @@ type Store interface {
 	GetBySubscription(ctx context.Context, provider did.DID, subscription string) (Record, error)
 	List(ctx context.Context, space did.DID, options ...ListOption) (store.Page[Record], error)
 	ListByCustomer(ctx context.Context, customer did.DID, options ...ListByCustomerOption) (store.Page[Record], error)
+}
+
+// CollectForSpace pages through all consumer records for space. Returns
+// [ErrConsumerNotFound] if the space has no consumers.
+func CollectForSpace(ctx context.Context, s Store, space did.DID) ([]Record, error) {
+	results, err := store.Collect(ctx, func(ctx context.Context, options store.PaginationConfig) (store.Page[Record], error) {
+		opts := []ListOption{}
+		if options.Cursor != nil {
+			opts = append(opts, WithListCursor(*options.Cursor))
+		}
+		return s.List(ctx, space, opts...)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("listing consumers: %w", err)
+	}
+	if len(results) == 0 {
+		return nil, ErrConsumerNotFound
+	}
+	return results, nil
 }

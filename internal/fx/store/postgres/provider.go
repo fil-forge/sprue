@@ -154,12 +154,12 @@ func NewAgentStore(lc fx.Lifecycle, mdb *MigratedPool, s3Cfg config.S3Config, s3
 	return store
 }
 
-func NewAllocationStore(mdb *MigratedPool) allocation.Store {
-	return pgallocation.New(mdb.Pool)
+func NewAllocationStore(mdb *MigratedPool, consumerStore consumer.Store) allocation.Store {
+	return pgallocation.New(mdb.Pool, consumerStore)
 }
 
-func NewBlobRegistryStore(mdb *MigratedPool, consumerStore consumer.Store) blobregistry.Store {
-	return pgblobregistry.New(mdb.Pool, consumerStore)
+func NewBlobRegistryStore(mdb *MigratedPool) blobregistry.Store {
+	return pgblobregistry.New(mdb.Pool)
 }
 
 func NewConsumerStore(mdb *MigratedPool) consumer.Store {

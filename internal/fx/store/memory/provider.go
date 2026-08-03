@@ -53,12 +53,12 @@ func NewAgentStore() agent.Store {
 	return memagent.New()
 }
 
-func NewAllocationStore() allocation.Store {
-	return memallocation.New()
+func NewAllocationStore(spaceDiffStore spacediff.Store, consumerStore consumer.Store, spaceMetrics metrics.SpaceStore, adminMetrics metrics.Store) allocation.Store {
+	return memallocation.New(spaceDiffStore, consumerStore, spaceMetrics, adminMetrics)
 }
 
-func NewBlobRegistry(spaceDiffStore spacediff.Store, consumerStore consumer.Store, spaceMetrics metrics.SpaceStore, adminMetrics metrics.Store) blobregistry.Store {
-	return memblobregistry.New(spaceDiffStore, consumerStore, spaceMetrics, adminMetrics)
+func NewBlobRegistry() blobregistry.Store {
+	return memblobregistry.New()
 }
 
 func NewConsumerStore() consumer.Store {

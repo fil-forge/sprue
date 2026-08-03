@@ -11,6 +11,9 @@ import (
 	"github.com/fil-forge/libforge/digestutil"
 	"github.com/fil-forge/sprue/pkg/store"
 	"github.com/fil-forge/sprue/pkg/store/allocation"
+	"github.com/fil-forge/sprue/pkg/store/consumer"
+	"github.com/fil-forge/sprue/pkg/store/metrics"
+	spacediff "github.com/fil-forge/sprue/pkg/store/space_diff"
 	"github.com/fil-forge/ucantone/did"
 	cid "github.com/ipfs/go-cid"
 	multihash "github.com/multiformats/go-multihash"
@@ -19,14 +22,22 @@ import (
 type Store struct {
 	mutex sync.RWMutex
 	// space -> list of allocation entries
-	allocs map[did.DID][]allocation.Record
+	allocs         map[did.DID][]allocation.Record
+	spaceDiffStore spacediff.Store
+	consumerStore  consumer.Store
+	spaceMetrics   metrics.SpaceStore
+	adminMetrics   metrics.Store
 }
 
 var _ allocation.Store = (*Store)(nil)
 
-func New() *Store {
+func New(spaceDiffStore spacediff.Store, consumerStore consumer.Store, spaceMetrics metrics.SpaceStore, adminMetrics metrics.Store) *Store {
 	return &Store{
-		allocs: map[did.DID][]allocation.Record{},
+		allocs:         map[did.DID][]allocation.Record{},
+		spaceDiffStore: spaceDiffStore,
+		consumerStore:  consumerStore,
+		spaceMetrics:   spaceMetrics,
+		adminMetrics:   adminMetrics,
 	}
 }
 
@@ -40,12 +51,37 @@ func (s *Store) Add(ctx context.Context, space did.DID, blob blob.Blob, cause ci
 		}
 	}
 
+	// Collect consumers before mutating state so a failure leaves no
+	// allocation record without its space diff.
+	consumers, err := consumer.CollectForSpace(ctx, s.consumerStore, space)
+	if err != nil {
+		return fmt.Errorf("collecting consumers: %w", err)
+	}
+
 	s.allocs[space] = append(s.allocs[space], allocation.Record{
 		Space:      space,
 		Blob:       blob,
 		Cause:      cause,
 		InsertedAt: time.Now(),
 	})
+
+	// There should only be one subscription per provider, but in theory you
+	// could have multiple providers for the same consumer (space).
+	for _, c := range consumers {
+		s.spaceDiffStore.Put(ctx, c.Provider, space, c.Subscription, cause, int64(blob.Size), time.Now())
+	}
+
+	inc := map[string]uint64{
+		metrics.BlobAddTotalMetric:     1,
+		metrics.BlobAddSizeTotalMetric: blob.Size,
+	}
+	if err := s.spaceMetrics.IncrementTotals(ctx, space, inc); err != nil {
+		return fmt.Errorf("incrementing space metrics: %w", err)
+	}
+	if err := s.adminMetrics.IncrementTotals(ctx, inc); err != nil {
+		return fmt.Errorf("incrementing admin metrics: %w", err)
+	}
+
 	return nil
 }
 
@@ -101,15 +137,45 @@ func (s *Store) Remove(ctx context.Context, space did.DID, digest multihash.Mult
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	ents := []allocation.Record{}
-	for _, ent := range s.allocs[space] {
-		if !bytes.Equal(ent.Blob.Digest, digest) {
-			ents = append(ents, ent)
+	// Find the record first: the not-found error takes precedence over a
+	// consumer lookup failure, and its size feeds the negative space diff.
+	idx := -1
+	for i, ent := range s.allocs[space] {
+		if bytes.Equal(ent.Blob.Digest, digest) {
+			idx = i
+			break
 		}
 	}
-	if len(ents) == len(s.allocs[space]) {
+	if idx == -1 {
 		return allocation.ErrEntryNotFound
 	}
-	s.allocs[space] = ents
+	size := s.allocs[space][idx].Blob.Size
+
+	// Collect consumers before mutating state so a failure leaves the
+	// allocation record with its space diff intact.
+	consumers, err := consumer.CollectForSpace(ctx, s.consumerStore, space)
+	if err != nil {
+		return fmt.Errorf("collecting consumers: %w", err)
+	}
+
+	s.allocs[space] = append(s.allocs[space][:idx], s.allocs[space][idx+1:]...)
+
+	// There should only be one subscription per provider, but in theory you
+	// could have multiple providers for the same consumer (space).
+	for _, c := range consumers {
+		s.spaceDiffStore.Put(ctx, c.Provider, space, c.Subscription, cause, -int64(size), time.Now())
+	}
+
+	inc := map[string]uint64{
+		metrics.BlobRemoveTotalMetric:     1,
+		metrics.BlobRemoveSizeTotalMetric: size,
+	}
+	if err := s.spaceMetrics.IncrementTotals(ctx, space, inc); err != nil {
+		return fmt.Errorf("incrementing space metrics: %w", err)
+	}
+	if err := s.adminMetrics.IncrementTotals(ctx, inc); err != nil {
+		return fmt.Errorf("incrementing admin metrics: %w", err)
+	}
+
 	return nil
 }

@@ -14,10 +14,6 @@ import (
 	"github.com/fil-forge/sprue/pkg/internal/timeutil"
 	"github.com/fil-forge/sprue/pkg/store"
 	blobregistry "github.com/fil-forge/sprue/pkg/store/blob_registry"
-	"github.com/fil-forge/sprue/pkg/store/consumer"
-	"github.com/fil-forge/sprue/pkg/store/metrics"
-	metricsaws "github.com/fil-forge/sprue/pkg/store/metrics/aws"
-	spacediffaws "github.com/fil-forge/sprue/pkg/store/space_diff/aws"
 	"github.com/fil-forge/ucantone/did"
 	"github.com/ipfs/go-cid"
 	multihash "github.com/multiformats/go-multihash"
@@ -69,24 +65,16 @@ var DynamoBlobRegistryTableProps = struct {
 }
 
 type Store struct {
-	dynamo        *dynamodb.Client
-	tableName     string
-	consumerStore consumer.Store
-	spaceDiff     *spacediffaws.Store
-	spaceMetrics  *metricsaws.SpaceStore
-	adminMetrics  *metricsaws.Store
+	dynamo    *dynamodb.Client
+	tableName string
 }
 
 var _ blobregistry.Store = (*Store)(nil)
 
-func New(dynamo *dynamodb.Client, tableName string, consumerStore consumer.Store, spaceDiff *spacediffaws.Store, spaceMetrics *metricsaws.SpaceStore, adminMetrics *metricsaws.Store) *Store {
+func New(dynamo *dynamodb.Client, tableName string) *Store {
 	return &Store{
-		dynamo:        dynamo,
-		tableName:     tableName,
-		consumerStore: consumerStore,
-		spaceDiff:     spaceDiff,
-		spaceMetrics:  spaceMetrics,
-		adminMetrics:  adminMetrics,
+		dynamo:    dynamo,
+		tableName: tableName,
 	}
 }
 
@@ -128,53 +116,24 @@ func (s *Store) Get(ctx context.Context, space did.DID, digest multihash.Multiha
 }
 
 func (s *Store) Register(ctx context.Context, space did.DID, blob blob.Blob, cause cid.Cid) error {
-	consumers, err := s.collectConsumers(ctx, space)
-	if err != nil {
-		return fmt.Errorf("collecting consumers: %w", err)
-	}
-
 	now := time.Now().UTC().Format(timeutil.SimplifiedISO8601)
-	items := []types.TransactWriteItem{
-		{
-			Put: &types.Put{
-				TableName: aws.String(s.tableName),
-				Item: map[string]types.AttributeValue{
-					"space":      &types.AttributeValueMemberS{Value: space.String()},
-					"digest":     &types.AttributeValueMemberS{Value: digestutil.Format(blob.Digest)},
-					"size":       &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", blob.Size)},
-					"cause":      &types.AttributeValueMemberS{Value: cause.String()},
-					"insertedAt": &types.AttributeValueMemberS{Value: now},
-				},
-				ConditionExpression: aws.String("attribute_not_exists(#space)"),
-				ExpressionAttributeNames: map[string]string{
-					"#space": "space",
-				},
-			},
+	if _, err := s.dynamo.PutItem(ctx, &dynamodb.PutItemInput{
+		TableName: aws.String(s.tableName),
+		Item: map[string]types.AttributeValue{
+			"space":      &types.AttributeValueMemberS{Value: space.String()},
+			"digest":     &types.AttributeValueMemberS{Value: digestutil.Format(blob.Digest)},
+			"size":       &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", blob.Size)},
+			"cause":      &types.AttributeValueMemberS{Value: cause.String()},
+			"insertedAt": &types.AttributeValueMemberS{Value: now},
 		},
-	}
-
-	receiptAt := time.Now()
-	for _, c := range consumers {
-		items = append(items, s.spaceDiff.TransactPut(ctx, c.Provider, space, c.Subscription, cause, int64(blob.Size), receiptAt))
-	}
-
-	inc := map[string]uint64{
-		metrics.BlobAddTotalMetric:     1,
-		metrics.BlobAddSizeTotalMetric: blob.Size,
-	}
-	items = append(items, s.spaceMetrics.TransactIncrementTotals(space, inc)...)
-	items = append(items, s.adminMetrics.TransactIncrementTotals(inc)...)
-
-	if _, err := s.dynamo.TransactWriteItems(ctx, &dynamodb.TransactWriteItemsInput{
-		TransactItems: items,
+		ConditionExpression: aws.String("attribute_not_exists(#space)"),
+		ExpressionAttributeNames: map[string]string{
+			"#space": "space",
+		},
 	}); err != nil {
-		var txErr *types.TransactionCanceledException
-		if errors.As(err, &txErr) {
-			for _, reason := range txErr.CancellationReasons {
-				if reason.Code != nil && *reason.Code == "ConditionalCheckFailed" {
-					return blobregistry.ErrEntryExists
-				}
-			}
+		var condErr *types.ConditionalCheckFailedException
+		if errors.As(err, &condErr) {
+			return blobregistry.ErrEntryExists
 		}
 		return fmt.Errorf("registering blob: %w", err)
 	}
@@ -182,54 +141,20 @@ func (s *Store) Register(ctx context.Context, space did.DID, blob blob.Blob, cau
 }
 
 func (s *Store) Deregister(ctx context.Context, space did.DID, digest multihash.Multihash, cause cid.Cid) error {
-	existing, err := s.Get(ctx, space, digest)
-	if err != nil {
-		return err
-	}
-
-	consumers, err := s.collectConsumers(ctx, space)
-	if err != nil {
-		return fmt.Errorf("collecting consumers: %w", err)
-	}
-
-	items := []types.TransactWriteItem{
-		{
-			Delete: &types.Delete{
-				TableName: aws.String(s.tableName),
-				Key: map[string]types.AttributeValue{
-					"space":  &types.AttributeValueMemberS{Value: space.String()},
-					"digest": &types.AttributeValueMemberS{Value: digestutil.Format(digest)},
-				},
-				ConditionExpression: aws.String("attribute_exists(#space)"),
-				ExpressionAttributeNames: map[string]string{
-					"#space": "space",
-				},
-			},
+	if _, err := s.dynamo.DeleteItem(ctx, &dynamodb.DeleteItemInput{
+		TableName: aws.String(s.tableName),
+		Key: map[string]types.AttributeValue{
+			"space":  &types.AttributeValueMemberS{Value: space.String()},
+			"digest": &types.AttributeValueMemberS{Value: digestutil.Format(digest)},
 		},
-	}
-
-	receiptAt := time.Now()
-	for _, c := range consumers {
-		items = append(items, s.spaceDiff.TransactPut(ctx, c.Provider, space, c.Subscription, cause, -int64(existing.Blob.Size), receiptAt))
-	}
-
-	inc := map[string]uint64{
-		metrics.BlobRemoveTotalMetric:     1,
-		metrics.BlobRemoveSizeTotalMetric: existing.Blob.Size,
-	}
-	items = append(items, s.spaceMetrics.TransactIncrementTotals(space, inc)...)
-	items = append(items, s.adminMetrics.TransactIncrementTotals(inc)...)
-
-	if _, err := s.dynamo.TransactWriteItems(ctx, &dynamodb.TransactWriteItemsInput{
-		TransactItems: items,
+		ConditionExpression: aws.String("attribute_exists(#space)"),
+		ExpressionAttributeNames: map[string]string{
+			"#space": "space",
+		},
 	}); err != nil {
-		var txErr *types.TransactionCanceledException
-		if errors.As(err, &txErr) {
-			for _, reason := range txErr.CancellationReasons {
-				if reason.Code != nil && *reason.Code == "ConditionalCheckFailed" {
-					return blobregistry.ErrEntryNotFound
-				}
-			}
+		var condErr *types.ConditionalCheckFailedException
+		if errors.As(err, &condErr) {
+			return blobregistry.ErrEntryNotFound
 		}
 		return fmt.Errorf("deregistering blob: %w", err)
 	}
@@ -287,23 +212,6 @@ func (s *Store) List(ctx context.Context, space did.DID, options ...blobregistry
 	}
 
 	return store.Page[blobregistry.Record]{Results: records, Cursor: cursor}, nil
-}
-
-func (s *Store) collectConsumers(ctx context.Context, space did.DID) ([]consumer.Record, error) {
-	results, err := store.Collect(ctx, func(ctx context.Context, options store.PaginationConfig) (store.Page[consumer.Record], error) {
-		opts := []consumer.ListOption{}
-		if options.Cursor != nil {
-			opts = append(opts, consumer.WithListCursor(*options.Cursor))
-		}
-		return s.consumerStore.List(ctx, space, opts...)
-	})
-	if err != nil {
-		return nil, fmt.Errorf("listing consumers: %w", err)
-	}
-	if len(results) == 0 {
-		return nil, consumer.ErrConsumerNotFound
-	}
-	return results, nil
 }
 
 func itemToRecord(item map[string]types.AttributeValue) (blobregistry.Record, error) {

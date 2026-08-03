@@ -67,13 +67,13 @@ func newBlobAddTestDeps(t *testing.T, uploadService multikey.Issuer, logger *zap
 	spStore := storage_provider_store.New()
 	router := routing.NewService(spStore, logger)
 	agentStore := agent_store.New()
-	blobReg := blob_registry.New(
+	blobReg := blob_registry.New()
+	allocations := allocation_store.New(
 		spacediff_store.New(),
 		consumerStore,
 		metrics_store.NewSpaceStore(),
 		metrics_store.New(),
 	)
-	allocations := allocation_store.New()
 	nodeProvider := piriclient.NewProvider(uploadService, logger)
 	handler := handlers.NewBlobAddHandler(
 		identity.Identity{Issuer: uploadService},

@@ -15,8 +15,6 @@ import (
 	agent_store "github.com/fil-forge/sprue/pkg/store/agent/memory"
 	blob_registry "github.com/fil-forge/sprue/pkg/store/blob_registry/memory"
 	consumer_store "github.com/fil-forge/sprue/pkg/store/consumer/memory"
-	metrics_store "github.com/fil-forge/sprue/pkg/store/metrics/memory"
-	spacediff_store "github.com/fil-forge/sprue/pkg/store/space_diff/memory"
 	storage_provider_store "github.com/fil-forge/sprue/pkg/store/storage_provider/memory"
 	"github.com/fil-forge/ucantone/ucan/container"
 	"github.com/fil-forge/ucantone/ucan/invocation"
@@ -41,12 +39,7 @@ func newHTTPPutDeps(t *testing.T, nodeProvider piriclient.Provider, logger *zap.
 	router := routing.NewService(spStore, logger)
 	agentStore := agent_store.New()
 	consumerStore := consumer_store.New()
-	blobReg := blob_registry.New(
-		spacediff_store.New(),
-		consumerStore,
-		metrics_store.NewSpaceStore(),
-		metrics_store.New(),
-	)
+	blobReg := blob_registry.New()
 	ch := handlers.NewHTTPPutConcludeHandler(router, nodeProvider, agentStore, blobReg, logger)
 	return &httpPutDeps{
 		ch:            ch,
