@@ -13,6 +13,8 @@ import (
 
 	"github.com/fil-forge/sprue/pkg/store/agent"
 	awsagent "github.com/fil-forge/sprue/pkg/store/agent/aws"
+	"github.com/fil-forge/sprue/pkg/store/allocation"
+	memallocation "github.com/fil-forge/sprue/pkg/store/allocation/memory"
 	blobregistry "github.com/fil-forge/sprue/pkg/store/blob_registry"
 	awsblobregistry "github.com/fil-forge/sprue/pkg/store/blob_registry/aws"
 	"github.com/fil-forge/sprue/pkg/store/consumer"
@@ -46,6 +48,10 @@ var Module = fx.Module("aws-store",
 		fx.Annotate(
 			NewAgentStore,
 			fx.As(new(agent.Store)),
+		),
+		fx.Annotate(
+			NewAllocationStore,
+			fx.As(new(allocation.Store)),
 		),
 		fx.Annotate(
 			NewBlobRegistry,
@@ -175,6 +181,13 @@ func NewAgentStore(lc fx.Lifecycle, dynamoCfg config.DynamoDBConfig, s3Cfg confi
 		},
 	})
 	return store
+}
+
+// NewAllocationStore wires the in-memory allocation store. The AWS backend is
+// being phased out, so no DynamoDB implementation exists; allocation records
+// on this backend do not survive restarts.
+func NewAllocationStore() allocation.Store {
+	return memallocation.New()
 }
 
 func NewBlobRegistry(lc fx.Lifecycle, dynamoCfg config.DynamoDBConfig, dynamo *dynamodb.Client, consumerStore consumer.Store, spaceDiff *awsspacediff.Store, spaceMetrics *awsmetrics.SpaceStore, adminMetrics *awsmetrics.Store) *awsblobregistry.Store {

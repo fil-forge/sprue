@@ -9,6 +9,7 @@ import (
 	"github.com/fil-forge/sprue/pkg/piriclient"
 	"github.com/fil-forge/sprue/pkg/routing"
 	"github.com/fil-forge/sprue/pkg/store/agent"
+	"github.com/fil-forge/sprue/pkg/store/allocation"
 	"github.com/fil-forge/ucantone/binding"
 	"github.com/fil-forge/ucantone/errors"
 	"github.com/fil-forge/ucantone/server"
@@ -18,18 +19,19 @@ import (
 
 // NewBlobAbortHandler abandons a space's in-flight upload of a parked
 // (never-accepted) blob: it recovers the storage node holding it from the
-// Cause receipt chain and forwards a /blob/reject there. Nothing is
-// deregistered — registration happens only at accept, which a parked blob
-// never reached.
+// Cause receipt chain, forwards a /blob/reject there, and removes the blob's
+// allocation record. Nothing is deregistered — registration happens only at
+// accept, which a parked blob never reached.
 //
 // A cause that does not resolve to a known /blob/add task fails with
 // the named error MissingCause; a node refusing the translated reject
 // because the space has accepted the blob surfaces the node's BlobAccepted
-// as a named failure, so the client can distinguish "use /blob/remove"
-// from a retryable fault. Other forward errors are propagated as generic
-// receipt failures: abort mutates no local state, so the caller can simply
-// retry.
-func NewBlobAbortHandler(router *routing.Service, nodeProvider piriclient.Provider, agentStore agent.Store, logger *zap.Logger) server.Route {
+// as a named failure (the allocation record is kept — an accepted blob's
+// allocation is released via /blob/remove), so the client can distinguish
+// "use /blob/remove" from a retryable fault. Other forward errors are
+// propagated as generic receipt failures: the only local mutation is the
+// idempotent allocation removal, so the caller can simply retry.
+func NewBlobAbortHandler(router *routing.Service, nodeProvider piriclient.Provider, agentStore agent.Store, allocations allocation.Store, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", blobcmds.Abort))
 	return blobcmds.Abort.Route(
 		func(req *binding.Request[*blobcmds.AbortArguments], res *binding.Response[*blobcmds.AbortOK]) error {
@@ -95,6 +97,14 @@ func NewBlobAbortHandler(router *routing.Service, nodeProvider piriclient.Provid
 			if err := writeAgentMessage(req.Context(), agentStore, []ucan.Invocation{inv}, []ucan.Receipt{rcpt}); err != nil {
 				log.Error("failed to write agent message", zap.Error(err))
 				return fmt.Errorf("writing agent message: %w", err)
+			}
+
+			// The node confirmed the blob was never accepted, so release the
+			// allocation record. A missing entry means a retried abort
+			// already removed it.
+			if err := allocations.Remove(req.Context(), space, args.Digest, req.Invocation().Task().Link()); err != nil && !errors.Is(err, allocation.ErrEntryNotFound) {
+				log.Error("failed to remove blob allocation record", zap.Error(err))
+				return fmt.Errorf("removing blob allocation record: %w", err)
 			}
 
 			return res.SetSuccess(&blobcmds.AbortOK{})

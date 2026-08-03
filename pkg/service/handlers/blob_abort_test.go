@@ -15,6 +15,8 @@ import (
 	"github.com/fil-forge/sprue/pkg/service/handlers"
 	"github.com/fil-forge/sprue/pkg/store/agent"
 	agent_store "github.com/fil-forge/sprue/pkg/store/agent/memory"
+	"github.com/fil-forge/sprue/pkg/store/allocation"
+	allocation_store "github.com/fil-forge/sprue/pkg/store/allocation/memory"
 	storage_provider_store "github.com/fil-forge/sprue/pkg/store/storage_provider/memory"
 	"github.com/fil-forge/ucantone/binding"
 	"github.com/fil-forge/ucantone/did"
@@ -38,9 +40,10 @@ import (
 )
 
 type blobAbortTestDeps struct {
-	handler    server.Route
-	spStore    *storage_provider_store.Store
-	agentStore *agent_store.Store
+	handler     server.Route
+	spStore     *storage_provider_store.Store
+	agentStore  *agent_store.Store
+	allocations *allocation_store.Store
 }
 
 func newBlobAbortTestDeps(t *testing.T, uploadService multikey.Issuer, logger *zap.Logger) *blobAbortTestDeps {
@@ -48,12 +51,14 @@ func newBlobAbortTestDeps(t *testing.T, uploadService multikey.Issuer, logger *z
 	spStore := storage_provider_store.New()
 	router := routing.NewService(spStore, logger)
 	agentStore := agent_store.New()
+	allocations := allocation_store.New()
 	nodeProvider := piriclient.NewProvider(uploadService, logger)
-	handler := handlers.NewBlobAbortHandler(router, nodeProvider, agentStore, logger)
+	handler := handlers.NewBlobAbortHandler(router, nodeProvider, agentStore, allocations, logger)
 	return &blobAbortTestDeps{
-		handler:    handler,
-		spStore:    spStore,
-		agentStore: agentStore,
+		handler:     handler,
+		spStore:     spStore,
+		agentStore:  agentStore,
+		allocations: allocations,
 	}
 }
 
@@ -204,6 +209,8 @@ func TestBlobAbortHandler(t *testing.T) {
 			container.New(container.WithDelegations(rejectProof))))
 
 		cause := seedParkedBlobChain(t, deps.agentStore, uploadService, storageProvider, space.DID(), blob)
+		// The parked blob was allocated, so it carries an allocation record.
+		require.NoError(t, deps.allocations.Add(t.Context(), space.DID(), blob, cause))
 
 		rcpt, herr := invokeBlobAbort(t, deps, uploadService, space, blob.Digest, cause)
 		require.NoError(t, herr)
@@ -214,6 +221,15 @@ func TestBlobAbortHandler(t *testing.T) {
 		require.Len(t, calls, 1, "abort forwarded to the provider as /blob/reject")
 		require.Equal(t, space.DID(), calls[0].Space)
 		require.Equal(t, blob.Digest, calls[0].Digest)
+
+		_, err = deps.allocations.Get(t.Context(), space.DID(), blob.Digest)
+		require.ErrorIs(t, err, allocation.ErrEntryNotFound, "allocation record removed")
+
+		// A retried abort (record already removed) still succeeds.
+		rcpt, herr = invokeBlobAbort(t, deps, uploadService, space, blob.Digest, cause)
+		require.NoError(t, herr)
+		_, err = blobcmds.Abort.Unpack(rcpt)
+		require.NoError(t, err)
 	})
 
 	t.Run("missing cause is unrepresentable", func(t *testing.T) {
@@ -259,6 +275,7 @@ func TestBlobAbortHandler(t *testing.T) {
 			container.New(container.WithDelegations(rejectProof))))
 
 		cause := seedParkedBlobChain(t, deps.agentStore, uploadService, storageProvider, space.DID(), blob)
+		require.NoError(t, deps.allocations.Add(t.Context(), space.DID(), blob, cause))
 
 		rcpt, herr := invokeBlobAbort(t, deps, uploadService, space, blob.Digest, cause)
 		require.NoError(t, herr)
@@ -267,5 +284,8 @@ func TestBlobAbortHandler(t *testing.T) {
 		require.ErrorAs(t, err, &named)
 		require.Equal(t, blobcmds.BlobAcceptedErrorName, named.Name(),
 			"the node's refusal is surfaced by name so the client knows to use /blob/remove")
+
+		_, err = deps.allocations.Get(t.Context(), space.DID(), blob.Digest)
+		require.NoError(t, err, "an accepted blob's allocation record is kept for /blob/remove")
 	})
 }

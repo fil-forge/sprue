@@ -15,6 +15,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/fil-forge/sprue/pkg/store/agent"
 	pgagent "github.com/fil-forge/sprue/pkg/store/agent/postgres"
+	"github.com/fil-forge/sprue/pkg/store/allocation"
+	pgallocation "github.com/fil-forge/sprue/pkg/store/allocation/postgres"
 	blobregistry "github.com/fil-forge/sprue/pkg/store/blob_registry"
 	pgblobregistry "github.com/fil-forge/sprue/pkg/store/blob_registry/postgres"
 	"github.com/fil-forge/sprue/pkg/store/consumer"
@@ -54,6 +56,7 @@ var Module = fx.Module("postgres-store",
 		awsstore.NewS3Client,
 
 		fx.Annotate(NewAgentStore, fx.As(new(agent.Store))),
+		fx.Annotate(NewAllocationStore, fx.As(new(allocation.Store))),
 		fx.Annotate(NewBlobRegistryStore, fx.As(new(blobregistry.Store))),
 		fx.Annotate(NewConsumerStore, fx.As(new(consumer.Store))),
 		fx.Annotate(NewCustomerStore, fx.As(new(customer.Store))),
@@ -149,6 +152,10 @@ func NewAgentStore(lc fx.Lifecycle, mdb *MigratedPool, s3Cfg config.S3Config, s3
 		},
 	})
 	return store
+}
+
+func NewAllocationStore(mdb *MigratedPool) allocation.Store {
+	return pgallocation.New(mdb.Pool)
 }
 
 func NewBlobRegistryStore(mdb *MigratedPool, consumerStore consumer.Store) blobregistry.Store {
