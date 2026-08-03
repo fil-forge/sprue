@@ -8,7 +8,6 @@ import (
 	ucancap "github.com/fil-forge/libforge/commands/ucan"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/store/agent"
-	agentaws "github.com/fil-forge/sprue/pkg/store/agent/aws"
 	agentmemory "github.com/fil-forge/sprue/pkg/store/agent/memory"
 	agentpostgres "github.com/fil-forge/sprue/pkg/store/agent/postgres"
 	"github.com/fil-forge/ucantone/ipld/datamodel"
@@ -25,18 +24,15 @@ type StoreKind string
 
 const (
 	Memory   StoreKind = "memory"
-	AWS      StoreKind = "aws"
 	Postgres StoreKind = "postgres"
 )
 
-var storeKinds = []StoreKind{Memory, AWS, Postgres}
+var storeKinds = []StoreKind{Memory, Postgres}
 
 func makeStore(t *testing.T, k StoreKind) agent.Store {
 	switch k {
 	case Memory:
 		return agentmemory.New()
-	case AWS:
-		return createAWSStore(t)
 	case Postgres:
 		return createPostgresStore(t)
 	}
@@ -60,37 +56,6 @@ func createPostgresStore(t *testing.T) agent.Store {
 	require.NoError(t, store.Initialize(t.Context()))
 	t.Cleanup(func() {
 		require.NoError(t, store.Shutdown(context.Background()))
-	})
-	return store
-}
-
-func createAWSStore(t *testing.T) agent.Store {
-	// This test expects docker to be running in linux CI environments and fails if it's not
-	if testutil.IsRunningInCI(t) && runtime.GOOS == "linux" {
-		if !testutil.IsDockerAvailable(t) {
-			t.Fatalf("docker is expected in CI linux testing environments, but wasn't found")
-		}
-	}
-	// otherwise this test is running locally, skip it if docker isn't available
-	if !testutil.IsDockerAvailable(t) {
-		t.SkipNow()
-	}
-
-	s3Endpoint := testutil.CreateS3(t)
-	s3 := testutil.NewS3Client(t, s3Endpoint)
-
-	dynamoEndpoint := testutil.CreateDynamo(t)
-	dynamo := testutil.NewDynamoClient(t, dynamoEndpoint)
-
-	id := uuid.NewString()
-	store := agentaws.New(dynamo, "agent-index-"+id, s3, "agent-message-"+id)
-
-	err := store.Initialize(t.Context())
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		err := store.Shutdown(context.Background())
-		require.NoError(t, err)
 	})
 	return store
 }

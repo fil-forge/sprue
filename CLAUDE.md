@@ -24,7 +24,7 @@ docker build -t sprue .
 
 ## Architecture Overview
 
-Sprue is the upload coordination service for Storacha local development. It routes blob allocations to Piri storage nodes and tracks upload state in DynamoDB.
+Sprue is the upload coordination service for Storacha local development. It routes blob allocations to Piri storage nodes and tracks upload state in PostgreSQL.
 
 ### Core Components
 
@@ -42,10 +42,10 @@ Sprue is the upload coordination service for Storacha local development. It rout
 
 **Stores (pkg/store/)**
 - Each domain has its own store interface in `pkg/store/<domain>/`
-- Each store has three implementations: AWS (DynamoDB/S3) in `<domain>/aws/`, PostgreSQL (+ S3 for blob payloads) in `<domain>/postgres/`, and in-memory in `<domain>/memory/`
+- Each store has two implementations: PostgreSQL (+ S3 for blob payloads) in `<domain>/postgres/` and in-memory in `<domain>/memory/`
 - Store interfaces: `agent.Store`, `blob_registry.Store`, `consumer.Store`, `customer.Store`, `delegation.Store`, `metrics.Store`, `replica.Store`, `revocation.Store`, `space_diff.Store`, `storage_provider.Store`, `subscription.Store`, `upload.Store`
-- Backends are wired in `internal/fx/store/<backend>/provider.go` (aws, postgres, memory)
-- Backend selection is driven by `storage.type` in config (`memory` | `postgres` | `aws`; default `postgres`). Per-backend settings live under `storage.postgres`, `storage.dynamodb`, and `storage.s3`.
+- Backends are wired in `internal/fx/store/<backend>/provider.go` (postgres, memory)
+- Backend selection is driven by `storage.type` in config (`memory` | `postgres`; default `postgres`). Per-backend settings live under `storage.postgres` and `storage.s3`.
 - Postgres schema is managed by goose migrations in `internal/migrations/sql/`, embedded and applied on startup. Set `storage.postgres.skip_migrations: true` to disable.
 
 **Services (pkg/)**
@@ -69,12 +69,11 @@ Sprue is the upload coordination service for Storacha local development. It rout
 ### Configuration
 
 Configuration via YAML file or environment variables with `SPRUE_` prefix:
-- `SPRUE_STORAGE_TYPE` — selects the store backend (`memory`, `postgres`, `aws`; default `postgres`)
+- `SPRUE_STORAGE_TYPE` — selects the store backend (`memory`, `postgres`; default `postgres`)
 - `SPRUE_SERVER_HOST`, `SPRUE_SERVER_PORT`
 - `SPRUE_IDENTITY_KEY_FILE`, `SPRUE_IDENTITY_PRIVATE_KEY`, `SPRUE_IDENTITY_SERVICE_DID`
 - `SPRUE_INDEXER_ENDPOINT`
 - `SPRUE_STORAGE_POSTGRES_DSN`, `SPRUE_STORAGE_POSTGRES_MAX_CONNS`, `SPRUE_STORAGE_POSTGRES_SKIP_MIGRATIONS`
-- `SPRUE_STORAGE_DYNAMODB_*` for DynamoDB settings (AWS backend)
 - `SPRUE_STORAGE_S3_*` for S3/MinIO settings
 
 ### Key Dependencies
@@ -82,7 +81,7 @@ Configuration via YAML file or environment variables with `SPRUE_` prefix:
 - **go-ucanto**: UCAN RPC framework for capability-based authorization
 - **go-libstoracha**: Storacha capability definitions (blob, space, upload, etc.)
 - **echo/v4**: HTTP server framework
-- **aws-sdk-go-v2**: DynamoDB + S3 client
+- **aws-sdk-go-v2**: S3 client (blob payloads for the postgres backend)
 - **jackc/pgx/v5**: PostgreSQL driver
 - **pressly/goose/v3**: SQL schema migrations
 - **viper/cobra**: Configuration and CLI

@@ -1,6 +1,5 @@
 // Package postgres wires the Postgres-backed store implementations into the
-// application via uber-go/fx. It mirrors the layout of
-// internal/fx/store/aws/provider.go.
+// application via uber-go/fx.
 package postgres
 
 import (
@@ -12,6 +11,9 @@ import (
 	"github.com/fil-forge/sprue/internal/migrations"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/fil-forge/sprue/pkg/store/agent"
 	pgagent "github.com/fil-forge/sprue/pkg/store/agent/postgres"
@@ -38,9 +40,6 @@ import (
 	"github.com/fil-forge/sprue/pkg/store/upload"
 	pgupload "github.com/fil-forge/sprue/pkg/store/upload/postgres"
 
-	// Reuse the AWS S3 client constructor for the three stores that keep an S3 half.
-	awsstore "github.com/fil-forge/sprue/internal/fx/store/aws"
-
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 )
@@ -49,9 +48,9 @@ var Module = fx.Module("postgres-store",
 	fx.Provide(
 		NewPostgresPool,
 		NewMigratedPool,
-		// S3 client is still needed for the three stores (agent, delegation, upload)
-		// that persist blob payloads outside of the database.
-		awsstore.NewS3Client,
+		// S3 client is needed for the stores (agent, delegation) that persist
+		// blob payloads outside of the database.
+		NewS3Client,
 
 		fx.Annotate(NewAgentStore, fx.As(new(agent.Store))),
 		fx.Annotate(NewBlobRegistryStore, fx.As(new(blobregistry.Store))),
@@ -116,6 +115,42 @@ func NewPostgresPool(cfg config.PostgresConfig, lc fx.Lifecycle, logger *zap.Log
 	})
 
 	return pool, nil
+}
+
+// NewS3Client creates the S3 client used by the stores that persist blob
+// payloads outside of the database (agent messages, delegation archives).
+func NewS3Client(cfg config.S3Config, logger *zap.Logger) (*s3.Client, error) {
+	opts := []func(*awsconfig.LoadOptions) error{
+		awsconfig.WithRegion(cfg.Region),
+	}
+
+	if cfg.Endpoint != "" {
+		if cfg.AccessKeyID == "" || cfg.SecretAccessKey == "" {
+			return nil, fmt.Errorf("storage.s3.access_key_id and storage.s3.secret_access_key are required when storage.s3.endpoint is set")
+		}
+		opts = append(opts, awsconfig.WithBaseEndpoint(cfg.Endpoint))
+		opts = append(opts, awsconfig.WithCredentialsProvider(credentials.StaticCredentialsProvider{
+			Value: aws.Credentials{
+				AccessKeyID:     cfg.AccessKeyID,
+				SecretAccessKey: cfg.SecretAccessKey,
+			},
+		}))
+	}
+
+	awsCfg, err := awsconfig.LoadDefaultConfig(context.Background(), opts...)
+	if err != nil {
+		return nil, fmt.Errorf("loading AWS config: %w", err)
+	}
+
+	client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
+		o.UsePathStyle = cfg.UsePathStyle
+	})
+	logger.Info("initialized S3 client",
+		zap.String("endpoint", cfg.Endpoint),
+		zap.String("region", cfg.Region),
+		zap.Bool("use_path_style", cfg.UsePathStyle),
+	)
+	return client, nil
 }
 
 // NewMigratedPool registers an OnStart hook that runs goose migrations against

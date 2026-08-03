@@ -42,8 +42,7 @@ func (s *Store) Put(ctx context.Context, provider did.DID, space did.DID, subscr
 
 // PutWith inserts a space diff row using the provided querier, allowing the
 // write to participate in an external transaction. It exists so blob_registry
-// can batch space-diff writes with its own updates in one atomic unit (matching
-// the DynamoDB TransactWriteItems behaviour used by the AWS backend).
+// can batch space-diff writes with its own updates in one atomic unit.
 func PutWith(ctx context.Context, q pgxExec, provider did.DID, space did.DID, subscription string, cause cid.Cid, delta int64, receiptAt time.Time) error {
 	_, err := q.Exec(ctx, `
 		INSERT INTO space_diff (provider, space, receipt_at, cause, subscription, delta, inserted_at)

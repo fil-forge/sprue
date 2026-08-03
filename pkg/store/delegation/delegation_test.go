@@ -8,7 +8,6 @@ import (
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/store"
 	dlgstore "github.com/fil-forge/sprue/pkg/store/delegation"
-	delegationaws "github.com/fil-forge/sprue/pkg/store/delegation/aws"
 	delegationmemory "github.com/fil-forge/sprue/pkg/store/delegation/memory"
 	delegationpostgres "github.com/fil-forge/sprue/pkg/store/delegation/postgres"
 	"github.com/fil-forge/ucantone/did"
@@ -23,18 +22,15 @@ type StoreKind string
 
 const (
 	Memory   StoreKind = "memory"
-	AWS      StoreKind = "aws"
 	Postgres StoreKind = "postgres"
 )
 
-var storeKinds = []StoreKind{Memory, AWS, Postgres}
+var storeKinds = []StoreKind{Memory, Postgres}
 
 func makeStore(t *testing.T, k StoreKind) dlgstore.Store {
 	switch k {
 	case Memory:
 		return delegationmemory.New()
-	case AWS:
-		return createAWSStore(t)
 	case Postgres:
 		return createPostgresStore(t)
 	}
@@ -55,31 +51,6 @@ func createPostgresStore(t *testing.T) dlgstore.Store {
 	s3Client := testutil.NewS3Client(t, s3Endpoint)
 
 	s := delegationpostgres.New(pool, s3Client, "delegation-"+uuid.NewString())
-	require.NoError(t, s.Initialize(t.Context()))
-	return s
-}
-
-func createAWSStore(t *testing.T) dlgstore.Store {
-	// This test expects docker to be running in linux CI environments and fails if it's not
-	if testutil.IsRunningInCI(t) && runtime.GOOS == "linux" {
-		if !testutil.IsDockerAvailable(t) {
-			t.Fatalf("docker is expected in CI linux testing environments, but wasn't found")
-		}
-	}
-	// otherwise this test is running locally, skip it if docker isn't available
-	if !testutil.IsDockerAvailable(t) {
-		t.SkipNow()
-	}
-
-	suffix := uuid.NewString()
-
-	dynamoEndpoint := testutil.CreateDynamo(t)
-	dynamo := testutil.NewDynamoClient(t, dynamoEndpoint)
-
-	s3Endpoint := testutil.CreateS3(t)
-	s3Client := testutil.NewS3Client(t, s3Endpoint)
-
-	s := delegationaws.New(dynamo, "delegation-"+suffix, s3Client, "delegation-"+suffix)
 	require.NoError(t, s.Initialize(t.Context()))
 	return s
 }

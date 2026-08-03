@@ -6,10 +6,8 @@ import (
 
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/store/metrics"
-	metricsaws "github.com/fil-forge/sprue/pkg/store/metrics/aws"
 	metricsmemory "github.com/fil-forge/sprue/pkg/store/metrics/memory"
 	metricspostgres "github.com/fil-forge/sprue/pkg/store/metrics/postgres"
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
 
@@ -17,18 +15,15 @@ type StoreKind string
 
 const (
 	Memory   StoreKind = "memory"
-	AWS      StoreKind = "aws"
 	Postgres StoreKind = "postgres"
 )
 
-var storeKinds = []StoreKind{Memory, AWS, Postgres}
+var storeKinds = []StoreKind{Memory, Postgres}
 
 func makeStore(t *testing.T, k StoreKind) metrics.Store {
 	switch k {
 	case Memory:
 		return metricsmemory.New()
-	case AWS:
-		return createAWSStore(t)
 	case Postgres:
 		return createPostgresStore(t)
 	}
@@ -39,8 +34,6 @@ func makeSpaceStore(t *testing.T, k StoreKind) metrics.SpaceStore {
 	switch k {
 	case Memory:
 		return metricsmemory.NewSpaceStore()
-	case AWS:
-		return createAWSSpaceStore(t)
 	case Postgres:
 		return createPostgresSpaceStore(t)
 	}
@@ -71,46 +64,6 @@ func createPostgresSpaceStore(t *testing.T) *metricspostgres.SpaceStore {
 	}
 	pool := testutil.CreatePostgres(t)
 	return metricspostgres.NewSpaceStore(pool)
-}
-
-func createAWSStore(t *testing.T) *metricsaws.Store {
-	// This test expects docker to be running in linux CI environments and fails if it's not
-	if testutil.IsRunningInCI(t) && runtime.GOOS == "linux" {
-		if !testutil.IsDockerAvailable(t) {
-			t.Fatalf("docker is expected in CI linux testing environments, but wasn't found")
-		}
-	}
-	// otherwise this test is running locally, skip it if docker isn't available
-	if !testutil.IsDockerAvailable(t) {
-		t.SkipNow()
-	}
-
-	dynamoEndpoint := testutil.CreateDynamo(t)
-	dynamo := testutil.NewDynamoClient(t, dynamoEndpoint)
-
-	store := metricsaws.New(dynamo, "metrics-"+uuid.NewString())
-	require.NoError(t, store.Initialize(t.Context()))
-	return store
-}
-
-func createAWSSpaceStore(t *testing.T) *metricsaws.SpaceStore {
-	// This test expects docker to be running in linux CI environments and fails if it's not
-	if testutil.IsRunningInCI(t) && runtime.GOOS == "linux" {
-		if !testutil.IsDockerAvailable(t) {
-			t.Fatalf("docker is expected in CI linux testing environments, but wasn't found")
-		}
-	}
-	// otherwise this test is running locally, skip it if docker isn't available
-	if !testutil.IsDockerAvailable(t) {
-		t.SkipNow()
-	}
-
-	dynamoEndpoint := testutil.CreateDynamo(t)
-	dynamo := testutil.NewDynamoClient(t, dynamoEndpoint)
-
-	store := metricsaws.NewSpaceStore(dynamo, "space-metrics-"+uuid.NewString())
-	require.NoError(t, store.Initialize(t.Context()))
-	return store
 }
 
 func TestStore(t *testing.T) {

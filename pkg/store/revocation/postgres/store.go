@@ -25,7 +25,7 @@ func New(pool *pgxpool.Pool) *Store {
 func (s *Store) Initialize(ctx context.Context) error { return nil }
 
 // Add inserts a revocation if one does not already exist for the given
-// (delegation, scope). Matches the AWS semantics of "leave existing unchanged".
+// (delegation, scope), leaving any existing revocation unchanged.
 func (s *Store) Add(ctx context.Context, delegation cid.Cid, scope did.DID, cause cid.Cid) error {
 	_, err := s.pool.Exec(ctx, `
 		INSERT INTO revocation (revoke, scope, cause, inserted_at)

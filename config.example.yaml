@@ -67,10 +67,9 @@ mailer:
 
 # Storage backend selection and per-backend configuration.
 storage:
-  # Selects the backend. Valid values: "memory", "postgres", "aws". Default "postgres".
+  # Selects the backend. Valid values: "memory", "postgres". Default "postgres".
   #  - memory:   in-process stores — all data lost on restart; dev/test only.
   #  - postgres: PostgreSQL for metadata + S3-compatible storage for blob payloads.
-  #  - aws:      DynamoDB for metadata + S3 for blob payloads.
   type: "postgres"
 
   postgres:
@@ -83,25 +82,8 @@ storage:
     # Set to true to skip goose migrations at startup (they run by default).
     skip_migrations: false
 
-  dynamodb:
-    # DynamoDB endpoint (for local development with DynamoDB Local).
-    endpoint: "http://dynamodb-local:8000"
-    # AWS region for DynamoDB.
-    region: "us-west-1"
-    agent_index_table: "agent-index"
-    blob_registry_table: "blob-registry"
-    consumer_table: "consumer"
-    customer_table: "customer"
-    delegation_table: "delegation"
-    space_metrics_table: "space-metrics"
-    admin_metrics_table: "admin-metrics"
-    replica_table: "replica"
-    revocation_table: "revocation"
-    storage_provider_table: "storage-provider"
-    subscription_table: "subscription"
-    space_diff_table: "space-diff"
-    upload_table: "upload"
-
+  # S3-compatible storage used by the postgres backend for blob payloads
+  # (agent messages and delegation archives).
   s3:
     # S3 endpoint (for local development with MinIO).
     endpoint: "http://minio:9000"
@@ -119,7 +101,6 @@ storage:
     use_path_style: true
     agent_message_bucket: "agent-message"
     delegation_bucket: "delegation"
-    upload_shards_bucket: "upload-shards"
 
 log:
   # Log level: debug, info, warn, error

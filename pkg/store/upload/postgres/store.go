@@ -1,8 +1,7 @@
 // Package postgres provides a PostgreSQL-backed implementation of upload.Store.
 //
-// Unlike the AWS backend (which pushes large shard lists to S3 to work around
-// DynamoDB's 400 KB item-size limit), Postgres stores shards in a dedicated
-// upload_shard table with no size restriction.
+// Shards are stored in a dedicated upload_shard table with no size
+// restriction.
 package postgres
 
 import (
