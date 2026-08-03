@@ -201,6 +201,14 @@ func (c *Client) AcceptInvocation(ctx context.Context, req *AcceptRequest, proof
 type ReleaseRequest struct {
 	Space  did.DID
 	Digest multihash.Multihash
+	// Cause is the /blob/remove invocation this release translates. The
+	// release arguments link to its task, and the invocation itself (with
+	// CauseProofs) is sent in the request container so the node can verify
+	// the release originates from the space.
+	Cause ucan.Invocation
+	// CauseProofs are the delegations proving the space authorized the Cause
+	// invocation.
+	CauseProofs []ucan.Delegation
 }
 
 // Release sends a /blob/release invocation to the piri node, releasing the
@@ -225,6 +233,8 @@ func (c *Client) Release(ctx context.Context, req *ReleaseRequest, proofStore uc
 		c.logger,
 		inv,
 		execution.WithDelegations(prfs...),
+		execution.WithInvocations(req.Cause),
+		execution.WithDelegations(req.CauseProofs...),
 	)
 	if err != nil {
 		return nil, nil, nil, err
@@ -255,6 +265,7 @@ func (c *Client) ReleaseInvocation(ctx context.Context, req *ReleaseRequest, pro
 		&blobcmds.ReleaseArguments{
 			Space:  req.Space,
 			Digest: req.Digest,
+			Cause:  req.Cause.Task().Link(),
 		},
 		options...,
 	)

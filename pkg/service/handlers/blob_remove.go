@@ -79,8 +79,9 @@ func NewBlobRemoveHandler(router *routing.Service, nodeProvider piriclient.Provi
 			// deregister. Deregistering last keeps the registration — and
 			// with it the receipt chain to the primary — available for a
 			// retry if every forward fails.
+			causeProofs := containerDelegations(req.Metadata(), req.Invocation().Proofs())
 			for provider := range providers {
-				if err := forwardBlobRelease(req.Context(), router, nodeProvider, agentStore, provider, space, args.Digest); err != nil {
+				if err := forwardBlobRelease(req.Context(), router, nodeProvider, agentStore, provider, space, args.Digest, req.Invocation(), causeProofs); err != nil {
 					log.Warn("failed to forward blob release to provider",
 						zap.Stringer("provider", provider), zap.Error(err))
 				}
@@ -124,8 +125,11 @@ func primaryProviderForBlob(ctx context.Context, agentStore agent.Store, cause c
 	return accInv.Subject(), nil
 }
 
-// forwardBlobRelease sends /blob/release {space, digest} to a single provider
-// and records the exchanged invocation + receipt in the agent store.
+// forwardBlobRelease sends /blob/release {space, digest, cause} to a single
+// provider and records the exchanged invocation + receipt in the agent store.
+// The cause is the /blob/remove invocation the release translates; it travels
+// in the request container (along with its proofs) so the node can verify the
+// release originates from the space.
 func forwardBlobRelease(
 	ctx context.Context,
 	router *routing.Service,
@@ -134,6 +138,8 @@ func forwardBlobRelease(
 	provider did.DID,
 	space did.DID,
 	digest multihash.Multihash,
+	cause ucan.Invocation,
+	causeProofs []ucan.Delegation,
 ) error {
 	info, err := router.GetProviderInfo(ctx, provider)
 	if err != nil {
@@ -148,8 +154,10 @@ func forwardBlobRelease(
 	// granted the upload service at registration.
 	proofStore := ucanlib.NewContainerProofStore(info.Proofs)
 	_, inv, rcpt, err := client.Release(ctx, &piriclient.ReleaseRequest{
-		Space:  space,
-		Digest: digest,
+		Space:       space,
+		Digest:      digest,
+		Cause:       cause,
+		CauseProofs: causeProofs,
 	}, proofStore)
 	if err != nil {
 		return fmt.Errorf("executing release on provider: %w", err)
@@ -159,4 +167,21 @@ func forwardBlobRelease(
 		return fmt.Errorf("writing agent message: %w", err)
 	}
 	return nil
+}
+
+// containerDelegations resolves delegation links against a request container,
+// skipping any that are absent. An invocation's proof chain arrives in the
+// same container as the invocation itself, so this recovers the delegations
+// needed to forward it elsewhere.
+func containerDelegations(meta ucan.Container, links []cid.Cid) []ucan.Delegation {
+	if meta == nil {
+		return nil
+	}
+	var dlgs []ucan.Delegation
+	for _, link := range links {
+		if d, ok := meta.Delegation(link); ok {
+			dlgs = append(dlgs, d)
+		}
+	}
+	return dlgs
 }
