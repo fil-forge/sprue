@@ -236,6 +236,9 @@ func scanRecord(row rowScanner) (allocation.Record, error) {
 	if err != nil {
 		return allocation.Record{}, fmt.Errorf("parsing cause CID: %w", err)
 	}
+	if size < 0 {
+		return allocation.Record{}, fmt.Errorf("invalid allocation size %d", size)
+	}
 	return allocation.Record{
 		Space: space,
 		Blob: allocation.Blob{

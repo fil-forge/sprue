@@ -58,17 +58,19 @@ func (s *Store) Add(ctx context.Context, space did.DID, blob blob.Blob, cause ci
 		return fmt.Errorf("collecting consumers: %w", err)
 	}
 
-	s.allocs[space] = append(s.allocs[space], allocation.Record{
+	rec := allocation.Record{
 		Space:      space,
 		Blob:       blob,
 		Cause:      cause,
 		InsertedAt: time.Now(),
-	})
+	}
 
 	// There should only be one subscription per provider, but in theory you
 	// could have multiple providers for the same consumer (space).
 	for _, c := range consumers {
-		s.spaceDiffStore.Put(ctx, c.Provider, space, c.Subscription, cause, int64(blob.Size), time.Now())
+		if err := s.spaceDiffStore.Put(ctx, c.Provider, space, c.Subscription, cause, int64(blob.Size), time.Now()); err != nil {
+			return fmt.Errorf("putting space diff: %w", err)
+		}
 	}
 
 	inc := map[string]uint64{
@@ -81,6 +83,8 @@ func (s *Store) Add(ctx context.Context, space did.DID, blob blob.Blob, cause ci
 	if err := s.adminMetrics.IncrementTotals(ctx, inc); err != nil {
 		return fmt.Errorf("incrementing admin metrics: %w", err)
 	}
+
+	s.allocs[space] = append(s.allocs[space], rec)
 
 	return nil
 }
