@@ -11,10 +11,10 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.62.1
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.106.1
 	github.com/docker/docker v28.5.2+incompatible
-	github.com/fil-forge/libforge v0.0.0-20260727220215-5e299c46f62f
+	github.com/fil-forge/libforge v0.0.0-20260801080224-850148f3084e
 	github.com/fil-forge/ucantone v0.0.0-20260713122829-2662bddc02ab
 	github.com/google/uuid v1.6.0
-	github.com/ipfs/go-cid v0.6.1
+	github.com/ipfs/go-cid v0.6.2
 	github.com/jackc/pgx/v5 v5.9.2
 	github.com/labstack/echo/v4 v4.15.4
 	github.com/multiformats/go-multihash v0.2.3

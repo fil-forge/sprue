@@ -84,13 +84,14 @@ func newBlobRemoveTestDeps(t *testing.T, uploadService multikey.Issuer, logger *
 	}
 }
 
-// mockPiriReleaseServer serves /blob/release and records the arguments of
-// each call.
+// mockPiriReleaseServer serves /blob/release and records the arguments and
+// request container of each call.
 type mockPiriReleaseServer struct {
 	srv *httptest.Server
 
 	mu    sync.Mutex
 	calls []blobcmds.ReleaseArguments
+	metas []ucan.Container
 }
 
 func newMockPiriReleaseServer(t *testing.T, storageProvider ucan.Issuer, uploadService identity.Identity) *mockPiriReleaseServer {
@@ -110,6 +111,7 @@ func newMockPiriReleaseServer(t *testing.T, storageProvider ucan.Issuer, uploadS
 	) error {
 		m.mu.Lock()
 		m.calls = append(m.calls, *req.Task().Arguments())
+		m.metas = append(m.metas, req.Metadata())
 		m.mu.Unlock()
 		return res.SetSuccess(&blobcmds.ReleaseOK{})
 	}))
@@ -123,6 +125,12 @@ func (m *mockPiriReleaseServer) Calls() []blobcmds.ReleaseArguments {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return append([]blobcmds.ReleaseArguments(nil), m.calls...)
+}
+
+func (m *mockPiriReleaseServer) Metas() []ucan.Container {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]ucan.Container(nil), m.metas...)
 }
 
 // releaseProviderProofs builds the registration proof container including the
@@ -255,6 +263,20 @@ func TestBlobRemoveHandler(t *testing.T) {
 		require.Len(t, calls, 1, "release forwarded to the primary provider")
 		require.Equal(t, space.DID(), calls[0].Space)
 		require.Equal(t, blob.Digest, calls[0].Digest)
+
+		// The /blob/remove invocation the release translates travels in the
+		// request container, linked from the release's Cause argument.
+		metas := piriSrv.Metas()
+		require.Len(t, metas, 1)
+		require.NotNil(t, metas[0])
+		var causeInv ucan.Invocation
+		for _, ci := range metas[0].Invocations() {
+			if ci.Task().Link() == calls[0].Cause {
+				causeInv = ci
+			}
+		}
+		require.NotNil(t, causeInv, "remove invocation sent in the release request container")
+		require.Equal(t, blobcmds.Remove.Command, causeInv.Command())
 
 		_, err = deps.blobReg.Get(t.Context(), space.DID(), blob.Digest)
 		require.ErrorIs(t, err, blobregistry.ErrEntryNotFound, "blob deregistered")
