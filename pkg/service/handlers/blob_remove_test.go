@@ -16,6 +16,8 @@ import (
 	"github.com/fil-forge/sprue/pkg/service/handlers"
 	"github.com/fil-forge/sprue/pkg/store/agent"
 	agent_store "github.com/fil-forge/sprue/pkg/store/agent/memory"
+	"github.com/fil-forge/sprue/pkg/store/allocation"
+	allocation_store "github.com/fil-forge/sprue/pkg/store/allocation/memory"
 	blobregistry "github.com/fil-forge/sprue/pkg/store/blob_registry"
 	blob_registry "github.com/fil-forge/sprue/pkg/store/blob_registry/memory"
 	consumer_store "github.com/fil-forge/sprue/pkg/store/consumer/memory"
@@ -49,6 +51,7 @@ type blobRemoveTestDeps struct {
 	spStore       *storage_provider_store.Store
 	agentStore    *agent_store.Store
 	blobReg       *blob_registry.Store
+	allocations   *allocation_store.Store
 	replicaStore  *replica_store.Store
 }
 
@@ -58,7 +61,8 @@ func newBlobRemoveTestDeps(t *testing.T, uploadService multikey.Issuer, logger *
 	router := routing.NewService(spStore, logger)
 	agentStore := agent_store.New()
 	consumerStore := consumer_store.New()
-	blobReg := blob_registry.New(
+	blobReg := blob_registry.New()
+	allocations := allocation_store.New(
 		spacediff_store.New(),
 		consumerStore,
 		metrics_store.NewSpaceStore(),
@@ -71,6 +75,7 @@ func newBlobRemoveTestDeps(t *testing.T, uploadService multikey.Issuer, logger *
 		nodeProvider,
 		agentStore,
 		blobReg,
+		allocations,
 		replicaStore,
 		logger,
 	)
@@ -80,6 +85,7 @@ func newBlobRemoveTestDeps(t *testing.T, uploadService multikey.Issuer, logger *
 		spStore:       spStore,
 		agentStore:    agentStore,
 		blobReg:       blobReg,
+		allocations:   allocations,
 		replicaStore:  replicaStore,
 	}
 }
@@ -156,8 +162,8 @@ func registerStoredBlob(
 	t.Helper()
 	ctx := t.Context()
 
-	// The registry's metrics accounting requires a consumer record for the
-	// space.
+	// The allocation store's billing writes require a consumer record for
+	// the space.
 	account := testutil.Must(didmailto.New("alice@example.com"))(t)
 	require.NoError(t, deps.consumerStore.Add(ctx, uploadService.DID(), space, account, "sub-1", testutil.RandomCID(t)))
 
@@ -205,6 +211,9 @@ func registerStoredBlob(
 		container.WithReceipts(addRcpt),
 	)
 	require.NoError(t, deps.agentStore.Write(ctx, msg, agent.Index(msg)))
+	// A stored blob was allocated before it was accepted, so it carries an
+	// allocation record as well as its registration.
+	require.NoError(t, deps.allocations.Add(ctx, space, blob, addInv.Task().Link()))
 	require.NoError(t, deps.blobReg.Register(ctx, space, blob, addInv.Task().Link()))
 }
 
@@ -240,6 +249,27 @@ func TestBlobRemoveHandler(t *testing.T) {
 		rcpt := invokeBlobRemove(t, deps, uploadService, space, testutil.RandomMultihash(t))
 		_, err := blobcmds.Remove.Unpack(rcpt)
 		require.NoError(t, err)
+	})
+
+	t.Run("unregistered blob keeps its allocation record", func(t *testing.T) {
+		deps := newBlobRemoveTestDeps(t, uploadService, logger)
+		space := testutil.RandomIssuer(t)
+		blob := blobcmds.Blob{Digest: testutil.RandomMultihash(t), Size: 1024}
+
+		// The allocation store's billing writes require a consumer record.
+		account := testutil.Must(didmailto.New("alice@example.com"))(t)
+		require.NoError(t, deps.consumerStore.Add(t.Context(), uploadService.DID(), space.DID(), account, "sub-1", testutil.RandomCID(t)))
+
+		// The blob was allocated but never accepted: remove must not release
+		// the allocation — that is /blob/abort's job.
+		require.NoError(t, deps.allocations.Add(t.Context(), space.DID(), blob, testutil.RandomCID(t)))
+
+		rcpt := invokeBlobRemove(t, deps, uploadService, space, blob.Digest)
+		_, err := blobcmds.Remove.Unpack(rcpt)
+		require.NoError(t, err)
+
+		_, err = deps.allocations.Get(t.Context(), space.DID(), blob.Digest)
+		require.NoError(t, err, "allocation record left intact")
 	})
 
 	t.Run("forwards to primary provider and deregisters", func(t *testing.T) {
@@ -280,6 +310,9 @@ func TestBlobRemoveHandler(t *testing.T) {
 
 		_, err = deps.blobReg.Get(t.Context(), space.DID(), blob.Digest)
 		require.ErrorIs(t, err, blobregistry.ErrEntryNotFound, "blob deregistered")
+
+		_, err = deps.allocations.Get(t.Context(), space.DID(), blob.Digest)
+		require.ErrorIs(t, err, allocation.ErrEntryNotFound, "allocation record removed")
 
 		// Removing again is idempotent success and forwards nothing new.
 		rcpt = invokeBlobRemove(t, deps, uploadService, space, blob.Digest)

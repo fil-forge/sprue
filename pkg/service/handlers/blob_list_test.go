@@ -10,8 +10,6 @@ import (
 	"github.com/fil-forge/sprue/pkg/service/handlers"
 	blob_registry "github.com/fil-forge/sprue/pkg/store/blob_registry/memory"
 	consumer_store "github.com/fil-forge/sprue/pkg/store/consumer/memory"
-	metrics_store "github.com/fil-forge/sprue/pkg/store/metrics/memory"
-	spacediff_store "github.com/fil-forge/sprue/pkg/store/space_diff/memory"
 	"github.com/fil-forge/ucantone/execution"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/invocation"
@@ -19,15 +17,13 @@ import (
 	"go.uber.org/zap/zaptest"
 )
 
+// newBlobRegistry returns a registry plus a consumer store. The registry no
+// longer depends on consumers (billing moved to the allocation store); the
+// consumer store is kept for subtests that provision spaces for other
+// reasons.
 func newBlobRegistry(t *testing.T) (*blob_registry.Store, *consumer_store.Store) {
 	t.Helper()
-	consumerStore := consumer_store.New()
-	return blob_registry.New(
-		spacediff_store.New(),
-		consumerStore,
-		metrics_store.NewSpaceStore(),
-		metrics_store.New(),
-	), consumerStore
+	return blob_registry.New(), consumer_store.New()
 }
 
 // invokeBlobList builds the invocation/request/response trio used by every

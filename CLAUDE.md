@@ -42,8 +42,8 @@ Sprue is the upload coordination service for Storacha local development. It rout
 
 **Stores (pkg/store/)**
 - Each domain has its own store interface in `pkg/store/<domain>/`
-- Each store has three implementations: AWS (DynamoDB/S3) in `<domain>/aws/`, PostgreSQL (+ S3 for blob payloads) in `<domain>/postgres/`, and in-memory in `<domain>/memory/`
-- Store interfaces: `agent.Store`, `blob_registry.Store`, `consumer.Store`, `customer.Store`, `delegation.Store`, `metrics.Store`, `replica.Store`, `revocation.Store`, `space_diff.Store`, `storage_provider.Store`, `subscription.Store`, `upload.Store`
+- Each store has three implementations: AWS (DynamoDB/S3) in `<domain>/aws/`, PostgreSQL (+ S3 for blob payloads) in `<domain>/postgres/`, and in-memory in `<domain>/memory/`. New stores get only postgres + memory (AWS is being phased out); the AWS fx backend wires their memory impl.
+- Store interfaces: `agent.Store`, `allocation.Store`, `blob_registry.Store`, `consumer.Store`, `customer.Store`, `delegation.Store`, `metrics.Store`, `replica.Store`, `revocation.Store`, `space_diff.Store`, `storage_provider.Store`, `subscription.Store`, `upload.Store`
 - Backends are wired in `internal/fx/store/<backend>/provider.go` (aws, postgres, memory)
 - Backend selection is driven by `storage.type` in config (`memory` | `postgres` | `aws`; default `postgres`). Per-backend settings live under `storage.postgres`, `storage.dynamodb`, and `storage.s3`.
 - Postgres schema is managed by goose migrations in `internal/migrations/sql/`, embedded and applied on startup. Set `storage.postgres.skip_migrations: true` to disable.

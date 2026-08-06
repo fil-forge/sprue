@@ -11,6 +11,7 @@ import (
 	"github.com/fil-forge/sprue/pkg/piriclient"
 	"github.com/fil-forge/sprue/pkg/routing"
 	"github.com/fil-forge/sprue/pkg/store/agent"
+	"github.com/fil-forge/sprue/pkg/store/allocation"
 	blobregistry "github.com/fil-forge/sprue/pkg/store/blob_registry"
 	"github.com/fil-forge/sprue/pkg/store/replica"
 	"github.com/fil-forge/ucantone/binding"
@@ -23,15 +24,18 @@ import (
 	"go.uber.org/zap"
 )
 
-// NewBlobRemoveHandler removes a blob from a space: it deregisters the blob
-// and forwards /blob/release to every storage node holding it (the primary
-// provider recovered via the registration's receipt chain, plus replicas).
+// NewBlobRemoveHandler removes a blob from a space: it deregisters the blob,
+// deletes its allocation record, and forwards /blob/release to every storage
+// node holding it (the primary provider recovered via the registration's
+// receipt chain, plus replicas).
 //
 // Forwarding is best-effort: a node that cannot be reached is logged and
 // skipped rather than failing the removal — piri's handler is idempotent and
 // unclaimed allocations expire, so stragglers are reconciled by provider-side
-// hygiene. Removing an unregistered blob is idempotent success.
-func NewBlobRemoveHandler(router *routing.Service, nodeProvider piriclient.Provider, agentStore agent.Store, blobRegistry blobregistry.Store, replicaStore replica.Store, logger *zap.Logger) server.Route {
+// hygiene. Removing an unregistered blob is idempotent success, and
+// deliberately leaves any allocation record in place: an allocation that
+// never reached acceptance is released via /blob/abort instead.
+func NewBlobRemoveHandler(router *routing.Service, nodeProvider piriclient.Provider, agentStore agent.Store, blobRegistry blobregistry.Store, allocations allocation.Store, replicaStore replica.Store, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", blobcmds.Remove))
 	return blobcmds.Remove.Route(
 		func(req *binding.Request[*blobcmds.RemoveArguments], res *binding.Response[*blobcmds.RemoveOK]) error {
@@ -85,6 +89,15 @@ func NewBlobRemoveHandler(router *routing.Service, nodeProvider piriclient.Provi
 					log.Warn("failed to forward blob release to provider",
 						zap.Stringer("provider", provider), zap.Error(err))
 				}
+			}
+
+			// Remove the allocation record before deregistering: if this ran
+			// after Deregister and failed, a retry would hit the idempotent
+			// "not registered" early-return above and orphan the record. A
+			// missing entry means a retry already removed it.
+			if err := allocations.Remove(req.Context(), space, args.Digest, cause); err != nil && !errors.Is(err, allocation.ErrEntryNotFound) {
+				log.Error("failed to remove blob allocation record", zap.Error(err))
+				return fmt.Errorf("removing blob allocation record: %w", err)
 			}
 
 			if err := blobRegistry.Deregister(req.Context(), space, args.Digest, cause); err != nil {

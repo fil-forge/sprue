@@ -16,6 +16,7 @@ import (
 	"github.com/fil-forge/sprue/pkg/provisioning"
 	"github.com/fil-forge/sprue/pkg/routing"
 	"github.com/fil-forge/sprue/pkg/store/agent"
+	"github.com/fil-forge/sprue/pkg/store/allocation"
 	blobregistry "github.com/fil-forge/sprue/pkg/store/blob_registry"
 	"github.com/fil-forge/ucantone/binding"
 	"github.com/fil-forge/ucantone/did"
@@ -34,7 +35,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func NewBlobAddHandler(id identity.Identity, provisioningSvc *provisioning.Service, router *routing.Service, nodeProvider piriclient.Provider, agentStore agent.Store, blobRegistry blobregistry.Store, logger *zap.Logger) server.Route {
+func NewBlobAddHandler(id identity.Identity, provisioningSvc *provisioning.Service, router *routing.Service, nodeProvider piriclient.Provider, agentStore agent.Store, blobRegistry blobregistry.Store, allocations allocation.Store, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", blobcmds.Add))
 	return blobcmds.Add.Route(
 		func(req *binding.Request[*blobcmds.AddArguments], res *binding.Response[*blobcmds.AddOK]) error {
@@ -163,6 +164,14 @@ func NewBlobAddHandler(id identity.Identity, provisioningSvc *provisioning.Servi
 				return fmt.Errorf("allocating space: %w", err)
 			}
 			log = log.With(zap.Stringer("provider", provider.ID))
+
+			// Record the allocation so the blob can be billed even if it is
+			// never accepted. An existing entry means a retried add already
+			// recorded it.
+			if err := allocations.Add(req.Context(), space, blob, cause); err != nil && !errors.Is(err, allocation.ErrEntryExists) {
+				log.Error("failed to record blob allocation", zap.Error(err))
+				return fmt.Errorf("recording blob allocation: %w", err)
+			}
 
 			putInv, putRcpt, err := genPut(blob, allocInv, allocOK, log)
 			if err != nil {

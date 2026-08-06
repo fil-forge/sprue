@@ -3,6 +3,8 @@ package memory
 import (
 	"github.com/fil-forge/sprue/pkg/store/agent"
 	memagent "github.com/fil-forge/sprue/pkg/store/agent/memory"
+	"github.com/fil-forge/sprue/pkg/store/allocation"
+	memallocation "github.com/fil-forge/sprue/pkg/store/allocation/memory"
 	blobregistry "github.com/fil-forge/sprue/pkg/store/blob_registry"
 	memblobregistry "github.com/fil-forge/sprue/pkg/store/blob_registry/memory"
 	"github.com/fil-forge/sprue/pkg/store/consumer"
@@ -31,6 +33,7 @@ import (
 var Module = fx.Module("memory-store",
 	fx.Provide(
 		NewAgentStore,
+		NewAllocationStore,
 		NewBlobRegistry,
 		NewConsumerStore,
 		NewCustomerStore,
@@ -50,8 +53,12 @@ func NewAgentStore() agent.Store {
 	return memagent.New()
 }
 
-func NewBlobRegistry(spaceDiffStore spacediff.Store, consumerStore consumer.Store, spaceMetrics metrics.SpaceStore, adminMetrics metrics.Store) blobregistry.Store {
-	return memblobregistry.New(spaceDiffStore, consumerStore, spaceMetrics, adminMetrics)
+func NewAllocationStore(spaceDiffStore spacediff.Store, consumerStore consumer.Store, spaceMetrics metrics.SpaceStore, adminMetrics metrics.Store) allocation.Store {
+	return memallocation.New(spaceDiffStore, consumerStore, spaceMetrics, adminMetrics)
+}
+
+func NewBlobRegistry() blobregistry.Store {
+	return memblobregistry.New()
 }
 
 func NewConsumerStore() consumer.Store {

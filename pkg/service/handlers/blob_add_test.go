@@ -20,6 +20,8 @@ import (
 	"github.com/fil-forge/sprue/pkg/service/handlers"
 	"github.com/fil-forge/sprue/pkg/store/agent"
 	agent_store "github.com/fil-forge/sprue/pkg/store/agent/memory"
+	"github.com/fil-forge/sprue/pkg/store/allocation"
+	allocation_store "github.com/fil-forge/sprue/pkg/store/allocation/memory"
 	blob_registry "github.com/fil-forge/sprue/pkg/store/blob_registry/memory"
 	consumer_store "github.com/fil-forge/sprue/pkg/store/consumer/memory"
 	metrics_store "github.com/fil-forge/sprue/pkg/store/metrics/memory"
@@ -54,6 +56,7 @@ type blobAddTestDeps struct {
 	spStore           *storage_provider_store.Store
 	agentStore        *agent_store.Store
 	blobReg           *blob_registry.Store
+	allocations       *allocation_store.Store
 }
 
 func newBlobAddTestDeps(t *testing.T, uploadService multikey.Issuer, logger *zap.Logger) *blobAddTestDeps {
@@ -64,7 +67,8 @@ func newBlobAddTestDeps(t *testing.T, uploadService multikey.Issuer, logger *zap
 	spStore := storage_provider_store.New()
 	router := routing.NewService(spStore, logger)
 	agentStore := agent_store.New()
-	blobReg := blob_registry.New(
+	blobReg := blob_registry.New()
+	allocations := allocation_store.New(
 		spacediff_store.New(),
 		consumerStore,
 		metrics_store.NewSpaceStore(),
@@ -78,6 +82,7 @@ func newBlobAddTestDeps(t *testing.T, uploadService multikey.Issuer, logger *zap
 		nodeProvider,
 		agentStore,
 		blobReg,
+		allocations,
 		logger,
 	)
 	return &blobAddTestDeps{
@@ -87,6 +92,7 @@ func newBlobAddTestDeps(t *testing.T, uploadService multikey.Issuer, logger *zap
 		spStore:           spStore,
 		agentStore:        agentStore,
 		blobReg:           blobReg,
+		allocations:       allocations,
 	}
 }
 
@@ -312,6 +318,13 @@ func TestBlobAddHandler(t *testing.T) {
 		// Response metadata should carry the allocate, put, and accept invocations.
 		require.NotNil(t, res.Metadata())
 		require.NotEmpty(t, res.Metadata().Invocations())
+
+		// A successful allocation records the blob for billing, caused by the
+		// /blob/add task.
+		rec, err := deps.allocations.Get(ctx, space.DID(), args.Blob.Digest)
+		require.NoError(t, err)
+		require.Equal(t, args.Blob, rec.Blob)
+		require.Equal(t, inv.Task().Link(), rec.Cause)
 	})
 
 	t.Run("successful allocation blob already stored", func(t *testing.T) {
@@ -361,6 +374,11 @@ func TestBlobAddHandler(t *testing.T) {
 		require.NotNil(t, res.Metadata())
 		require.NotEmpty(t, res.Metadata().Invocations())
 		require.NotEmpty(t, res.Metadata().Receipts())
+
+		// The allocation record persists through the immediate accept.
+		rec, err := deps.allocations.Get(ctx, space.DID(), args.Blob.Digest)
+		require.NoError(t, err)
+		require.Equal(t, inv.Task().Link(), rec.Cause)
 	})
 
 	t.Run("blob already registered in space", func(t *testing.T) {
@@ -478,6 +496,11 @@ func TestBlobAddHandler(t *testing.T) {
 		require.NotNil(t, res.Metadata())
 		require.Len(t, res.Metadata().Invocations(), 3)
 		require.Len(t, res.Metadata().Receipts(), 3)
+
+		// The short-circuit performs no new allocation, so no allocation
+		// record is created by the repeat add.
+		_, err = deps.allocations.Get(ctx, space.DID(), blob.Digest)
+		require.ErrorIs(t, err, allocation.ErrEntryNotFound)
 	})
 }
 
