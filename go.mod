@@ -7,8 +7,6 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.43.1
 	github.com/aws/aws-sdk-go-v2/config v1.32.32
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.31
-	github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue v1.20.55
-	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.62.1
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.106.1
 	github.com/docker/docker v28.5.2+incompatible
 	github.com/fil-forge/libforge v0.0.0-20260801080224-850148f3084e
@@ -24,7 +22,6 @@ require (
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go v0.43.0
-	github.com/testcontainers/testcontainers-go/modules/dynamodb v0.41.0
 	github.com/testcontainers/testcontainers-go/modules/minio v0.43.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.43.0
 	github.com/whyrusleeping/cbor-gen v0.3.1
@@ -42,10 +39,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.32 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.32 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.33 // indirect
-	github.com/aws/aws-sdk-go-v2/service/dynamodbstreams v1.36.1 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.14 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.9.25 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/endpoint-discovery v1.12.9 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.32 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.19.33 // indirect
 	github.com/aws/aws-sdk-go-v2/service/signin v1.5.1 // indirect

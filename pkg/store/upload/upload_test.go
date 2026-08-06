@@ -8,11 +8,9 @@ import (
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/store"
 	"github.com/fil-forge/sprue/pkg/store/upload"
-	uploadaws "github.com/fil-forge/sprue/pkg/store/upload/aws"
 	uploadmemory "github.com/fil-forge/sprue/pkg/store/upload/memory"
 	uploadpostgres "github.com/fil-forge/sprue/pkg/store/upload/postgres"
 	"github.com/fil-forge/ucantone/did"
-	"github.com/google/uuid"
 	"github.com/ipfs/go-cid"
 	"github.com/stretchr/testify/require"
 )
@@ -21,18 +19,20 @@ type StoreKind string
 
 const (
 	Memory   StoreKind = "memory"
-	AWS      StoreKind = "aws"
 	Postgres StoreKind = "postgres"
 )
 
-var storeKinds = []StoreKind{Memory, AWS, Postgres}
+var storeKinds = []StoreKind{Memory, Postgres}
+
+// manyShards is a shard count large enough that listing spans multiple pages.
+// It preserves the value of the removed AWS store's ShardThreshold so the
+// "many shards" cases keep exercising the same scale.
+const manyShards = 5000
 
 func makeStore(t *testing.T, k StoreKind) upload.Store {
 	switch k {
 	case Memory:
 		return uploadmemory.New()
-	case AWS:
-		return createAWSStore(t)
 	case Postgres:
 		return createPostgresStore(t)
 	}
@@ -50,32 +50,6 @@ func createPostgresStore(t *testing.T) upload.Store {
 	}
 	pool := testutil.CreatePostgres(t)
 	return uploadpostgres.New(pool)
-}
-
-func createAWSStore(t *testing.T) *uploadaws.Store {
-	// This test expects docker to be running in linux CI environments and fails if it's not
-	if testutil.IsRunningInCI(t) && runtime.GOOS == "linux" {
-		if !testutil.IsDockerAvailable(t) {
-			t.Fatalf("docker is expected in CI linux testing environments, but wasn't found")
-		}
-	}
-	// otherwise this test is running locally, skip it if docker isn't available
-	if !testutil.IsDockerAvailable(t) {
-		t.SkipNow()
-	}
-
-	s3Endpoint := testutil.CreateS3(t)
-	s3 := testutil.NewS3Client(t, s3Endpoint)
-
-	dynamoEndpoint := testutil.CreateDynamo(t)
-	dynamo := testutil.NewDynamoClient(t, dynamoEndpoint)
-
-	id := uuid.NewString()
-	store := uploadaws.New(dynamo, "upload-"+id, s3, "upload-shards-"+id)
-
-	err := store.Initialize(t.Context())
-	require.NoError(t, err)
-	return store
 }
 
 // listAllShards collects all shards for an upload by paginating in batches of 1000.
@@ -161,8 +135,8 @@ func TestUploadStore(t *testing.T) {
 				require.NoError(t, err)
 
 				// build a second batch of shards that includes one duplicate from the
-				// first batch and enough new shards to push the total over ShardThreshold
-				newShardCount := uploadaws.ShardThreshold - len(initialShards) + 2 // +2 to exceed threshold, accounting for the duplicate
+				// first batch and enough new shards to push the total over manyShards
+				newShardCount := manyShards - len(initialShards) + 2 // +2 to exceed threshold, accounting for the duplicate
 				additionalShards := make([]cid.Cid, newShardCount)
 				additionalShards[0] = initialShards[0] // duplicate
 				for i := 1; i < newShardCount; i++ {
@@ -180,7 +154,7 @@ func TestUploadStore(t *testing.T) {
 
 				// total unique shards = initialShards + additionalShards - 1 duplicate
 				wantShards := len(initialShards) + newShardCount - 1
-				require.Greater(t, wantShards, uploadaws.ShardThreshold)
+				require.Greater(t, wantShards, manyShards)
 
 				allShards := listAllShards(t, store, space, root)
 				require.Len(t, allShards, wantShards)
@@ -214,7 +188,7 @@ func TestUploadStore(t *testing.T) {
 					shardCount int
 				}{
 					{"few shards", 3},
-					{"many shards", uploadaws.ShardThreshold + 1},
+					{"many shards", manyShards + 1},
 				}
 				for _, tc := range cases {
 					t.Run(tc.name, func(t *testing.T) {
@@ -259,7 +233,7 @@ func TestUploadStore(t *testing.T) {
 					shardCount int
 				}{
 					{"few shards", 3},
-					{"many shards", uploadaws.ShardThreshold + 1},
+					{"many shards", manyShards + 1},
 				}
 				for _, tc := range cases {
 					t.Run(tc.name, func(t *testing.T) {

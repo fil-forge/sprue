@@ -6,10 +6,8 @@ import (
 
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/store/replica"
-	replicaaws "github.com/fil-forge/sprue/pkg/store/replica/aws"
 	replicamemory "github.com/fil-forge/sprue/pkg/store/replica/memory"
 	replicapostgres "github.com/fil-forge/sprue/pkg/store/replica/postgres"
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
 
@@ -17,18 +15,15 @@ type StoreKind string
 
 const (
 	Memory   StoreKind = "memory"
-	AWS      StoreKind = "aws"
 	Postgres StoreKind = "postgres"
 )
 
-var storeKinds = []StoreKind{Memory, AWS, Postgres}
+var storeKinds = []StoreKind{Memory, Postgres}
 
 func makeStore(t *testing.T, k StoreKind) replica.Store {
 	switch k {
 	case Memory:
 		return replicamemory.New()
-	case AWS:
-		return createAWSStore(t)
 	case Postgres:
 		return createPostgresStore(t)
 	}
@@ -46,26 +41,6 @@ func createPostgresStore(t *testing.T) replica.Store {
 	}
 	pool := testutil.CreatePostgres(t)
 	return replicapostgres.New(pool)
-}
-
-func createAWSStore(t *testing.T) replica.Store {
-	// This test expects docker to be running in linux CI environments and fails if it's not
-	if testutil.IsRunningInCI(t) && runtime.GOOS == "linux" {
-		if !testutil.IsDockerAvailable(t) {
-			t.Fatalf("docker is expected in CI linux testing environments, but wasn't found")
-		}
-	}
-	// otherwise this test is running locally, skip it if docker isn't available
-	if !testutil.IsDockerAvailable(t) {
-		t.SkipNow()
-	}
-
-	dynamoEndpoint := testutil.CreateDynamo(t)
-	dynamo := testutil.NewDynamoClient(t, dynamoEndpoint)
-
-	s := replicaaws.New(dynamo, "replica-"+uuid.NewString())
-	require.NoError(t, s.Initialize(t.Context()))
-	return s
 }
 
 func TestReplicaStore(t *testing.T) {

@@ -8,10 +8,8 @@ import (
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/store"
 	"github.com/fil-forge/sprue/pkg/store/consumer"
-	consumeraws "github.com/fil-forge/sprue/pkg/store/consumer/aws"
 	consumermemory "github.com/fil-forge/sprue/pkg/store/consumer/memory"
 	consumerpostgres "github.com/fil-forge/sprue/pkg/store/consumer/postgres"
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
 
@@ -19,18 +17,15 @@ type StoreKind string
 
 const (
 	Memory   StoreKind = "memory"
-	AWS      StoreKind = "aws"
 	Postgres StoreKind = "postgres"
 )
 
-var storeKinds = []StoreKind{Memory, AWS, Postgres}
+var storeKinds = []StoreKind{Memory, Postgres}
 
 func makeStore(t *testing.T, k StoreKind) consumer.Store {
 	switch k {
 	case Memory:
 		return consumermemory.New()
-	case AWS:
-		return createAWSStore(t)
 	case Postgres:
 		return createPostgresStore(t)
 	}
@@ -48,26 +43,6 @@ func createPostgresStore(t *testing.T) consumer.Store {
 	}
 	pool := testutil.CreatePostgres(t)
 	return consumerpostgres.New(pool)
-}
-
-func createAWSStore(t *testing.T) *consumeraws.Store {
-	// This test expects docker to be running in linux CI environments and fails if it's not
-	if testutil.IsRunningInCI(t) && runtime.GOOS == "linux" {
-		if !testutil.IsDockerAvailable(t) {
-			t.Fatalf("docker is expected in CI linux testing environments, but wasn't found")
-		}
-	}
-	// otherwise this test is running locally, skip it if docker isn't available
-	if !testutil.IsDockerAvailable(t) {
-		t.SkipNow()
-	}
-
-	dynamoEndpoint := testutil.CreateDynamo(t)
-	dynamo := testutil.NewDynamoClient(t, dynamoEndpoint)
-
-	s := consumeraws.New(dynamo, "consumer-"+uuid.NewString())
-	require.NoError(t, s.Initialize(t.Context()))
-	return s
 }
 
 func TestConsumerStore(t *testing.T) {

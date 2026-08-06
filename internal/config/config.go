@@ -11,7 +11,6 @@ import (
 const (
 	StorageTypeMemory   = "memory"
 	StorageTypePostgres = "postgres"
-	StorageTypeAWS      = "aws"
 )
 
 // Config holds the sprue service configuration.
@@ -80,45 +79,21 @@ type IndexerConfig struct {
 }
 
 // StorageConfig selects and configures the store backend. Type picks which of
-// Memory/Postgres/DynamoDB to use; S3 is shared by the postgres and aws
-// backends for blob payload storage.
+// Memory/Postgres to use; S3 is used by the postgres backend for blob payload
+// storage.
 type StorageConfig struct {
-	// Type selects the backend: "memory", "postgres", or "aws". Defaults to
+	// Type selects the backend: "memory" or "postgres". Defaults to
 	// "postgres".
 	Type string `mapstructure:"type"`
 
 	Memory   MemoryConfig   `mapstructure:"memory"`
 	Postgres PostgresConfig `mapstructure:"postgres"`
-	DynamoDB DynamoDBConfig `mapstructure:"dynamodb"`
 	S3       S3Config       `mapstructure:"s3"`
 }
 
 // MemoryConfig configures the in-process store. It currently carries no
 // settings but exists for symmetry with the persistent backends.
 type MemoryConfig struct{}
-
-// DynamoDBConfig holds DynamoDB settings.
-type DynamoDBConfig struct {
-	// Endpoint is the DynamoDB endpoint (for local development).
-	Endpoint string `mapstructure:"endpoint"`
-
-	// Region is the AWS region for DynamoDB.
-	Region string `mapstructure:"region"`
-
-	AgentIndexTable      string `mapstructure:"agent_index_table"`
-	BlobRegistryTable    string `mapstructure:"blob_registry_table"`
-	ConsumerTable        string `mapstructure:"consumer_table"`
-	CustomerTable        string `mapstructure:"customer_table"`
-	DelegationTable      string `mapstructure:"delegation_table"`
-	SpaceMetricsTable    string `mapstructure:"space_metrics_table"`
-	AdminMetricsTable    string `mapstructure:"admin_metrics_table"`
-	ReplicaTable         string `mapstructure:"replica_table"`
-	RevocationTable      string `mapstructure:"revocation_table"`
-	StorageProviderTable string `mapstructure:"storage_provider_table"`
-	SubscriptionTable    string `mapstructure:"subscription_table"`
-	SpaceDiffTable       string `mapstructure:"space_diff_table"`
-	UploadTable          string `mapstructure:"upload_table"`
-}
 
 // PostgresConfig holds PostgreSQL settings.
 type PostgresConfig struct {
@@ -159,7 +134,6 @@ type S3Config struct {
 
 	AgentMessageBucket string `mapstructure:"agent_message_bucket"`
 	DelegationBucket   string `mapstructure:"delegation_bucket"`
-	UploadShardsBucket string `mapstructure:"upload_shards_bucket"`
 }
 
 // LogConfig holds logging settings.
@@ -222,24 +196,7 @@ func SetDefaults(v *viper.Viper) {
 	v.SetDefault("storage.postgres.max_conns", 10)
 	v.SetDefault("storage.postgres.min_conns", 0)
 
-	// DynamoDB defaults (only consulted when storage.type is "aws")
-	v.SetDefault("storage.dynamodb.endpoint", "http://dynamodb-local:8000")
-	v.SetDefault("storage.dynamodb.region", "us-west-1")
-	v.SetDefault("storage.dynamodb.agent_index_table", "agent-index")
-	v.SetDefault("storage.dynamodb.blob_registry_table", "blob-registry")
-	v.SetDefault("storage.dynamodb.consumer_table", "consumer")
-	v.SetDefault("storage.dynamodb.customer_table", "customer")
-	v.SetDefault("storage.dynamodb.delegation_table", "delegation")
-	v.SetDefault("storage.dynamodb.space_metrics_table", "space-metrics")
-	v.SetDefault("storage.dynamodb.admin_metrics_table", "admin-metrics")
-	v.SetDefault("storage.dynamodb.replica_table", "replica")
-	v.SetDefault("storage.dynamodb.revocation_table", "revocation")
-	v.SetDefault("storage.dynamodb.storage_provider_table", "storage-provider")
-	v.SetDefault("storage.dynamodb.subscription_table", "subscription")
-	v.SetDefault("storage.dynamodb.space_diff_table", "space-diff")
-	v.SetDefault("storage.dynamodb.upload_table", "upload")
-
-	// S3 defaults (used by the postgres and aws backends)
+	// S3 defaults (used by the postgres backend for blob payloads)
 	v.SetDefault("storage.s3.endpoint", "http://minio:9000")
 	v.SetDefault("storage.s3.region", "us-west-1")
 	v.SetDefault("storage.s3.access_key_id", "minioadmin")
@@ -247,7 +204,6 @@ func SetDefaults(v *viper.Viper) {
 	v.SetDefault("storage.s3.use_path_style", false)
 	v.SetDefault("storage.s3.agent_message_bucket", "agent-message")
 	v.SetDefault("storage.s3.delegation_bucket", "delegation")
-	v.SetDefault("storage.s3.upload_shards_bucket", "upload-shards")
 
 	// Log defaults
 	v.SetDefault("log.level", "info")

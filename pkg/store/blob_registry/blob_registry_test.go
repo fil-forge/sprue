@@ -9,20 +9,15 @@ import (
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/store"
 	blobregistry "github.com/fil-forge/sprue/pkg/store/blob_registry"
-	blobregistryaws "github.com/fil-forge/sprue/pkg/store/blob_registry/aws"
 	blobregistrymemory "github.com/fil-forge/sprue/pkg/store/blob_registry/memory"
 	blobregistrypostgres "github.com/fil-forge/sprue/pkg/store/blob_registry/postgres"
 	"github.com/fil-forge/sprue/pkg/store/consumer"
-	consumeraws "github.com/fil-forge/sprue/pkg/store/consumer/aws"
 	consumermemory "github.com/fil-forge/sprue/pkg/store/consumer/memory"
 	consumerpostgres "github.com/fil-forge/sprue/pkg/store/consumer/postgres"
 	"github.com/fil-forge/sprue/pkg/store/metrics"
-	metricsaws "github.com/fil-forge/sprue/pkg/store/metrics/aws"
 	metricsmemory "github.com/fil-forge/sprue/pkg/store/metrics/memory"
 	metricspostgres "github.com/fil-forge/sprue/pkg/store/metrics/postgres"
-	spacediffaws "github.com/fil-forge/sprue/pkg/store/space_diff/aws"
 	spacediffmemory "github.com/fil-forge/sprue/pkg/store/space_diff/memory"
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
 
@@ -30,11 +25,10 @@ type StoreKind string
 
 const (
 	Memory   StoreKind = "memory"
-	AWS      StoreKind = "aws"
 	Postgres StoreKind = "postgres"
 )
 
-var storeKinds = []StoreKind{Memory, AWS, Postgres}
+var storeKinds = []StoreKind{Memory, Postgres}
 
 // storeBundle groups the blob registry with the dependency stores that tests
 // need to set up state (e.g. adding consumers before registering blobs).
@@ -59,8 +53,6 @@ func makeStores(t *testing.T, k StoreKind) storeBundle {
 			spaceMetrics: spaceMetrics,
 			adminMetrics: adminMetrics,
 		}
-	case AWS:
-		return createAWSStores(t)
 	case Postgres:
 		return createPostgresStores(t)
 	}
@@ -81,46 +73,6 @@ func createPostgresStores(t *testing.T) storeBundle {
 	spaceMetrics := metricspostgres.NewSpaceStore(pool)
 	adminMetrics := metricspostgres.New(pool)
 	registry := blobregistrypostgres.New(pool, consumerStore)
-	return storeBundle{
-		registry:     registry,
-		consumers:    consumerStore,
-		spaceMetrics: spaceMetrics,
-		adminMetrics: adminMetrics,
-	}
-}
-
-func createAWSStores(t *testing.T) storeBundle {
-	// This test expects docker to be running in linux CI environments and fails if it's not
-	if testutil.IsRunningInCI(t) && runtime.GOOS == "linux" {
-		if !testutil.IsDockerAvailable(t) {
-			t.Fatalf("docker is expected in CI linux testing environments, but wasn't found")
-		}
-	}
-	// otherwise this test is running locally, skip it if docker isn't available
-	if !testutil.IsDockerAvailable(t) {
-		t.SkipNow()
-	}
-
-	dynamoEndpoint := testutil.CreateDynamo(t)
-	dynamo := testutil.NewDynamoClient(t, dynamoEndpoint)
-
-	suffix := uuid.NewString()
-
-	consumerStore := consumeraws.New(dynamo, "consumer-"+suffix)
-	require.NoError(t, consumerStore.Initialize(t.Context()))
-
-	spaceDiffStore := spacediffaws.New(dynamo, "space-diff-"+suffix)
-	require.NoError(t, spaceDiffStore.Initialize(t.Context()))
-
-	spaceMetrics := metricsaws.NewSpaceStore(dynamo, "space-metrics-"+suffix)
-	require.NoError(t, spaceMetrics.Initialize(t.Context()))
-
-	adminMetrics := metricsaws.New(dynamo, "admin-metrics-"+suffix)
-	require.NoError(t, adminMetrics.Initialize(t.Context()))
-
-	registry := blobregistryaws.New(dynamo, "blob-registry-"+suffix, consumerStore, spaceDiffStore, spaceMetrics, adminMetrics)
-	require.NoError(t, registry.Initialize(t.Context()))
-
 	return storeBundle{
 		registry:     registry,
 		consumers:    consumerStore,

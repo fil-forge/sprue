@@ -6,10 +6,8 @@ import (
 
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/store/revocation"
-	revocationaws "github.com/fil-forge/sprue/pkg/store/revocation/aws"
 	revocationmemory "github.com/fil-forge/sprue/pkg/store/revocation/memory"
 	revocationpostgres "github.com/fil-forge/sprue/pkg/store/revocation/postgres"
-	"github.com/google/uuid"
 	"github.com/ipfs/go-cid"
 	"github.com/stretchr/testify/require"
 )
@@ -18,18 +16,15 @@ type StoreKind string
 
 const (
 	Memory   StoreKind = "memory"
-	AWS      StoreKind = "aws"
 	Postgres StoreKind = "postgres"
 )
 
-var storeKinds = []StoreKind{Memory, AWS, Postgres}
+var storeKinds = []StoreKind{Memory, Postgres}
 
 func makeStore(t *testing.T, k StoreKind) revocation.Store {
 	switch k {
 	case Memory:
 		return revocationmemory.New()
-	case AWS:
-		return createAWSStore(t)
 	case Postgres:
 		return createPostgresStore(t)
 	}
@@ -47,26 +42,6 @@ func createPostgresStore(t *testing.T) revocation.Store {
 	}
 	pool := testutil.CreatePostgres(t)
 	return revocationpostgres.New(pool)
-}
-
-func createAWSStore(t *testing.T) revocation.Store {
-	// This test expects docker to be running in linux CI environments and fails if it's not
-	if testutil.IsRunningInCI(t) && runtime.GOOS == "linux" {
-		if !testutil.IsDockerAvailable(t) {
-			t.Fatalf("docker is expected in CI linux testing environments, but wasn't found")
-		}
-	}
-	// otherwise this test is running locally, skip it if docker isn't available
-	if !testutil.IsDockerAvailable(t) {
-		t.SkipNow()
-	}
-
-	dynamoEndpoint := testutil.CreateDynamo(t)
-	dynamo := testutil.NewDynamoClient(t, dynamoEndpoint)
-
-	s := revocationaws.New(dynamo, "revocation-"+uuid.NewString())
-	require.NoError(t, s.Initialize(t.Context()))
-	return s
 }
 
 func TestRevocationStore(t *testing.T) {

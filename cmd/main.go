@@ -22,7 +22,7 @@ func main() {
 		Use:   "sprue",
 		Short: "Sprue upload service for Storacha local development",
 		Long: `Sprue is the upload coordination service for Storacha local development.
-Routes blob allocations to Piri nodes and tracks upload state in DynamoDB.`,
+Routes blob allocations to Piri nodes and tracks upload state in PostgreSQL.`,
 	}
 
 	serveCmd := &cobra.Command{
