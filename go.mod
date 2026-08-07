@@ -5,7 +5,7 @@ go 1.25.3
 require (
 	github.com/alanshaw/dag-json-gen v0.0.8
 	github.com/aws/aws-sdk-go-v2 v1.43.3
-	github.com/aws/aws-sdk-go-v2/config v1.32.32
+	github.com/aws/aws-sdk-go-v2/config v1.32.34
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.33
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.106.1
 	github.com/docker/docker v28.5.2+incompatible
