@@ -17,6 +17,10 @@ import (
 	"github.com/fil-forge/ucantone/server"
 )
 
+const IndexerNotConfiguredErrorName = "IndexerNotConfigured"
+
+var ErrIndexerNotConfigured = errors.New(IndexerNotConfiguredErrorName, "indexer is not configured")
+
 func NewIndexAddHandler(id identity.Identity, provisioningSvc *provisioning.Service, blobRegistry blobregistry.Store, indexerClient *indexerclient.Client, logger *zap.Logger) server.Route {
 	log := logger.With(zap.Stringer("handler", indexcmds.Add))
 	return indexcmds.Add.Route(
@@ -50,6 +54,11 @@ func NewIndexAddHandler(id identity.Identity, provisioningSvc *provisioning.Serv
 				}
 				log.Error("failed to get index from blob registry", zap.Error(err))
 				return err
+			}
+
+			if indexerClient == nil {
+				log.Warn("indexer is not configured")
+				return res.SetFailure(ErrIndexerNotConfigured)
 			}
 
 			// Request MUST include a delegation to the upload service that gives it

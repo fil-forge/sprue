@@ -185,8 +185,39 @@ func TestIndexAddHandler(t *testing.T) {
 		err = handler.Handler(req, res)
 		require.NoError(t, err)
 
-		_, err = blobcmds.Allocate.Unpack(res.Receipt())
+		_, err = indexcmds.Add.Unpack(res.Receipt())
 		require.NoError(t, err)
+	})
+
+	t.Run("configured space with no indexer returns a typed failure", func(t *testing.T) {
+		blobReg, consumerStore := newBlobRegistry(t)
+		subscriptionStore := subscription_store.New()
+		provisioningSvc := provisioning.NewService(
+			[]did.DID{uploadService.DID()},
+			consumerStore,
+			subscriptionStore,
+		)
+
+		space := testutil.RandomIssuer(t)
+		require.NoError(t, consumerStore.Add(ctx, uploadService.DID(), space.DID(), aliceAccount, "sub-1", testutil.RandomCID(t)))
+
+		indexCID := testutil.RandomCID(t)
+		indexBlob := blobcmds.Blob{Digest: indexCID.Hash(), Size: 512}
+		require.NoError(t, blobReg.Register(ctx, space.DID(), indexBlob, testutil.RandomCID(t)))
+
+		handler := handlers.NewIndexAddHandler(id, provisioningSvc, blobReg, nil, logger)
+		req, res := invokeIndexAdd(t, ctx, alice, uploadService, space, indexCID)
+
+		var handlerErr error
+		require.NotPanics(t, func() {
+			handlerErr = handler.Handler(req, res)
+		})
+		require.NoError(t, handlerErr)
+
+		_, err := indexcmds.Add.Unpack(res.Receipt())
+		var errModel datamodel.ErrorModel
+		require.ErrorAs(t, err, &errModel)
+		require.Equal(t, handlers.IndexerNotConfiguredErrorName, errModel.Name())
 	})
 
 	t.Run("missing retrieval auth fails to build proof chain", func(t *testing.T) {
@@ -226,7 +257,7 @@ func TestIndexAddHandler(t *testing.T) {
 		// Currently the indexer client publishes even without retrieval auth
 		// because the proof chain is empty (not erroring). Document that
 		// behavior.
-		_, err = blobcmds.Allocate.Unpack(res.Receipt())
+		_, err = indexcmds.Add.Unpack(res.Receipt())
 		require.NoError(t, err)
 	})
 }
