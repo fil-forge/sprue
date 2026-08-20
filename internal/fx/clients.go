@@ -23,13 +23,12 @@ func NewPiriClientProvider(id identity.Identity, logger *zap.Logger) piriclient.
 	return piriclient.NewProvider(id.Issuer, logger)
 }
 
-// IndexerClientResult wraps the optional indexer client.
-// Using fx.Out with optional tag allows this provider to return nil
-// when the indexer is not configured.
+// IndexerClientResult wraps the indexer client. Client is nil when the
+// indexer is not configured or its configuration is invalid.
 type IndexerClientResult struct {
 	fx.Out
 
-	Client *indexerclient.Client `optional:"true"`
+	Client *indexerclient.Client
 }
 
 // NewIndexerClient creates an indexer client if configured.
