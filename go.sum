@@ -82,10 +82,10 @@ github.com/ebitengine/purego v0.10.1 h1:dewVBCBT2GaMu1SrNTYxQhgQBethzfhiwvZiLGP/
 github.com/ebitengine/purego v0.10.1/go.mod h1:iIjxzd6CiRiOG0UyXP+V1+jWqUXVjPKLAI0mRfJZTmQ=
 github.com/felixge/httpsnoop v1.1.0 h1:3YtUj32ZZkqZtt3sZZsClsymw/QDuVfpNhoA31zeORc=
 github.com/felixge/httpsnoop v1.1.0/go.mod h1:Zqxgdd+1Rkcz8euOqdr7lqgCRJztwr5hp9vDSi5UZCE=
-github.com/fil-forge/libforge v0.0.0-20260801080224-850148f3084e h1:eP4ClPFIWUTwcdFkzKwt0iEBxyULZqZ5bOeHchICVKo=
-github.com/fil-forge/libforge v0.0.0-20260801080224-850148f3084e/go.mod h1:aL/KcXZ0KVs1ymAYqIwQyCnl2p481InN+gYbRLNM8fI=
-github.com/fil-forge/ucantone v0.0.0-20260713122829-2662bddc02ab h1:Kal5frXuFQiaeumu1DreTbaXmK6DXWfz7al4FFhAh4A=
-github.com/fil-forge/ucantone v0.0.0-20260713122829-2662bddc02ab/go.mod h1:oFY5BfD0bDeodGlbBHh3/nK99MAS93rGXjoQz7s5qgE=
+github.com/fil-forge/libforge v0.0.0-20260807225550-3e6895b41be5 h1:Pu7Xk/LdaQyv1560k1MbL6CQUdWxZJIG9elEE0vkgLY=
+github.com/fil-forge/libforge v0.0.0-20260807225550-3e6895b41be5/go.mod h1:aL/KcXZ0KVs1ymAYqIwQyCnl2p481InN+gYbRLNM8fI=
+github.com/fil-forge/ucantone v0.0.0-20260817170631-3a20cd59fabc h1:s6QNgj3hWY2neeAWyq2FckpQoTaRZhK2utgLkauGsqA=
+github.com/fil-forge/ucantone v0.0.0-20260817170631-3a20cd59fabc/go.mod h1:uhSFN3BGtWpnIF47b1svijEa6wBmCM6JJArAG14MYh4=
 github.com/filecoin-project/go-data-segment v0.0.1 h1:1wmDxOG4ubWQm3ZC1XI5nCon5qgSq7Ra3Rb6Dbu10Gs=
 github.com/filecoin-project/go-data-segment v0.0.1/go.mod h1:H0/NKbsRxmRFBcLibmABv+yFNHdmtl5AyplYLnb0Zv4=
 github.com/filecoin-project/go-fil-commcid v0.3.1 h1:4EfxpHSlvtkOqa9weG2Yt5kxFmPib2xU7Uc9Lbqk7fs=

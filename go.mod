@@ -9,8 +9,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.35
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.107.1
 	github.com/docker/docker v28.5.2+incompatible
-	github.com/fil-forge/libforge v0.0.0-20260801080224-850148f3084e
-	github.com/fil-forge/ucantone v0.0.0-20260713122829-2662bddc02ab
+	github.com/fil-forge/libforge v0.0.0-20260807225550-3e6895b41be5
+	github.com/fil-forge/ucantone v0.0.0-20260817170631-3a20cd59fabc
 	github.com/google/uuid v1.6.0
 	github.com/ipfs/go-cid v0.6.2
 	github.com/jackc/pgx/v5 v5.10.0
