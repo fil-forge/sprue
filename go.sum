@@ -8,8 +8,8 @@ github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERo
 github.com/Microsoft/go-winio v0.6.2/go.mod h1:yd8OoFMLzJbo9gZq8j5qaps8bJ9aShtEA8Ipt1oGCvU=
 github.com/alanshaw/dag-json-gen v0.0.9 h1:q59Ra1mQB6HnFGI1ilFxsZvF1CqGN0XDlUWq16EJ6pw=
 github.com/alanshaw/dag-json-gen v0.0.9/go.mod h1:v1YBZcS4B355MqxtyQr+fGNbEhm0CzHd+gOqOO/MZ+I=
-github.com/aws/aws-sdk-go-v2 v1.43.6 h1:RrmFcqCBxkJuf7g1axVo5krB4jM/AO8r5e5oujrgdoQ=
-github.com/aws/aws-sdk-go-v2 v1.43.6/go.mod h1:tXpPM+v0D1lndmga+HqqLDIzUFJlEeR21aspVklHF00=
+github.com/aws/aws-sdk-go-v2 v1.43.7 h1:msCzvkeYJA9ehbV8mRRmkZLo/zJg/+yDVLNtflg83hQ=
+github.com/aws/aws-sdk-go-v2 v1.43.7/go.mod h1:tXpPM+v0D1lndmga+HqqLDIzUFJlEeR21aspVklHF00=
 github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.18 h1:LAfOuhAH331fmOjTQpAaOlH+Ftn7RzSDJ2VFwjdMMy4=
 github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.18/go.mod h1:4e5xhuXHx1e4U9EthvbPP1r/DIMp5c2823OL8karzcM=
 github.com/aws/aws-sdk-go-v2/config v1.32.37 h1:Ljl7LOJB6ym0liuEl0+TZ3d7f5I8MEZN1Cj9PINlj/g=
