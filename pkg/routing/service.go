@@ -227,11 +227,15 @@ func (s *Service) resolvePolicy(ctx context.Context, space did.DID) (*routingpol
 	return &rec, nil
 }
 
-// filterToCandidates keeps only the providers named in candidates.
 func filterToCandidates(providers []storageprovider.Record, candidates []did.DID) []storageprovider.Record {
-	var filtered []storageprovider.Record
+	candidateSet := make(map[did.DID]struct{}, len(candidates))
+	for _, c := range candidates {
+		candidateSet[c] = struct{}{}
+	}
+
+	filtered := make([]storageprovider.Record, 0, len(providers))
 	for _, prov := range providers {
-		if slices.Contains(candidates, prov.Provider) {
+		if _, ok := candidateSet[prov.Provider]; ok {
 			filtered = append(filtered, prov)
 		}
 	}
