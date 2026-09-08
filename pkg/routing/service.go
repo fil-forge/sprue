@@ -2,21 +2,29 @@ package routing
 
 import (
 	"context"
+	stderrors "errors"
+	"fmt"
 	"math/rand"
 	"net/url"
 	"slices"
 
 	"github.com/fil-forge/libforge/commands/blob"
+	routingcmds "github.com/fil-forge/libforge/commands/routing"
 	"github.com/fil-forge/libforge/digestutil"
 	"github.com/fil-forge/sprue/pkg/store"
+	routingpolicy "github.com/fil-forge/sprue/pkg/store/routing_policy"
 	storageprovider "github.com/fil-forge/sprue/pkg/store/storage_provider"
 	"github.com/fil-forge/ucantone/did"
 	"github.com/fil-forge/ucantone/errors"
 	"github.com/fil-forge/ucantone/ucan"
+	"github.com/ipfs/go-cid"
 	"go.uber.org/zap"
 )
 
-const CandidateUnavailableErrorName = "CandidateUnavailable"
+const (
+	CandidateUnavailableErrorName = "CandidateUnavailable"
+	InvalidCandidatesErrorName    = routingcmds.InvalidCandidatesErrorName
+)
 
 // ErrCandidateUnavailable is returned when there are no candidates willing to
 // allocate space for the given blob.
@@ -47,14 +55,53 @@ type StorageProviderInfo struct {
 
 type Service struct {
 	storageProviderStore storageprovider.Store
+	policyStore          routingpolicy.Store
 	logger               *zap.Logger
 }
 
-func NewService(storageProviderStore storageprovider.Store, logger *zap.Logger) *Service {
+func NewService(storageProviderStore storageprovider.Store, policyStore routingpolicy.Store, logger *zap.Logger) *Service {
 	return &Service{
 		storageProviderStore: storageProviderStore,
+		policyStore:          policyStore,
 		logger:               logger,
 	}
+}
+
+// PutPolicy replaces the candidate set of a routing policy, creating the
+// policy if it does not exist. Every candidate must be a registered storage
+// provider. Violations are returned as a named error with
+// [InvalidCandidatesErrorName]. Cause is the CID of the task for the invocation
+// making the change.
+func (s *Service) PutPolicy(ctx context.Context, policy did.DID, candidates []did.DID, cause cid.Cid) error {
+	if len(candidates) == 0 {
+		return errors.New(InvalidCandidatesErrorName, "routing policy requires at least one candidate")
+	}
+	for _, c := range candidates {
+		_, err := s.storageProviderStore.Get(ctx, c)
+		if err != nil {
+			if stderrors.Is(err, storageprovider.ErrStorageProviderNotFound) {
+				return errors.New(InvalidCandidatesErrorName, fmt.Sprintf("candidate %s is not a registered storage provider", c))
+			}
+			return fmt.Errorf("getting storage provider %s: %w", c, err)
+		}
+	}
+	if err := s.policyStore.SetCandidates(ctx, policy, candidates, cause); err != nil {
+		return fmt.Errorf("storing routing policy: %w", err)
+	}
+	return nil
+}
+
+// UseSpacePolicy sets the routing policy a space references. Cause is the CID
+// of the task for the invocation making the change. It may return
+// [routingpolicy.ErrPolicyNotFound] if the policy has no stored candidate set.
+func (s *Service) UseSpacePolicy(ctx context.Context, space did.DID, policy did.DID, cause cid.Cid) error {
+	return s.policyStore.SetSpacePolicy(ctx, space, policy, cause)
+}
+
+// ClearSpacePolicy removes the routing policy reference of a space, returning
+// it to default routing. It succeeds if the space has no reference.
+func (s *Service) ClearSpacePolicy(ctx context.Context, space did.DID) error {
+	return s.policyStore.ClearSpacePolicy(ctx, space)
 }
 
 // GetProviderInfo returns information about a registered storage provider. It
@@ -71,15 +118,17 @@ func (s *Service) GetProviderInfo(ctx context.Context, provider did.DID) (Storag
 	}, nil
 }
 
-// SelectStorageProvider selects a candidate for blob allocation from the
-// current list of available storage nodes. It may return
+// SelectStorageProvider selects a candidate for blob allocation to the space
+// from the current list of available storage nodes. When the space references
+// a routing policy, only the policy's candidates are considered. It may return
 // [ErrCandidateUnavailable] if no candidates are available.
-func (s *Service) SelectStorageProvider(ctx context.Context, blob blob.Blob, options ...SelectOption) (StorageProviderInfo, error) {
+func (s *Service) SelectStorageProvider(ctx context.Context, space did.DID, blob blob.Blob, options ...SelectOption) (StorageProviderInfo, error) {
 	cfg := &selectCfg{}
 	for _, option := range options {
 		option(cfg)
 	}
 	log := s.logger.With(
+		zap.Stringer("space", space),
 		zap.Dict(
 			"blob",
 			zap.String("digest", digestutil.Format(blob.Digest)),
@@ -95,6 +144,16 @@ func (s *Service) SelectStorageProvider(ctx context.Context, blob blob.Blob, opt
 	}
 
 	total := len(candidates)
+
+	policy, err := s.resolvePolicy(ctx, space)
+	if err != nil {
+		log.Error("failed to resolve routing policy", zap.Error(err))
+		return StorageProviderInfo{}, err
+	}
+	if policy != nil {
+		log = log.With(zap.Stringer("policy", policy.Policy))
+		candidates = filterToCandidates(candidates, policy.Candidates)
+	}
 
 	candidates = filterExcludedProviders(candidates, cfg.exclusions)
 	candidates = filterZeroWeightProviders(candidates)
@@ -144,6 +203,39 @@ func (s *Service) SelectReplicationProvider(ctx context.Context, primary did.DID
 		Endpoint: selected.Endpoint,
 		Proofs:   selected.Proofs,
 	}, nil
+}
+
+// resolvePolicy returns the routing policy the space references, or nil when
+// the space has none. A reference to a policy with no stored candidate set
+// yields [ErrCandidateUnavailable]: the space is constrained, but to nothing.
+func (s *Service) resolvePolicy(ctx context.Context, space did.DID) (*routingpolicy.PolicyRecord, error) {
+	ref, err := s.policyStore.GetSpacePolicy(ctx, space)
+	if err != nil {
+		if stderrors.Is(err, routingpolicy.ErrSpacePolicyNotFound) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("getting space routing policy: %w", err)
+	}
+	rec, err := s.policyStore.GetPolicy(ctx, ref.Policy)
+	if err != nil {
+		if stderrors.Is(err, routingpolicy.ErrPolicyNotFound) {
+			s.logger.Error("space references unknown routing policy", zap.Stringer("space", space), zap.Stringer("policy", ref.Policy))
+			return nil, ErrCandidateUnavailable
+		}
+		return nil, fmt.Errorf("getting routing policy: %w", err)
+	}
+	return &rec, nil
+}
+
+// filterToCandidates keeps only the providers named in candidates.
+func filterToCandidates(providers []storageprovider.Record, candidates []did.DID) []storageprovider.Record {
+	var filtered []storageprovider.Record
+	for _, prov := range providers {
+		if slices.Contains(candidates, prov.Provider) {
+			filtered = append(filtered, prov)
+		}
+	}
+	return filtered
 }
 
 func listProviders(ctx context.Context, providerStore storageprovider.Store) ([]storageprovider.Record, error) {

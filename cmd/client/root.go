@@ -2,6 +2,7 @@ package client
 
 import (
 	"github.com/fil-forge/sprue/cmd/client/admin"
+	"github.com/fil-forge/sprue/cmd/client/routing"
 	"github.com/spf13/cobra"
 )
 
@@ -12,4 +13,5 @@ var Cmd = &cobra.Command{
 
 func init() {
 	Cmd.AddCommand(admin.Cmd)
+	Cmd.AddCommand(routing.Cmd)
 }

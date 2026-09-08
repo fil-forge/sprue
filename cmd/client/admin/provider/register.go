@@ -2,11 +2,9 @@ package provider
 
 import (
 	"net/url"
-	"os"
 
 	"github.com/fil-forge/sprue/cmd/client/lib"
 	"github.com/fil-forge/ucantone/did"
-	"github.com/fil-forge/ucantone/ucan/container"
 	"github.com/spf13/cobra"
 )
 
@@ -31,7 +29,7 @@ func doRegister(cmd *cobra.Command, args []string) error {
 	endpoint, err := url.Parse(args[1])
 	cobra.CheckErr(err)
 
-	proofs, err := decodeProofs(args[2])
+	proofs, err := lib.DecodeProofs(args[2])
 	cobra.CheckErr(err)
 
 	_, err = c.AdminProviderRegister(cmd.Context(), id, endpoint.String(), proofs)
@@ -39,19 +37,4 @@ func doRegister(cmd *cobra.Command, args []string) error {
 
 	cmd.Println("Provider registered successfully")
 	return nil
-}
-
-// decodeProofs decodes a UCAN container from arg, which is either the encoded
-// container itself or a path to a file containing it. The inline form is tried
-// first so a file that happens to share the name of a valid container string
-// does not shadow it.
-func decodeProofs(arg string) (*container.Container, error) {
-	if ct, err := container.Decode([]byte(arg)); err == nil {
-		return ct, nil
-	}
-	data, err := os.ReadFile(arg)
-	if err != nil {
-		return nil, err
-	}
-	return container.Decode(data)
 }

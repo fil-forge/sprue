@@ -31,6 +31,8 @@ import (
 	pgreplica "github.com/fil-forge/sprue/pkg/store/replica/postgres"
 	"github.com/fil-forge/sprue/pkg/store/revocation"
 	pgrevocation "github.com/fil-forge/sprue/pkg/store/revocation/postgres"
+	routingpolicy "github.com/fil-forge/sprue/pkg/store/routing_policy"
+	pgroutingpolicy "github.com/fil-forge/sprue/pkg/store/routing_policy/postgres"
 	spacediff "github.com/fil-forge/sprue/pkg/store/space_diff"
 	pgspacediff "github.com/fil-forge/sprue/pkg/store/space_diff/postgres"
 	storageprovider "github.com/fil-forge/sprue/pkg/store/storage_provider"
@@ -61,6 +63,7 @@ var Module = fx.Module("postgres-store",
 		fx.Annotate(NewAdminMetricsStore, fx.As(fx.Self()), fx.As(new(metrics.Store))),
 		fx.Annotate(NewReplicaStore, fx.As(new(replica.Store))),
 		fx.Annotate(NewRevocationStore, fx.As(new(revocation.Store))),
+		fx.Annotate(NewRoutingPolicyStore, fx.As(new(routingpolicy.Store))),
 		fx.Annotate(NewSpaceDiffStore, fx.As(fx.Self()), fx.As(new(spacediff.Store))),
 		fx.Annotate(NewStorageProviderStore, fx.As(new(storageprovider.Store))),
 		fx.Annotate(NewSubscriptionStore, fx.As(new(subscription.Store))),
@@ -222,6 +225,10 @@ func NewReplicaStore(mdb *MigratedPool) replica.Store {
 
 func NewRevocationStore(mdb *MigratedPool) revocation.Store {
 	return pgrevocation.New(mdb.Pool)
+}
+
+func NewRoutingPolicyStore(mdb *MigratedPool) routingpolicy.Store {
+	return pgroutingpolicy.New(mdb.Pool)
 }
 
 func NewSpaceDiffStore(mdb *MigratedPool) *pgspacediff.Store {

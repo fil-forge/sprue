@@ -23,6 +23,7 @@ import (
 	blob_registry "github.com/fil-forge/sprue/pkg/store/blob_registry/memory"
 	consumer_store "github.com/fil-forge/sprue/pkg/store/consumer/memory"
 	metrics_store "github.com/fil-forge/sprue/pkg/store/metrics/memory"
+	routing_policy_store "github.com/fil-forge/sprue/pkg/store/routing_policy/memory"
 	spacediff_store "github.com/fil-forge/sprue/pkg/store/space_diff/memory"
 	storage_provider_store "github.com/fil-forge/sprue/pkg/store/storage_provider/memory"
 	subscription_store "github.com/fil-forge/sprue/pkg/store/subscription/memory"
@@ -52,6 +53,7 @@ type blobAddTestDeps struct {
 	consumerStore     *consumer_store.Store
 	subscriptionStore *subscription_store.Store
 	spStore           *storage_provider_store.Store
+	policyStore       *routing_policy_store.Store
 	agentStore        *agent_store.Store
 	blobReg           *blob_registry.Store
 }
@@ -62,7 +64,8 @@ func newBlobAddTestDeps(t *testing.T, uploadService multikey.Issuer, logger *zap
 	subscriptionStore := subscription_store.New()
 	provisioningSvc := provisioning.NewService([]did.DID{uploadService.DID()}, consumerStore, subscriptionStore)
 	spStore := storage_provider_store.New()
-	router := routing.NewService(spStore, logger)
+	policyStore := routing_policy_store.New()
+	router := routing.NewService(spStore, policyStore, logger)
 	agentStore := agent_store.New()
 	blobReg := blob_registry.New(
 		spacediff_store.New(),
@@ -85,6 +88,7 @@ func newBlobAddTestDeps(t *testing.T, uploadService multikey.Issuer, logger *zap
 		consumerStore:     consumerStore,
 		subscriptionStore: subscriptionStore,
 		spStore:           spStore,
+		policyStore:       policyStore,
 		agentStore:        agentStore,
 		blobReg:           blobReg,
 	}
@@ -312,6 +316,112 @@ func TestBlobAddHandler(t *testing.T) {
 		// Response metadata should carry the allocate, put, and accept invocations.
 		require.NotNil(t, res.Metadata())
 		require.NotEmpty(t, res.Metadata().Invocations())
+	})
+
+	t.Run("routing policy restricts allocation to its candidates", func(t *testing.T) {
+		deps := newBlobAddTestDeps(t, uploadService, logger)
+
+		space := testutil.RandomIssuer(t)
+		provisionSpace(t, deps, uploadService, space.DID())
+
+		// Two registered providers, but only the policy candidate has a server
+		// behind it: any allocation routed elsewhere fails and is excluded, and
+		// the policy forbids falling back to it anyway.
+		candidate := testutil.RandomIssuer(t)
+		putURL := testutil.Must(url.Parse("https://storage.example.com/put"))(t)
+		allocateOK := &blobcmds.AllocateOK{
+			Size: 1024,
+			Address: &blobcmds.BlobAddress{
+				URL:     commands.CborURL(*putURL),
+				Headers: map[string]string{},
+				Expires: time.Now().Add(time.Hour).Unix(),
+			},
+		}
+		acceptOK := &blobcmds.AcceptOK{
+			Site: testutil.RandomCID(t),
+			PDP:  promise.AwaitOK{Task: testutil.RandomCID(t)},
+		}
+		piriSrv := newMockPiriServer(t, candidate, uploadService, allocateOK, acceptOK)
+		piriURL := testutil.Must(url.Parse(piriSrv.URL))(t)
+		require.NoError(t, deps.spStore.Put(ctx, candidate.DID(), *piriURL, 1, nil, providerProofs(t, candidate, uploadService)))
+
+		outside := testutil.RandomIssuer(t)
+		outsideURL := testutil.Must(url.Parse("http://127.0.0.1:1/unreachable"))(t)
+		require.NoError(t, deps.spStore.Put(ctx, outside.DID(), *outsideURL, 1000, nil, container.New()))
+
+		policy := testutil.RandomDID(t)
+		require.NoError(t, deps.policyStore.SetCandidates(ctx, policy, []did.DID{candidate.DID()}, testutil.RandomCID(t)))
+		require.NoError(t, deps.policyStore.SetSpacePolicy(ctx, space.DID(), policy, testutil.RandomCID(t)))
+
+		for range 10 {
+			args := blobcmds.AddArguments{
+				Blob: blobcmds.Blob{Digest: testutil.RandomMultihash(t), Size: 1024},
+			}
+			inv, err := blobcmds.Add.Invoke(
+				testutil.Alice,
+				space.DID(),
+				&args,
+				invocation.WithAudience(uploadService.DID()),
+			)
+			require.NoError(t, err)
+
+			req := execution.NewRequest(ctx, inv)
+			res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
+			require.NoError(t, err)
+
+			require.NoError(t, deps.handler.Handler(req, res))
+			_, err = blobcmds.Allocate.Unpack(res.Receipt())
+			require.NoError(t, err)
+
+			// The allocate invocation in the response metadata was addressed to
+			// the policy candidate.
+			var allocated bool
+			for _, metaInv := range res.Metadata().Invocations() {
+				if metaInv.Command() == blobcmds.Allocate.Command {
+					require.Equal(t, candidate.DID(), metaInv.Audience())
+					allocated = true
+				}
+			}
+			require.True(t, allocated)
+		}
+	})
+
+	t.Run("routing policy with no serviceable candidate does not fall back", func(t *testing.T) {
+		deps := newBlobAddTestDeps(t, uploadService, logger)
+
+		space := testutil.RandomIssuer(t)
+		provisionSpace(t, deps, uploadService, space.DID())
+
+		// The policy candidate has zero weight; a healthy provider outside the
+		// policy must not be selected.
+		candidate := testutil.RandomIssuer(t)
+		endpoint := testutil.Must(url.Parse("https://piri.example.com"))(t)
+		require.NoError(t, deps.spStore.Put(ctx, candidate.DID(), *endpoint, 0, nil, container.New()))
+		outside := testutil.RandomIssuer(t)
+		require.NoError(t, deps.spStore.Put(ctx, outside.DID(), *endpoint, 100, nil, container.New()))
+
+		policy := testutil.RandomDID(t)
+		require.NoError(t, deps.policyStore.SetCandidates(ctx, policy, []did.DID{candidate.DID()}, testutil.RandomCID(t)))
+		require.NoError(t, deps.policyStore.SetSpacePolicy(ctx, space.DID(), policy, testutil.RandomCID(t)))
+
+		args := blobcmds.AddArguments{
+			Blob: blobcmds.Blob{Digest: testutil.RandomMultihash(t), Size: 1024},
+		}
+		inv, err := blobcmds.Add.Invoke(
+			testutil.Alice,
+			space.DID(),
+			&args,
+			invocation.WithAudience(uploadService.DID()),
+		)
+		require.NoError(t, err)
+
+		req := execution.NewRequest(ctx, inv)
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
+		require.NoError(t, err)
+
+		require.NoError(t, deps.handler.Handler(req, res))
+		_, err = blobcmds.Add.Unpack(res.Receipt())
+		require.ErrorIs(t, err, routing.ErrCandidateUnavailable)
 	})
 
 	t.Run("successful allocation blob already stored", func(t *testing.T) {
