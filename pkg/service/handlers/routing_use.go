@@ -49,10 +49,10 @@ func NewRoutingUseHandler(provisioningSvc *provisioning.Service, router *routing
 
 			err = router.UseSpacePolicy(req.Context(), space, *args.Policy, req.Invocation().Task().Link())
 			if err != nil {
-			if stderrors.Is(err, routingpolicy.ErrPolicyNotFound) {
-				log.Warn("unknown routing policy")
-				return res.SetFailure(errors.New(routingcmds.UnknownPolicyErrorName, fmt.Sprintf("routing policy %s not found", *args.Policy)))
-			}
+				if stderrors.Is(err, routingpolicy.ErrPolicyNotFound) {
+					log.Warn("unknown routing policy")
+					return res.SetFailure(errors.New(routingcmds.UnknownPolicyErrorName, fmt.Sprintf("routing policy %s not found", *args.Policy)))
+				}
 				log.Error("failed to set routing policy", zap.Error(err))
 				return fmt.Errorf("setting routing policy: %w", err)
 			}
