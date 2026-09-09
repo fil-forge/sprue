@@ -31,11 +31,10 @@ func New(pool *pgxpool.Pool) *Store {
 func (s *Store) Initialize(ctx context.Context) error { return nil }
 
 func (s *Store) Add(ctx context.Context, space did.DID, digest multihash.Multihash, provider did.DID, status replica.ReplicationStatus, cause cid.Cid) error {
-	now := time.Now().UTC()
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO replica (space, digest, provider, status, cause, inserted_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $6)
-	`, space.String(), digestutil.Format(digest), provider.String(), status.String(), cause.String(), now)
+		INSERT INTO replica (space, digest, provider, status, cause)
+		VALUES ($1, $2, $3, $4, $5)
+	`, space.String(), digestutil.Format(digest), provider.String(), status.String(), cause.String())
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == uniqueViolation {
@@ -75,9 +74,9 @@ func (s *Store) List(ctx context.Context, space did.DID, digest multihash.Multih
 func (s *Store) Retry(ctx context.Context, space did.DID, digest multihash.Multihash, provider did.DID, status replica.ReplicationStatus, cause cid.Cid) error {
 	tag, err := s.pool.Exec(ctx, `
 		UPDATE replica
-		SET status = $1, cause = $2, updated_at = $3
-		WHERE space = $4 AND digest = $5 AND provider = $6
-	`, status.String(), cause.String(), time.Now().UTC(), space.String(), digestutil.Format(digest), provider.String())
+		SET status = $1, cause = $2, updated_at = NOW()
+		WHERE space = $3 AND digest = $4 AND provider = $5
+	`, status.String(), cause.String(), space.String(), digestutil.Format(digest), provider.String())
 	if err != nil {
 		return fmt.Errorf("retrying replica: %w", err)
 	}
@@ -90,9 +89,9 @@ func (s *Store) Retry(ctx context.Context, space did.DID, digest multihash.Multi
 func (s *Store) SetStatus(ctx context.Context, space did.DID, digest multihash.Multihash, provider did.DID, status replica.ReplicationStatus) error {
 	tag, err := s.pool.Exec(ctx, `
 		UPDATE replica
-		SET status = $1, updated_at = $2
-		WHERE space = $3 AND digest = $4 AND provider = $5
-	`, status.String(), time.Now().UTC(), space.String(), digestutil.Format(digest), provider.String())
+		SET status = $1, updated_at = NOW()
+		WHERE space = $2 AND digest = $3 AND provider = $4
+	`, status.String(), space.String(), digestutil.Format(digest), provider.String())
 	if err != nil {
 		return fmt.Errorf("setting replica status: %w", err)
 	}

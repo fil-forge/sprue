@@ -37,15 +37,14 @@ func (s *Store) SetCandidates(ctx context.Context, policy did.DID, candidates []
 	for _, c := range candidates {
 		strs = append(strs, c.String())
 	}
-	now := time.Now().UTC()
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO routing_policy (policy, candidates, cause, inserted_at, updated_at)
-		VALUES ($1, $2, $3, $4, $4)
+		INSERT INTO routing_policy (policy, candidates, cause)
+		VALUES ($1, $2, $3)
 		ON CONFLICT (policy) DO UPDATE
 		SET candidates = EXCLUDED.candidates,
 		    cause = EXCLUDED.cause,
-		    updated_at = EXCLUDED.updated_at
-	`, policy.String(), strs, cause.String(), now)
+		    updated_at = NOW()
+	`, policy.String(), strs, cause.String())
 	if err != nil {
 		return fmt.Errorf("storing routing policy: %w", err)
 	}
@@ -97,15 +96,14 @@ func (s *Store) GetPolicy(ctx context.Context, policy did.DID) (routingpolicy.Po
 }
 
 func (s *Store) SetSpacePolicy(ctx context.Context, space did.DID, policy did.DID, cause cid.Cid) error {
-	now := time.Now().UTC()
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO space_routing (space, policy, cause, inserted_at, updated_at)
-		VALUES ($1, $2, $3, $4, $4)
+		INSERT INTO space_routing (space, policy, cause)
+		VALUES ($1, $2, $3)
 		ON CONFLICT (space) DO UPDATE
 		SET policy = EXCLUDED.policy,
 		    cause = EXCLUDED.cause,
-		    updated_at = EXCLUDED.updated_at
-	`, space.String(), policy.String(), cause.String(), now)
+		    updated_at = NOW()
+	`, space.String(), policy.String(), cause.String())
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == foreignKeyViolation {

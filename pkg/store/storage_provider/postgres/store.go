@@ -39,17 +39,16 @@ func (s *Store) Put(ctx context.Context, id did.DID, endpoint url.URL, weight in
 	if err != nil {
 		return fmt.Errorf("encoding proofs: %w", err)
 	}
-	now := time.Now().UTC()
 	_, err = s.pool.Exec(ctx, `
-		INSERT INTO storage_provider (provider, endpoint, weight, replication_weight, proofs, inserted_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $6)
+		INSERT INTO storage_provider (provider, endpoint, weight, replication_weight, proofs)
+		VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT (provider) DO UPDATE
 		SET endpoint = EXCLUDED.endpoint,
 		    weight = EXCLUDED.weight,
 		    replication_weight = EXCLUDED.replication_weight,
 		    proofs = EXCLUDED.proofs,
-		    updated_at = EXCLUDED.updated_at
-	`, id.String(), endpoint.String(), weight, replicationWeight, proofBytes, now)
+		    updated_at = NOW()
+	`, id.String(), endpoint.String(), weight, replicationWeight, proofBytes)
 	if err != nil {
 		return fmt.Errorf("storing storage provider: %w", err)
 	}

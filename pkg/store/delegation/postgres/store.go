@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -46,7 +45,6 @@ func (s *Store) Initialize(ctx context.Context) error {
 }
 
 func (s *Store) PutMany(ctx context.Context, tokens []ucan.Token, cause cid.Cid) error {
-	now := time.Now().UTC()
 	for _, token := range tokens {
 		link := token.Link().String()
 
@@ -93,15 +91,15 @@ func (s *Store) PutMany(ctx context.Context, tokens []ucan.Token, cause cid.Cid)
 		}
 
 		if _, err := s.pool.Exec(ctx, `
-			INSERT INTO delegation (link, audience, issuer, cause, expiration, inserted_at, updated_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $6)
+			INSERT INTO delegation (link, audience, issuer, cause, expiration)
+			VALUES ($1, $2, $3, $4, $5)
 			ON CONFLICT (link) DO UPDATE
 			SET audience = EXCLUDED.audience,
 			    issuer = EXCLUDED.issuer,
 			    cause = EXCLUDED.cause,
 			    expiration = EXCLUDED.expiration,
-			    updated_at = EXCLUDED.updated_at
-		`, link, aud.String(), token.Issuer().String(), causeStr, expiration, now); err != nil {
+			    updated_at = NOW()
+		`, link, aud.String(), token.Issuer().String(), causeStr, expiration); err != nil {
 			return fmt.Errorf("indexing delegation %s: %w", link, err)
 		}
 	}
