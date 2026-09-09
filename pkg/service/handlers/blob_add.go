@@ -215,7 +215,7 @@ func doAllocate(
 
 	var exclusions []did.DID
 	for {
-		candidate, err := router.SelectStorageProvider(ctx, blob, routing.WithExclusions(exclusions...))
+		candidate, err := router.SelectStorageProvider(ctx, space, blob, routing.WithExclusions(exclusions...))
 		if err != nil {
 			log.Error("failed to select storage node", zap.Error(err))
 			return routing.StorageProviderInfo{}, nil, nil, blobcmds.AllocateOK{}, err

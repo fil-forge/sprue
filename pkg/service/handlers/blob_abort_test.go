@@ -15,6 +15,7 @@ import (
 	"github.com/fil-forge/sprue/pkg/service/handlers"
 	"github.com/fil-forge/sprue/pkg/store/agent"
 	agent_store "github.com/fil-forge/sprue/pkg/store/agent/memory"
+	routing_policy_store "github.com/fil-forge/sprue/pkg/store/routing_policy/memory"
 	storage_provider_store "github.com/fil-forge/sprue/pkg/store/storage_provider/memory"
 	"github.com/fil-forge/ucantone/binding"
 	"github.com/fil-forge/ucantone/did"
@@ -46,7 +47,7 @@ type blobAbortTestDeps struct {
 func newBlobAbortTestDeps(t *testing.T, uploadService multikey.Issuer, logger *zap.Logger) *blobAbortTestDeps {
 	t.Helper()
 	spStore := storage_provider_store.New()
-	router := routing.NewService(spStore, logger)
+	router := routing.NewService(spStore, routing_policy_store.New(), logger)
 	agentStore := agent_store.New()
 	nodeProvider := piriclient.NewProvider(uploadService, logger)
 	handler := handlers.NewBlobAbortHandler(router, nodeProvider, agentStore, logger)

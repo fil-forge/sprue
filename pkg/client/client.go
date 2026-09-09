@@ -6,11 +6,15 @@ import (
 	"net/url"
 	"slices"
 
+	routingcmds "github.com/fil-forge/libforge/commands/routing"
+	ucanlib "github.com/fil-forge/libforge/ucan"
 	providercap "github.com/fil-forge/sprue/pkg/commands/admin/provider"
 	weightcap "github.com/fil-forge/sprue/pkg/commands/admin/provider/weight"
 	"github.com/fil-forge/sprue/pkg/lib/ucan_client"
+	"github.com/fil-forge/ucantone/binding"
 	"github.com/fil-forge/ucantone/client"
 	"github.com/fil-forge/ucantone/did"
+	"github.com/fil-forge/ucantone/execution"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/container"
 	"github.com/fil-forge/ucantone/ucan/invocation"
@@ -168,6 +172,62 @@ func (c *Client) AdminProviderWeightSet(ctx context.Context, providerID did.DID,
 	_, rcpt, _, err := ucan_client.Execute[*weightcap.SetOK](ctx, c.client, c.logger, inv)
 	if err != nil {
 		return nil, fmt.Errorf("executing provider weight set invocation: %w", err)
+	}
+	return rcpt, nil
+}
+
+// RoutingPut replaces the candidate set of the routing policy. The issuer must
+// hold a proof chain from proofs rooted at the policy; proofs may be nil when
+// the issuer is the policy itself.
+func (c *Client) RoutingPut(ctx context.Context, policy did.DID, candidates []did.DID, proofs ucanlib.ProofStore, options ...invocation.Option) (ucan.Receipt, error) {
+	entries := make(map[did.DID]routingcmds.Candidate, len(candidates))
+	for _, cand := range candidates {
+		entries[cand] = routingcmds.Candidate{}
+	}
+	args := &routingcmds.PutArguments{Candidates: routingcmds.CandidateSet{Entries: entries}}
+	rcpt, err := invokeRouting(c, ctx, routingcmds.Put, policy, args, proofs, options...)
+	if err != nil {
+		return nil, fmt.Errorf("routing put: %w", err)
+	}
+	return rcpt, nil
+}
+
+// RoutingUse sets the routing policy referenced by the space, or clears it when
+// policy is nil. The issuer must hold a proof chain from proofs rooted at the
+// space; proofs may be nil when the issuer is the space itself.
+func (c *Client) RoutingUse(ctx context.Context, space did.DID, policy *did.DID, proofs ucanlib.ProofStore, options ...invocation.Option) (ucan.Receipt, error) {
+	args := &routingcmds.UseArguments{Policy: policy}
+	rcpt, err := invokeRouting(c, ctx, routingcmds.Use, space, args, proofs, options...)
+	if err != nil {
+		return nil, fmt.Errorf("routing use: %w", err)
+	}
+	return rcpt, nil
+}
+
+// invokeRouting builds and executes a routing command invocation on subject,
+// attaching the proof chain from proofs when one is supplied.
+func invokeRouting[A, O binding.CBORValue](c *Client, ctx context.Context, cmd binding.Binding[A, O], subject did.DID, args A, proofs ucanlib.ProofStore, options ...invocation.Option) (ucan.Receipt, error) {
+	options = slices.Clone(options)
+	options = append(options, invocation.WithAudience(c.uploadServiceID))
+
+	var dlgs []ucan.Delegation
+	if proofs != nil {
+		chain, links, err := proofs.ProofChain(ctx, c.issuer.DID(), cmd.Command, subject)
+		if err != nil {
+			return nil, fmt.Errorf("building proof chain: %w", err)
+		}
+		dlgs = chain
+		options = append(options, invocation.WithProofs(links...))
+	}
+
+	inv, err := cmd.Invoke(c.issuer, subject, args, options...)
+	if err != nil {
+		return nil, fmt.Errorf("invoking %s: %w", cmd.Command, err)
+	}
+
+	_, rcpt, _, err := ucan_client.Execute[O](ctx, c.client, c.logger, inv, execution.WithDelegations(dlgs...))
+	if err != nil {
+		return nil, fmt.Errorf("executing %s invocation: %w", cmd.Command, err)
 	}
 	return rcpt, nil
 }

@@ -22,6 +22,7 @@ import (
 	metrics_store "github.com/fil-forge/sprue/pkg/store/metrics/memory"
 	"github.com/fil-forge/sprue/pkg/store/replica"
 	replica_store "github.com/fil-forge/sprue/pkg/store/replica/memory"
+	routing_policy_store "github.com/fil-forge/sprue/pkg/store/routing_policy/memory"
 	spacediff_store "github.com/fil-forge/sprue/pkg/store/space_diff/memory"
 	storage_provider_store "github.com/fil-forge/sprue/pkg/store/storage_provider/memory"
 	"github.com/fil-forge/ucantone/binding"
@@ -55,7 +56,7 @@ type blobRemoveTestDeps struct {
 func newBlobRemoveTestDeps(t *testing.T, uploadService multikey.Issuer, logger *zap.Logger) *blobRemoveTestDeps {
 	t.Helper()
 	spStore := storage_provider_store.New()
-	router := routing.NewService(spStore, logger)
+	router := routing.NewService(spStore, routing_policy_store.New(), logger)
 	agentStore := agent_store.New()
 	consumerStore := consumer_store.New()
 	blobReg := blob_registry.New(

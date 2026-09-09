@@ -73,6 +73,14 @@ var Module = fx.Module("service-handlers",
 			fx.ResultTags(`group:"ucan_handlers"`),
 		),
 		fx.Annotate(
+			handlers.NewRoutingPutHandler,
+			fx.ResultTags(`group:"ucan_handlers"`),
+		),
+		fx.Annotate(
+			handlers.NewRoutingUseHandler,
+			fx.ResultTags(`group:"ucan_handlers"`),
+		),
+		fx.Annotate(
 			handlers.NewSpaceInfoHandler,
 			fx.ResultTags(`group:"ucan_handlers"`),
 		),

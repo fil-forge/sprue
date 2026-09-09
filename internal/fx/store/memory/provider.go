@@ -17,6 +17,8 @@ import (
 	memreplica "github.com/fil-forge/sprue/pkg/store/replica/memory"
 	"github.com/fil-forge/sprue/pkg/store/revocation"
 	memrevocation "github.com/fil-forge/sprue/pkg/store/revocation/memory"
+	routingpolicy "github.com/fil-forge/sprue/pkg/store/routing_policy"
+	memroutingpolicy "github.com/fil-forge/sprue/pkg/store/routing_policy/memory"
 	spacediff "github.com/fil-forge/sprue/pkg/store/space_diff"
 	memspacediff "github.com/fil-forge/sprue/pkg/store/space_diff/memory"
 	storageprovider "github.com/fil-forge/sprue/pkg/store/storage_provider"
@@ -39,6 +41,7 @@ var Module = fx.Module("memory-store",
 		NewAdminMetricsStore,
 		NewReplicaStore,
 		NewRevocationStore,
+		NewRoutingPolicyStore,
 		NewSpaceDiffStore,
 		NewStorageProviderStore,
 		NewSubscriptionStore,
@@ -80,6 +83,10 @@ func NewReplicaStore() replica.Store {
 
 func NewRevocationStore() revocation.Store {
 	return memrevocation.New()
+}
+
+func NewRoutingPolicyStore() routingpolicy.Store {
+	return memroutingpolicy.New()
 }
 
 func NewSpaceDiffStore() spacediff.Store {
