@@ -69,9 +69,9 @@ func (s *Store) Add(ctx context.Context, customerID did.DID, externalAccount *st
 	}
 
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO customer (customer, external_account, product, details, reserved_capacity, inserted_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
-	`, customerID.String(), externalAccount, product.String(), detailsJSON, capacity, time.Now().UTC())
+		INSERT INTO customer (customer, external_account, product, details, reserved_capacity)
+		VALUES ($1, $2, $3, $4, $5)
+	`, customerID.String(), externalAccount, product.String(), detailsJSON, capacity)
 
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -135,9 +135,9 @@ func (s *Store) List(ctx context.Context, options ...customer.ListOption) (store
 func (s *Store) UpdateProduct(ctx context.Context, customerID did.DID, product did.DID) error {
 	tag, err := s.pool.Exec(ctx, `
 		UPDATE customer
-		SET product = $1, updated_at = $2
-		WHERE customer = $3
-	`, product.String(), time.Now().UTC(), customerID.String())
+		SET product = $1, updated_at = NOW()
+		WHERE customer = $2
+	`, product.String(), customerID.String())
 	if err != nil {
 		return fmt.Errorf("updating customer product: %w", err)
 	}

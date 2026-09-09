@@ -4,7 +4,6 @@ package postgres
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/fil-forge/sprue/pkg/store/revocation"
 	"github.com/fil-forge/ucantone/did"
@@ -28,10 +27,10 @@ func (s *Store) Initialize(ctx context.Context) error { return nil }
 // (delegation, scope), leaving any existing revocation unchanged.
 func (s *Store) Add(ctx context.Context, delegation cid.Cid, scope did.DID, cause cid.Cid) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO revocation (revoke, scope, cause, inserted_at)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO revocation (revoke, scope, cause)
+		VALUES ($1, $2, $3)
 		ON CONFLICT (revoke, scope) DO NOTHING
-	`, delegation.String(), scope.String(), cause.String(), time.Now().UTC())
+	`, delegation.String(), scope.String(), cause.String())
 	if err != nil {
 		return fmt.Errorf("adding revocation: %w", err)
 	}
@@ -51,9 +50,9 @@ func (s *Store) Reset(ctx context.Context, delegation cid.Cid, scope did.DID, ca
 		return fmt.Errorf("clearing revocation: %w", err)
 	}
 	if _, err := tx.Exec(ctx, `
-		INSERT INTO revocation (revoke, scope, cause, inserted_at)
-		VALUES ($1, $2, $3, $4)
-	`, delegation.String(), scope.String(), cause.String(), time.Now().UTC()); err != nil {
+		INSERT INTO revocation (revoke, scope, cause)
+		VALUES ($1, $2, $3)
+	`, delegation.String(), scope.String(), cause.String()); err != nil {
 		return fmt.Errorf("inserting revocation: %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {

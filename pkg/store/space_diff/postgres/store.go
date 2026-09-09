@@ -45,9 +45,9 @@ func (s *Store) Put(ctx context.Context, provider did.DID, space did.DID, subscr
 // can batch space-diff writes with its own updates in one atomic unit.
 func PutWith(ctx context.Context, q pgxExec, provider did.DID, space did.DID, subscription string, cause cid.Cid, delta int64, receiptAt time.Time) error {
 	_, err := q.Exec(ctx, `
-		INSERT INTO space_diff (provider, space, receipt_at, cause, subscription, delta, inserted_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-	`, provider.String(), space.String(), receiptAt.UTC(), cause.String(), subscription, delta, time.Now().UTC())
+		INSERT INTO space_diff (provider, space, receipt_at, cause, subscription, delta)
+		VALUES ($1, $2, $3, $4, $5, $6)
+	`, provider.String(), space.String(), receiptAt.UTC(), cause.String(), subscription, delta)
 	if err != nil {
 		return fmt.Errorf("putting space diff: %w", err)
 	}

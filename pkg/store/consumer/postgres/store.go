@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/fil-forge/sprue/pkg/store"
 	"github.com/fil-forge/sprue/pkg/store/consumer"
@@ -36,9 +35,9 @@ func (s *Store) Initialize(ctx context.Context) error { return nil }
 
 func (s *Store) Add(ctx context.Context, provider did.DID, space did.DID, customer did.DID, subscription string, cause cid.Cid) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO consumer (subscription, provider, consumer, customer, cause, inserted_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
-	`, subscription, provider.String(), space.String(), customer.String(), cause.String(), time.Now().UTC())
+		INSERT INTO consumer (subscription, provider, consumer, customer, cause)
+		VALUES ($1, $2, $3, $4, $5)
+	`, subscription, provider.String(), space.String(), customer.String(), cause.String())
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == uniqueViolation {

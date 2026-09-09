@@ -35,9 +35,9 @@ func (s *Store) Initialize(ctx context.Context) error { return nil }
 
 func (s *Store) Add(ctx context.Context, provider did.DID, subscriptionID string, customer did.DID, cause cid.Cid) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO subscription (subscription, provider, customer, cause, inserted_at)
-		VALUES ($1, $2, $3, $4, $5)
-	`, subscriptionID, provider.String(), customer.String(), cause.String(), time.Now().UTC())
+		INSERT INTO subscription (subscription, provider, customer, cause)
+		VALUES ($1, $2, $3, $4)
+	`, subscriptionID, provider.String(), customer.String(), cause.String())
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == uniqueViolation {

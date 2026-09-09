@@ -216,13 +216,12 @@ func (s *Store) Upsert(ctx context.Context, space did.DID, root cid.Cid, index *
 		str := index.String()
 		indexStr = &str
 	}
-	now := time.Now().UTC()
 	if _, err := tx.Exec(ctx, `
-		INSERT INTO upload (space, root, index, cause, inserted_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $5)
+		INSERT INTO upload (space, root, index, cause)
+		VALUES ($1, $2, $3, $4)
 		ON CONFLICT (space, root) DO UPDATE
-		SET index = EXCLUDED.index, cause = EXCLUDED.cause, updated_at = EXCLUDED.updated_at
-	`, space.String(), root.String(), indexStr, cause.String(), now); err != nil {
+		SET index = EXCLUDED.index, cause = EXCLUDED.cause, updated_at = NOW()
+	`, space.String(), root.String(), indexStr, cause.String()); err != nil {
 		return fmt.Errorf("upserting upload: %w", err)
 	}
 

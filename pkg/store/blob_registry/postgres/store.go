@@ -75,9 +75,9 @@ func (s *Store) Register(ctx context.Context, space did.DID, blob blobregistry.B
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	if _, err := tx.Exec(ctx, `
-		INSERT INTO blob_registry (space, digest, size, cause, inserted_at)
-		VALUES ($1, $2, $3, $4, $5)
-	`, space.String(), digestutil.Format(blob.Digest), int64(blob.Size), cause.String(), time.Now().UTC()); err != nil {
+		INSERT INTO blob_registry (space, digest, size, cause)
+		VALUES ($1, $2, $3, $4)
+	`, space.String(), digestutil.Format(blob.Digest), int64(blob.Size), cause.String()); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == uniqueViolation {
 			return blobregistry.ErrEntryExists
