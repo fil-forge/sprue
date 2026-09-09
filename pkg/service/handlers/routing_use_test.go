@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/fil-forge/libforge/attestation/didmailto"
+	accesscmds "github.com/fil-forge/libforge/commands/access"
 	routingcmds "github.com/fil-forge/libforge/commands/routing"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/provisioning"
@@ -113,7 +114,7 @@ func TestRoutingUseHandler(t *testing.T) {
 		_, err := routingcmds.Use.Unpack(res.Receipt())
 		var errModel datamodel.ErrorModel
 		require.ErrorAs(t, err, &errModel)
-		require.Equal(t, routingcmds.SpaceNotProvisionedErrorName, errModel.Name())
+		require.Equal(t, accesscmds.InsufficientStorageErrorName, errModel.Name())
 	})
 
 	t.Run("rejects an unknown policy", func(t *testing.T) {
