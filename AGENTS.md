@@ -78,8 +78,8 @@ Configuration via YAML file or environment variables with `SPRUE_` prefix:
 
 ### Key Dependencies
 
-- **go-ucanto**: UCAN RPC framework for capability-based authorization
-- **go-libstoracha**: Storacha capability definitions (blob, space, upload, etc.)
+- **ucantone**: UCAN RPC framework for capability-based authorization
+- **libforge**: Forge Network UCAN command definitions (blob, space, upload, etc.)
 - **echo/v4**: HTTP server framework
 - **aws-sdk-go-v2**: S3 client (blob payloads for the postgres backend)
 - **jackc/pgx/v5**: PostgreSQL driver
