@@ -27,11 +27,11 @@ func doList(cmd *cobra.Command, args []string) error {
 	}
 
 	table := lib.NewTable(cmd.OutOrStdout())
-	table.SetHeader([]string{"ID", "Weight", "Replication Weight", "URL"})
+	table.Header("ID", "Weight", "Replication Weight", "URL")
 	for _, p := range res.Providers {
-		table.Append([]string{p.Provider.String(), fmt.Sprintf("%d", p.Weight), fmt.Sprintf("%d", p.ReplicationWeight), p.Endpoint})
+		if err := table.Append(p.Provider.String(), fmt.Sprintf("%d", p.Weight), fmt.Sprintf("%d", p.ReplicationWeight), p.Endpoint); err != nil {
+			return err
+		}
 	}
-	table.Render()
-
-	return nil
+	return table.Render()
 }

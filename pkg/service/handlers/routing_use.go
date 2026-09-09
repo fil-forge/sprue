@@ -4,6 +4,7 @@ import (
 	stderrors "errors"
 	"fmt"
 
+	accesscmds "github.com/fil-forge/libforge/commands/access"
 	routingcmds "github.com/fil-forge/libforge/commands/routing"
 	"github.com/fil-forge/sprue/pkg/provisioning"
 	"github.com/fil-forge/sprue/pkg/routing"
@@ -36,7 +37,7 @@ func NewRoutingUseHandler(provisioningSvc *provisioning.Service, router *routing
 			}
 			if len(providers) == 0 {
 				log.Warn("space has no service provider")
-				return res.SetFailure(errors.New(routingcmds.SpaceNotProvisionedErrorName, "space is not provisioned with a provider"))
+				return res.SetFailure(errors.New(accesscmds.InsufficientStorageErrorName, "space has no storage provider"))
 			}
 
 			if args.Policy == nil {
