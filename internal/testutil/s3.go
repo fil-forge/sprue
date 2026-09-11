@@ -14,7 +14,11 @@ import (
 )
 
 func CreateS3(t *testing.T) *url.URL {
-	container, err := minio.Run(t.Context(), "minio/minio:latest")
+	// Our own build of MinIO. Upstream withdrew minio/minio from Docker Hub on
+	// 2026-09-11 -- every tag, pinned releases included -- and archived the
+	// project, so there is no public image left to pull. fil-forge/minio builds
+	// it from source at the tag below.
+	container, err := minio.Run(t.Context(), "ghcr.io/fil-forge/minio:RELEASE.2025-10-15T17-29-55Z")
 	testcontainers.CleanupContainer(t, container)
 	require.NoError(t, err)
 
