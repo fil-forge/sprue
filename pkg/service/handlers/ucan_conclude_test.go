@@ -18,9 +18,20 @@ import (
 	"github.com/fil-forge/ucantone/ucan/container"
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/fil-forge/ucantone/ucan/receipt"
+	"github.com/ipfs/go-cid"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 )
+
+// linksOf is a receipt's link as the one-element list a conclude argument
+// always takes.
+func linksOf(rcpts ...ucan.Receipt) []cid.Cid {
+	links := make([]cid.Cid, len(rcpts))
+	for i, r := range rcpts {
+		links[i] = r.Link()
+	}
+	return links
+}
 
 func TestUCANConcludeHandler(t *testing.T) {
 	logger := zaptest.NewLogger(t)
@@ -55,7 +66,7 @@ func TestUCANConcludeHandler(t *testing.T) {
 		concludeInv, err := ucancmds.Conclude.Invoke(
 			uploadService,
 			uploadService.DID(),
-			&ucancmds.ConcludeArguments{Receipt: rcpt.Link()},
+			&ucancmds.ConcludeArguments{Receipts: linksOf(rcpt)},
 			invocation.WithAudience(uploadService.DID()),
 		)
 		require.NoError(t, err)
@@ -88,7 +99,7 @@ func TestUCANConcludeHandler(t *testing.T) {
 		concludeInv, err := ucancmds.Conclude.Invoke(
 			uploadService,
 			uploadService.DID(),
-			&ucancmds.ConcludeArguments{Receipt: rcpt.Link()},
+			&ucancmds.ConcludeArguments{Receipts: linksOf(rcpt)},
 			invocation.WithAudience(uploadService.DID()),
 		)
 		require.NoError(t, err)
@@ -113,11 +124,12 @@ func TestUCANConcludeHandler(t *testing.T) {
 			gotRcpt ucan.Receipt
 		)
 		handlerMap := map[ucan.Command]handlers.ConclusionHandlerFunc{
-			command.MustParse("/test/thing"): func(_ context.Context, inv ucan.Invocation, rcpt ucan.Receipt) error {
+			command.MustParse("/test/thing"): func(_ context.Context, cs []handlers.Conclusion) (ucan.Container, error) {
 				called = true
-				gotInv = inv
-				gotRcpt = rcpt
-				return nil
+				require.Len(t, cs, 1)
+				gotInv = cs[0].Invocation
+				gotRcpt = cs[0].Receipt
+				return nil, nil
 			},
 		}
 
@@ -138,7 +150,7 @@ func TestUCANConcludeHandler(t *testing.T) {
 		concludeInv, err := ucancmds.Conclude.Invoke(
 			uploadService,
 			uploadService.DID(),
-			&ucancmds.ConcludeArguments{Receipt: rcpt.Link()},
+			&ucancmds.ConcludeArguments{Receipts: linksOf(rcpt)},
 			invocation.WithAudience(uploadService.DID()),
 		)
 		require.NoError(t, err)
@@ -178,7 +190,7 @@ func TestUCANConcludeHandler(t *testing.T) {
 		concludeInv, err := ucancmds.Conclude.Invoke(
 			uploadService,
 			uploadService.DID(),
-			&ucancmds.ConcludeArguments{Receipt: rcpt.Link()},
+			&ucancmds.ConcludeArguments{Receipts: linksOf(rcpt)},
 			invocation.WithAudience(uploadService.DID()),
 		)
 		require.NoError(t, err)
@@ -194,14 +206,135 @@ func TestUCANConcludeHandler(t *testing.T) {
 		require.NoError(t, err)
 	})
 
+	t.Run("delivers many receipts in one invocation", func(t *testing.T) {
+		agentStore := agent_store.New()
+
+		var got [][]handlers.Conclusion
+		handlerMap := map[ucan.Command]handlers.ConclusionHandlerFunc{
+			command.MustParse("/test/thing"): func(_ context.Context, cs []handlers.Conclusion) (ucan.Container, error) {
+				got = append(got, cs)
+				return nil, nil
+			},
+		}
+		handler := handlers.NewUCANConcludeHandler(
+			identity.Identity{Issuer: uploadService}, agentStore, handlerMap, logger,
+		)
+
+		const n = 3
+		var links []cid.Cid
+		var invs []ucan.Invocation
+		var rcpts []ucan.Receipt
+		for range n {
+			taskInv, rcpt := newTaskAndReceipt(t, command.MustParse("/test/thing"))
+			links = append(links, rcpt.Link())
+			invs = append(invs, taskInv)
+			rcpts = append(rcpts, rcpt)
+		}
+
+		concludeInv, err := ucancmds.Conclude.Invoke(
+			uploadService,
+			uploadService.DID(),
+			&ucancmds.ConcludeArguments{Receipts: links},
+			invocation.WithAudience(uploadService.DID()),
+		)
+		require.NoError(t, err)
+
+		req := execution.NewRequest(ctx, concludeInv,
+			execution.WithReceipts(rcpts...),
+			execution.WithInvocations(invs...),
+		)
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
+		require.NoError(t, err)
+
+		require.NoError(t, handler.Handler(req, res))
+		_, err = ucancmds.Conclude.Unpack(res.Receipt())
+		require.NoError(t, err)
+
+		// One call carrying every receipt, not one call per receipt.
+		require.Len(t, got, 1)
+		require.Len(t, got[0], n)
+	})
+
+	t.Run("receipts a handler produced travel in the response", func(t *testing.T) {
+		agentStore := agent_store.New()
+
+		taskInv, rcpt := newTaskAndReceipt(t, command.MustParse("/test/thing"))
+		// What the handler ran as a consequence of the conclusion.
+		onwardInv, onwardRcpt := newTaskAndReceipt(t, command.MustParse("/test/onward"))
+
+		handlerMap := map[ucan.Command]handlers.ConclusionHandlerFunc{
+			command.MustParse("/test/thing"): func(_ context.Context, _ []handlers.Conclusion) (ucan.Container, error) {
+				return container.New(
+					container.WithInvocations(onwardInv),
+					container.WithReceipts(onwardRcpt),
+				), nil
+			},
+		}
+		handler := handlers.NewUCANConcludeHandler(
+			identity.Identity{Issuer: uploadService}, agentStore, handlerMap, logger,
+		)
+
+		concludeInv, err := ucancmds.Conclude.Invoke(
+			uploadService,
+			uploadService.DID(),
+			&ucancmds.ConcludeArguments{Receipts: linksOf(rcpt)},
+			invocation.WithAudience(uploadService.DID()),
+		)
+		require.NoError(t, err)
+
+		req := execution.NewRequest(ctx, concludeInv,
+			execution.WithReceipts(rcpt),
+			execution.WithInvocations(taskInv),
+		)
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
+		require.NoError(t, err)
+
+		require.NoError(t, handler.Handler(req, res))
+		require.NotNil(t, res.Metadata())
+		require.Len(t, res.Metadata().Receipts(), 1)
+		require.Equal(t, onwardRcpt.Link(), res.Metadata().Receipts()[0].Link())
+		require.Len(t, res.Metadata().Invocations(), 1)
+	})
+
+	t.Run("one missing receipt fails the whole conclusion", func(t *testing.T) {
+		agentStore := agent_store.New()
+		handler := handlers.NewUCANConcludeHandler(
+			identity.Identity{Issuer: uploadService}, agentStore,
+			map[ucan.Command]handlers.ConclusionHandlerFunc{}, logger,
+		)
+
+		taskInv, rcpt := newTaskAndReceipt(t, command.MustParse("/test/thing"))
+		_, absent := newTaskAndReceipt(t, command.MustParse("/test/thing"))
+
+		concludeInv, err := ucancmds.Conclude.Invoke(
+			uploadService,
+			uploadService.DID(),
+			&ucancmds.ConcludeArguments{Receipts: []cid.Cid{rcpt.Link(), absent.Link()}},
+			invocation.WithAudience(uploadService.DID()),
+		)
+		require.NoError(t, err)
+
+		// Only the first receipt travels in the container.
+		req := execution.NewRequest(ctx, concludeInv,
+			execution.WithReceipts(rcpt),
+			execution.WithInvocations(taskInv),
+		)
+		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
+		require.NoError(t, err)
+
+		require.NoError(t, handler.Handler(req, res))
+		_, err = ucancmds.Conclude.Unpack(res.Receipt())
+		require.ErrorIs(t, err, ucancmds.ErrConclusionReceiptNotFound)
+	})
+
 	t.Run("invocation supplied via metadata", func(t *testing.T) {
 		agentStore := agent_store.New()
 
 		var called bool
 		handlerMap := map[ucan.Command]handlers.ConclusionHandlerFunc{
-			command.MustParse("/test/thing"): func(_ context.Context, _ ucan.Invocation, _ ucan.Receipt) error {
+			command.MustParse("/test/thing"): func(_ context.Context, _ []handlers.Conclusion) (ucan.Container, error) {
 				called = true
-				return nil
+				return nil, nil
 			},
 		}
 
@@ -216,7 +349,7 @@ func TestUCANConcludeHandler(t *testing.T) {
 		concludeInv, err := ucancmds.Conclude.Invoke(
 			uploadService,
 			uploadService.DID(),
-			&ucancmds.ConcludeArguments{Receipt: rcpt.Link()},
+			&ucancmds.ConcludeArguments{Receipts: linksOf(rcpt)},
 			invocation.WithAudience(uploadService.DID()),
 		)
 		require.NoError(t, err)

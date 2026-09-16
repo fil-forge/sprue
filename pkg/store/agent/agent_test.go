@@ -17,6 +17,7 @@ import (
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/fil-forge/ucantone/ucan/receipt"
 	"github.com/google/uuid"
+	"github.com/ipfs/go-cid"
 	"github.com/stretchr/testify/require"
 )
 
@@ -141,7 +142,7 @@ func TestAgentStore(t *testing.T) {
 					testutil.Alice,
 					testutil.Alice.DID(),
 					&ucancap.ConcludeArguments{
-						Receipt: rcpt.Link(),
+						Receipts: []cid.Cid{rcpt.Link()},
 					},
 					invocation.WithAudience(testutil.Bob.DID()),
 				)

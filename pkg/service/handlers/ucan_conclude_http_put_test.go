@@ -90,7 +90,7 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		err = deps.ch.Handler(ctx, putInv, putRcpt)
+		_, err = deps.ch.Handler(ctx, []handlers.Conclusion{{Invocation: putInv, Receipt: putRcpt}})
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "getting allocation invocation")
 	})
@@ -142,7 +142,7 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		err = deps.ch.Handler(ctx, putInv, putRcpt)
+		_, err = deps.ch.Handler(ctx, []handlers.Conclusion{{Invocation: putInv, Receipt: putRcpt}})
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "getting storage provider info")
 	})
@@ -219,8 +219,15 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 		// The upload service is authorized to invoke /blob/accept by the proofs
 		// the provider granted it at registration (sourced from the provider
 		// record), so no proof travels in the conclude metadata.
-		err = deps.ch.Handler(ctx, putInv, putRcpt)
+		meta, err := deps.ch.Handler(ctx, []handlers.Conclusion{{Invocation: putInv, Receipt: putRcpt}})
 		require.NoError(t, err)
+
+		// The accept receipt travels back in the conclude response, so the
+		// deliverer reads the outcome instead of polling for it.
+		require.Len(t, meta.Receipts(), 1)
+		acceptedOK, err := blobcmds.Accept.Unpack(meta.Receipts()[0])
+		require.NoError(t, err)
+		require.Equal(t, acceptOK.Site, acceptedOK.Site)
 
 		// Blob should now be registered in the space, with cause = blobAddTaskLink.
 		rec, err := deps.blobReg.Get(ctx, space.DID(), digest)

@@ -39,8 +39,8 @@ type Client struct {
 
 // New creates a new Piri client.
 // The delegationFetcher is used to fetch delegation proofs on-demand for each request.
-func New(endpoint *url.URL, piriDID did.DID, issuer ucan.Issuer, logger *zap.Logger) (*Client, error) {
-	client, err := client.NewHTTP(endpoint)
+func New(endpoint *url.URL, piriDID did.DID, issuer ucan.Issuer, logger *zap.Logger, options ...client.HTTPOption) (*Client, error) {
+	client, err := client.NewHTTP(endpoint, options...)
 	if err != nil {
 		return nil, fmt.Errorf("creating HTTP client: %w", err)
 	}
@@ -164,15 +164,99 @@ func (c *Client) Accept(ctx context.Context, req *AcceptRequest, proofStore ucan
 	return acceptOK, inv, rcpt, meta, nil
 }
 
+// MaxAcceptBatch caps the accepts sent in one request. A UCAN container holds
+// at most 8192 tokens, and each accept costs one receipt plus the two
+// invocations piri attaches to it (the location claim and the PDP promise),
+// so a node's response is ~3 tokens per accept. 1000 leaves ample headroom
+// and keeps any single request's latency bounded.
+const MaxAcceptBatch = 1000
+
+// AcceptResult pairs an accept request with the invocation sent for it and
+// the receipt the node returned. Receipt is nil if the node's response
+// carried none for that invocation.
+type AcceptResult struct {
+	Request    *AcceptRequest
+	Invocation ucan.Invocation
+	Receipt    ucan.Receipt
+}
+
+// AcceptBatch sends many /blob/accept invocations to the piri node, in as few
+// requests as MaxAcceptBatch allows, and returns one result per request in
+// the order given along with the containers the node responded with (its
+// location claims and PDP promises travel there).
+//
+// A node executes every invocation in the request sequentially and answers
+// each with its own receipt, so one blob's failure neither stops nor hides
+// the others: the failure is that blob's receipt. An error is returned only
+// when a whole request failed.
+func (c *Client) AcceptBatch(ctx context.Context, reqs []*AcceptRequest, proofStore ucanlib.ProofStore, options ...invocation.Option) ([]AcceptResult, []ucan.Container, error) {
+	if len(reqs) == 0 {
+		return nil, nil, nil
+	}
+	// Every accept to one node proves the same way, so the chain is resolved
+	// once rather than per invocation.
+	prfs, prfLinks, err := c.acceptProofs(ctx, proofStore)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	results := make([]AcceptResult, len(reqs))
+	invs := make([]ucan.Invocation, len(reqs))
+	for i, req := range reqs {
+		inv, err := c.acceptInvocation(req, options, prfLinks)
+		if err != nil {
+			return nil, nil, err
+		}
+		invs[i] = inv
+		results[i] = AcceptResult{Request: req, Invocation: inv}
+	}
+
+	var metas []ucan.Container
+	for start := 0; start < len(invs); start += MaxAcceptBatch {
+		end := min(start+MaxAcceptBatch, len(invs))
+		meta, err := ucan_client.ExecuteBatch(ctx, c.client, c.logger, invs[start:end],
+			execution.WithDelegations(prfs...))
+		if err != nil {
+			return nil, nil, err
+		}
+		metas = append(metas, meta)
+		byRan := ucan_client.ReceiptsByRan(meta)
+		for i := start; i < end; i++ {
+			results[i].Receipt = byRan[invs[i].Task().Link()]
+		}
+	}
+	return results, metas, nil
+}
+
 // AcceptInvocation returns the invocation for the accept request (for use in effects).
 func (c *Client) AcceptInvocation(ctx context.Context, req *AcceptRequest, proofStore ucanlib.ProofStore, options ...invocation.Option) (ucan.Invocation, []ucan.Delegation, error) {
+	prfs, prfLinks, err := c.acceptProofs(ctx, proofStore)
+	if err != nil {
+		return nil, nil, err
+	}
+	inv, err := c.acceptInvocation(req, options, prfLinks)
+	if err != nil {
+		return nil, nil, err
+	}
+	return inv, prfs, nil
+}
+
+// acceptProofs resolves the proof chain authorizing this client to accept on
+// the node. It is the same chain for every blob, so a batch resolves it once.
+func (c *Client) acceptProofs(ctx context.Context, proofStore ucanlib.ProofStore) ([]ucan.Delegation, []cid.Cid, error) {
 	// As with allocate, the proof chain is rooted at the storage provider, so the
 	// subject is the provider DID and the space travels in the arguments.
 	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.issuer.DID(), blobcmds.Accept.Command, c.piriDID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("building proof chain: %w", err)
 	}
+	return prfs, prfLinks, nil
+}
 
+// acceptInvocation mints one /blob/accept invocation. Single and batched
+// accepts share it so their invocations — and therefore the task CIDs the
+// client polls receipts for — are identical.
+func (c *Client) acceptInvocation(req *AcceptRequest, options []invocation.Option, prfLinks []cid.Cid) (ucan.Invocation, error) {
 	options = slices.Clone(options)
 	options = append(
 		options,
@@ -191,10 +275,9 @@ func (c *Client) AcceptInvocation(ctx context.Context, req *AcceptRequest, proof
 		options...,
 	)
 	if err != nil {
-		return nil, nil, fmt.Errorf("creating accept invocation: %w", err)
+		return nil, fmt.Errorf("creating accept invocation: %w", err)
 	}
-
-	return inv, prfs, nil
+	return inv, nil
 }
 
 // ReleaseRequest contains the parameters for a /blob/release invocation.
