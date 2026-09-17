@@ -167,9 +167,10 @@ func (c *Client) Accept(ctx context.Context, req *AcceptRequest, proofStore ucan
 
 // acceptInvocationTTL is how long (in seconds) an accept invocation stays
 // valid. It must outlast a whole request, not a single call: every invocation
-// of a batch is minted before the request is sent, the node validates each one
-// immediately before executing it, and so the last is checked once the request
-// is nearly over — which is why the 30-second default cannot serve a batch.
+// of a chunk is issued before that chunk's request is sent, the node validates
+// each one immediately before executing it, and so the last is checked once
+// the request is nearly over — which is why the 30-second default cannot serve
+// a batch.
 // It therefore exceeds piriRequestTimeout, with the remainder absorbing clock
 // skew between the two hosts. It does not affect the accept's task link, which
 // is derived from subject, command, arguments and nonce alone.
@@ -211,26 +212,32 @@ func (c *Client) AcceptBatch(ctx context.Context, reqs []*AcceptRequest, proofSt
 		return nil, nil, err
 	}
 
-	results := make([]AcceptResult, len(reqs))
-	invs := make([]ucan.Invocation, len(reqs))
-	for i, req := range reqs {
-		inv, err := c.acceptInvocation(req, options, prfLinks)
-		if err != nil {
-			return nil, nil, err
-		}
-		invs[i] = inv
-		results[i] = AcceptResult{Request: req, Invocation: inv}
-	}
-
 	// A chunk that fails leaves the earlier chunks already executed on the
 	// node, so the results so far are returned alongside the error: their
 	// acceptances are real and the caller must still persist and register
 	// them, or the node holds blobs sprue has no record of.
+	results := make([]AcceptResult, len(reqs))
 	var metas []ucan.Container
-	for start := 0; start < len(invs); start += maxAcceptBatch {
-		end := min(start+maxAcceptBatch, len(invs))
-		c.logger.Debug("executing accept batch", zap.Int("invocations", end-start))
-		res, err := c.client.ExecuteBatch(batch.NewRequest(ctx, invs[start:end], batch.WithDelegations(prfs...)))
+	for start := 0; start < len(reqs); start += maxAcceptBatch {
+		end := min(start+maxAcceptBatch, len(reqs))
+
+		// Issued here rather than for the whole batch up front: an
+		// invocation's expiry runs from the moment it is issued, so a later
+		// chunk issued with the first would spend its life queued behind the
+		// requests ahead of it. Issuing per chunk keeps the expiry covering
+		// one request, which is the span acceptInvocationTTL is sized for.
+		invs := make([]ucan.Invocation, 0, end-start)
+		for i := start; i < end; i++ {
+			inv, err := c.acceptInvocation(reqs[i], options, prfLinks)
+			if err != nil {
+				return results, metas, err
+			}
+			invs = append(invs, inv)
+			results[i] = AcceptResult{Request: reqs[i], Invocation: inv}
+		}
+
+		c.logger.Debug("executing accept batch", zap.Int("invocations", len(invs)))
+		res, err := c.client.ExecuteBatch(batch.NewRequest(ctx, invs, batch.WithDelegations(prfs...)))
 		if err != nil {
 			c.logger.Error("failed to execute accept batch", zap.Error(err))
 			return results, metas, fmt.Errorf("executing accept batch: %w", err)
@@ -238,7 +245,7 @@ func (c *Client) AcceptBatch(ctx context.Context, reqs []*AcceptRequest, proofSt
 		metas = append(metas, res.Metadata())
 		// The client guarantees a receipt for every invocation it sent.
 		for i := start; i < end; i++ {
-			results[i].Receipt, _ = res.Receipt(invs[i].Task().Link())
+			results[i].Receipt, _ = res.Receipt(invs[i-start].Task().Link())
 		}
 	}
 	return results, metas, nil
@@ -269,7 +276,7 @@ func (c *Client) acceptProofs(ctx context.Context, proofStore ucanlib.ProofStore
 	return prfs, prfLinks, nil
 }
 
-// acceptInvocation mints one /blob/accept invocation. Single and batched
+// acceptInvocation issues one /blob/accept invocation. Single and batched
 // accepts share it so their invocations — and therefore the task CIDs the
 // client polls receipts for — are identical.
 func (c *Client) acceptInvocation(req *AcceptRequest, options []invocation.Option, prfLinks []cid.Cid) (ucan.Invocation, error) {

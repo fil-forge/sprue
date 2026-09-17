@@ -309,15 +309,16 @@ func acceptOnProvider(
 		log := log.With(
 			zap.Stringer("space", put.space),
 			zap.String("digest", digestutil.Format(put.blob.Digest)),
-			zap.Stringer("accept", res.Invocation.Task().Link()),
 		)
 		if res.Receipt == nil {
-			// The request carrying this invocation failed before the node
-			// answered it. Nothing attests the blob was accepted, so it is not
-			// registered; the deliverer sees a missing receipt and can retry.
+			// The request carrying this accept never completed — it failed, or
+			// an earlier chunk did and this one was never issued. Nothing
+			// attests the blob was accepted, so it is not registered; the
+			// deliverer sees a missing receipt and can retry.
 			log.Error("blob accept was not executed")
 			continue
 		}
+		log = log.With(zap.Stringer("accept", res.Invocation.Task().Link()))
 		if res.Receipt.Out().IsErr() {
 			_, x := res.Receipt.Out().Unpack()
 			var model edm.ErrorModel

@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	blobcmds "github.com/fil-forge/libforge/commands/blob"
 	"github.com/fil-forge/libforge/identity"
@@ -32,7 +33,7 @@ import (
 //
 // The invocation must outlive the whole batch. A node validates each
 // invocation immediately before executing it, one at a time, so the last of a
-// large batch is checked long after the first was minted — and any clock skew
+// large batch is checked long after the first was issued — and any clock skew
 // between the two hosts comes out of the same budget. The 30-second default
 // does not survive that.
 //
@@ -66,18 +67,18 @@ func TestAcceptInvocationExpiry(t *testing.T) {
 	require.NoError(t, err)
 
 	// The invariant is a relationship, not a number: every invocation of a
-	// batch is minted before the request goes out, so the last one is
+	// batch is issued before the request goes out, so the last one is
 	// validated as the request ends. An expiry that does not outlast a
 	// full-length request lets the tail of a batch age out mid-flight.
 	require.NotNil(t, inv.Expiration(), "an accept must carry an expiry, not run forever")
 	require.Greater(t, int64(*inv.Expiration()), int64(ucan.Now())+int64(piriRequestTimeout.Seconds()),
 		"accept expiry must outlast a request that runs to the timeout")
 
-	// Minted again — a different envelope, the same task.
+	// Issued again — a different envelope, the same task.
 	again, _, err := client.AcceptInvocation(ctx, req, proofStore, invocation.WithNoNonce())
 	require.NoError(t, err)
 	require.Equal(t, inv.Task().Link(), again.Task().Link(),
-		"the accept task link must not depend on when the invocation was minted")
+		"the accept task link must not depend on when the invocation was issued")
 }
 
 // acceptingNode is a storage node that answers /blob/accept, counting the
@@ -185,6 +186,52 @@ func TestAcceptBatchChunks(t *testing.T) {
 		require.NotNil(t, res.Receipt, "accept %d of %d lost its receipt", i, len(reqs))
 		require.Equal(t, res.Invocation.Task().Link(), res.Receipt.Ran())
 	}
+}
+
+// TestAcceptBatchIssuesEachChunkLate pins when invocations are issued. An
+// expiry runs from the moment of issuing, so issuing the whole batch up front
+// would have a later chunk spend its life queued behind the requests ahead of
+// it — each request inside the timeout, yet the tail expired on arrival. The
+// node records the expiry it is handed, and a chunk issued after the previous
+// request finished carries a later one.
+func TestAcceptBatchIssuesEachChunkLate(t *testing.T) {
+	uploadService := testutil.WebService
+	node := testutil.RandomIssuer(t)
+	accepting := newAcceptingNode(t, node, uploadService)
+
+	// Hold the first request open past a clock tick, so a chunk issued after
+	// it is distinguishable from one issued before it.
+	slow := &delayFirst{inner: http.DefaultTransport, delay: 1100 * time.Millisecond}
+	c, err := New(accepting.url, node.DID(), uploadService, zaptest.NewLogger(t),
+		client.WithHTTPClient(&http.Client{Transport: slow}))
+	require.NoError(t, err)
+
+	acceptProof := testutil.Must(
+		blobcmds.Accept.Delegate(node, uploadService.DID(), node.DID(), delegation.WithNoExpiration()))(t)
+	proofs := ucanlib.NewContainerProofStore(container.New(container.WithDelegations(acceptProof)))
+
+	reqs := acceptRequests(t, maxAcceptBatch+1)
+	results, _, err := c.AcceptBatch(t.Context(), reqs, proofs, invocation.WithNoNonce())
+	require.NoError(t, err)
+
+	first := *results[0].Invocation.Expiration()
+	last := *results[len(results)-1].Invocation.Expiration()
+	require.Greater(t, int64(last), int64(first),
+		"the second chunk must be issued after the first request, not alongside it")
+}
+
+// delayFirst holds the first request open, leaving later ones untouched.
+type delayFirst struct {
+	inner http.RoundTripper
+	delay time.Duration
+	calls atomic.Int64
+}
+
+func (d *delayFirst) RoundTrip(r *http.Request) (*http.Response, error) {
+	if d.calls.Add(1) == 1 {
+		time.Sleep(d.delay)
+	}
+	return d.inner.RoundTrip(r)
 }
 
 // TestAcceptBatchKeepsCompletedChunks pins that a chunk failing does not

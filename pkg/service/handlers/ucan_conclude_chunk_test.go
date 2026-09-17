@@ -37,7 +37,7 @@ func (r *recordingAgentStore) List(context.Context, cid.Cid, ...agent.ListOption
 	return store.Page[ucan.Container]{}, nil
 }
 
-// testInvocation mints a distinct invocation, so a container's
+// testInvocation issues a distinct invocation, so a container's
 // deduplication by link does not silently collapse the fixtures.
 func testInvocation(t *testing.T, n int) ucan.Invocation {
 	t.Helper()
