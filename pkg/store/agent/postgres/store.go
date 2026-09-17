@@ -21,9 +21,16 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/multiformats/go-multihash"
+	"golang.org/x/sync/errgroup"
 )
 
 const defaultListLimit = 1000
+
+// messageFetchConcurrency bounds the parallel object-store reads a batched
+// lookup makes, one per distinct agent message the tasks index into. Reads
+// are worth overlapping, and the limit keeps a large batch from swamping the
+// store.
+const messageFetchConcurrency = 16
 
 type Store struct {
 	pool       *pgxpool.Pool
@@ -65,6 +72,74 @@ func (s *Store) GetInvocation(ctx context.Context, task cid.Cid) (ucan.Invocatio
 		}
 	}
 	return nil, agent.ErrInvocationNotFound
+}
+
+// GetInvocations answers a batch of tasks with one index query and one
+// object-store read per distinct message the tasks were written in.
+func (s *Store) GetInvocations(ctx context.Context, tasks []cid.Cid) (map[cid.Cid]ucan.Invocation, error) {
+	found := make(map[cid.Cid]ucan.Invocation, len(tasks))
+	if len(tasks) == 0 {
+		return found, nil
+	}
+	wanted := make(map[cid.Cid]bool, len(tasks))
+	taskStrs := make([]string, 0, len(tasks))
+	for _, task := range tasks {
+		if wanted[task] {
+			continue
+		}
+		wanted[task] = true
+		taskStrs = append(taskStrs, task.String())
+	}
+
+	rows, err := s.pool.Query(ctx, `
+		SELECT DISTINCT message FROM agent_index WHERE kind = 'in' AND task = ANY($1)
+	`, taskStrs)
+	if err != nil {
+		return nil, fmt.Errorf("querying agent_index: %w", err)
+	}
+	defer rows.Close()
+
+	var msgRoots []cid.Cid
+	for rows.Next() {
+		var msgRootStr string
+		if err := rows.Scan(&msgRootStr); err != nil {
+			return nil, fmt.Errorf("scanning message: %w", err)
+		}
+		msgRoot, err := cid.Parse(msgRootStr)
+		if err != nil {
+			return nil, fmt.Errorf("parsing message root CID: %w", err)
+		}
+		msgRoots = append(msgRoots, msgRoot)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating messages: %w", err)
+	}
+
+	msgs := make([]*container.Container, len(msgRoots))
+	grp, gctx := errgroup.WithContext(ctx)
+	grp.SetLimit(messageFetchConcurrency)
+	for i, msgRoot := range msgRoots {
+		grp.Go(func() error {
+			ct, err := s.fetchMessage(gctx, msgRoot)
+			if err != nil {
+				return err
+			}
+			msgs[i] = ct
+			return nil
+		})
+	}
+	if err := grp.Wait(); err != nil {
+		return nil, err
+	}
+
+	for _, ct := range msgs {
+		for _, inv := range ct.Invocations() {
+			if task := inv.Task().Link(); wanted[task] {
+				found[task] = inv
+			}
+		}
+	}
+	return found, nil
 }
 
 func (s *Store) GetReceipt(ctx context.Context, task cid.Cid) (ucan.Receipt, error) {

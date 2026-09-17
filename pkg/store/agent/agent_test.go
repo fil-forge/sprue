@@ -115,6 +115,32 @@ func TestAgentStore(t *testing.T) {
 				require.ErrorIs(t, err, agent.ErrInvocationNotFound)
 			})
 
+			t.Run("gets invocations in one lookup", func(t *testing.T) {
+				// Three invocations across two messages: two share a message
+				// and the third has its own.
+				a, b, c := makeInvocation(t), makeInvocation(t), makeInvocation(t)
+				buildAndWrite(t, store, []ucan.Invocation{a, b}, nil)
+				buildAndWrite(t, store, []ucan.Invocation{c}, nil)
+				missing := testutil.RandomCID(t)
+
+				got, err := store.GetInvocations(t.Context(), []cid.Cid{
+					a.Task().Link(), missing, c.Task().Link(), b.Task().Link(),
+					a.Task().Link(), // a repeated task is looked up once
+				})
+				require.NoError(t, err)
+				require.Len(t, got, 3)
+				for _, inv := range []ucan.Invocation{a, b, c} {
+					require.Equal(t, inv.Link().String(), got[inv.Task().Link()].Link().String())
+				}
+				require.NotContains(t, got, missing, "a task with no invocation is absent, not an error")
+			})
+
+			t.Run("gets no invocations for no tasks", func(t *testing.T) {
+				got, err := store.GetInvocations(t.Context(), nil)
+				require.NoError(t, err)
+				require.Empty(t, got)
+			})
+
 			t.Run("gets a receipt", func(t *testing.T) {
 				inv := makeInvocation(t)
 				rcpt := makeReceipt(t, inv)

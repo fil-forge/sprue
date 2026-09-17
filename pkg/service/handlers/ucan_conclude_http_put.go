@@ -22,14 +22,7 @@ import (
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/ipfs/go-cid"
 	"go.uber.org/zap"
-	"golang.org/x/sync/errgroup"
 )
-
-// allocationLookupConcurrency bounds the parallel agent-store reads that
-// resolve each concluded put to its allocation. On the postgres backend every
-// read is an object-store GET, so a batch of them is worth overlapping; the
-// limit keeps a large batch from swamping the store.
-const allocationLookupConcurrency = 16
 
 // containerTokenBudget leaves headroom under container.MaxTokens for the tokens
 // the server wraps around ours — the conclusion's own receipt, and whatever a
@@ -122,58 +115,62 @@ func NewHTTPPutConcludeHandler(
 // resolveAllocations turns each delivered put receipt into the allocation it
 // fulfils. The allocate invocation names the provider (its subject) and
 // carries the space, blob and cause; without it there is no acceptance to
-// make, so a failure here fails the conclusion.
+// make, so a failure here fails the conclusion. The allocations are fetched
+// from the agent store in one lookup, so a batch costs one round trip rather
+// than one per blob.
 func resolveAllocations(ctx context.Context, agentStore agent.Store, conclusions []Conclusion, log *zap.Logger) ([]*concludedPut, error) {
-	puts := make([]*concludedPut, len(conclusions))
-	grp, ctx := errgroup.WithContext(ctx)
-	grp.SetLimit(allocationLookupConcurrency)
+	allocTasks := make([]cid.Cid, len(conclusions))
 	for i, conclusion := range conclusions {
-		grp.Go(func() error {
-			log := log.With(zap.Stringer("ran", conclusion.Receipt.Ran()))
-
-			var putArgs httpcmds.PutArguments
-			if err := putArgs.UnmarshalCBOR(bytes.NewReader(conclusion.Invocation.ArgumentsBytes())); err != nil {
-				log.Error("failed to unmarshal HTTP PUT arguments", zap.Error(err))
-				return fmt.Errorf("unmarshaling HTTP PUT arguments: %w", err)
-			}
-
-			allocTaskLink := putArgs.Destination.Task
-			log = log.With(zap.Stringer("allocation", allocTaskLink))
-
-			allocInv, err := agentStore.GetInvocation(ctx, allocTaskLink)
-			if err != nil {
-				log.Error("failed to get allocation invocation", zap.Error(err))
-				return fmt.Errorf("getting allocation invocation: %w", err)
-			}
-
-			var allocArgs blobcmds.AllocateArguments
-			if err := allocArgs.UnmarshalCBOR(bytes.NewReader(allocInv.ArgumentsBytes())); err != nil {
-				log.Error("failed to unmarshal allocate arguments", zap.Error(err))
-				return fmt.Errorf("unmarshaling allocate arguments: %w", err)
-			}
-
-			puts[i] = &concludedPut{
-				putInv: conclusion.Invocation,
-				// The allocate invocation's subject and audience are both the
-				// storage provider (its proofs are rooted at the provider).
-				// The space travels in the allocate arguments rather than on
-				// the subject.
-				provider: allocInv.Subject(),
-				space:    allocArgs.Space,
-				blob:     allocArgs.Blob,
-				cause:    allocArgs.Cause,
-				acceptReq: &piriclient.AcceptRequest{
-					Space:  allocArgs.Space,
-					Digest: allocArgs.Blob.Digest,
-					Size:   allocArgs.Blob.Size,
-					Put:    conclusion.Invocation.Task().Link(),
-				},
-			}
-			return nil
-		})
+		var putArgs httpcmds.PutArguments
+		if err := putArgs.UnmarshalCBOR(bytes.NewReader(conclusion.Invocation.ArgumentsBytes())); err != nil {
+			log.Error("failed to unmarshal HTTP PUT arguments",
+				zap.Stringer("ran", conclusion.Receipt.Ran()), zap.Error(err))
+			return nil, fmt.Errorf("unmarshaling HTTP PUT arguments: %w", err)
+		}
+		allocTasks[i] = putArgs.Destination.Task
 	}
-	if err := grp.Wait(); err != nil {
-		return nil, err
+
+	allocInvs, err := agentStore.GetInvocations(ctx, allocTasks)
+	if err != nil {
+		log.Error("failed to get allocation invocations", zap.Error(err))
+		return nil, fmt.Errorf("getting allocation invocations: %w", err)
+	}
+
+	puts := make([]*concludedPut, len(conclusions))
+	for i, conclusion := range conclusions {
+		log := log.With(
+			zap.Stringer("ran", conclusion.Receipt.Ran()),
+			zap.Stringer("allocation", allocTasks[i]),
+		)
+		allocInv, ok := allocInvs[allocTasks[i]]
+		if !ok {
+			log.Error("failed to get allocation invocation", zap.Error(agent.ErrInvocationNotFound))
+			return nil, fmt.Errorf("getting allocation invocation: %w", agent.ErrInvocationNotFound)
+		}
+
+		var allocArgs blobcmds.AllocateArguments
+		if err := allocArgs.UnmarshalCBOR(bytes.NewReader(allocInv.ArgumentsBytes())); err != nil {
+			log.Error("failed to unmarshal allocate arguments", zap.Error(err))
+			return nil, fmt.Errorf("unmarshaling allocate arguments: %w", err)
+		}
+
+		puts[i] = &concludedPut{
+			putInv: conclusion.Invocation,
+			// The allocate invocation's subject and audience are both the
+			// storage provider (its proofs are rooted at the provider).
+			// The space travels in the allocate arguments rather than on
+			// the subject.
+			provider: allocInv.Subject(),
+			space:    allocArgs.Space,
+			blob:     allocArgs.Blob,
+			cause:    allocArgs.Cause,
+			acceptReq: &piriclient.AcceptRequest{
+				Space:  allocArgs.Space,
+				Digest: allocArgs.Blob.Digest,
+				Size:   allocArgs.Blob.Size,
+				Put:    conclusion.Invocation.Task().Link(),
+			},
+		}
 	}
 	return puts, nil
 }

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"net/url"
 	"testing"
 
@@ -18,10 +19,12 @@ import (
 	routing_policy_store "github.com/fil-forge/sprue/pkg/store/routing_policy/memory"
 	spacediff_store "github.com/fil-forge/sprue/pkg/store/space_diff/memory"
 	storage_provider_store "github.com/fil-forge/sprue/pkg/store/storage_provider/memory"
+	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/container"
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/fil-forge/ucantone/ucan/promise"
 	"github.com/fil-forge/ucantone/ucan/receipt"
+	"github.com/ipfs/go-cid"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
@@ -234,4 +237,48 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 		require.Equal(t, blobAddTaskLink, rec.Cause)
 		require.Equal(t, blob.Size, rec.Blob.Size)
 	})
+}
+
+// countingAgentStore counts how the completion path reads the agent store.
+type countingAgentStore struct {
+	agent.Store
+	single, batch int
+}
+
+func (c *countingAgentStore) GetInvocation(ctx context.Context, task cid.Cid) (ucan.Invocation, error) {
+	c.single++
+	return c.Store.GetInvocation(ctx, task)
+}
+
+func (c *countingAgentStore) GetInvocations(ctx context.Context, tasks []cid.Cid) (map[cid.Cid]ucan.Invocation, error) {
+	c.batch++
+	return c.Store.GetInvocations(ctx, tasks)
+}
+
+// TestResolveAllocationsLooksUpOnce pins that a batch of concluded puts costs
+// one agent-store lookup for its allocations rather than one per blob, and
+// that the allocations come back in delivery order.
+func TestResolveAllocationsLooksUpOnce(t *testing.T) {
+	logger := zaptest.NewLogger(t)
+	ctx := t.Context()
+	uploadService := testutil.WebService
+	storageProvider := testutil.RandomIssuer(t)
+	deps := newHTTPPutDeps(t, piriclient.NewProvider(uploadService, logger), logger)
+
+	parked := parkBlobs(t, ctx, deps, uploadService, storageProvider, testutil.RandomIssuer(t).DID(), testutil.RandomCID(t), 5)
+	conclusions := make([]Conclusion, len(parked))
+	for i, p := range parked {
+		conclusions[i] = p.conc
+	}
+
+	counting := &countingAgentStore{Store: deps.agentStore}
+	puts, err := resolveAllocations(ctx, counting, conclusions, logger)
+	require.NoError(t, err)
+	require.Equal(t, 1, counting.batch, "one lookup for the whole batch")
+	require.Zero(t, counting.single, "no per-blob lookups")
+	require.Len(t, puts, len(parked))
+	for i, put := range puts {
+		require.Equal(t, parked[i].digest.String(), put.blob.Digest.String(), "put %d resolved to another blob's allocation", i)
+		require.Equal(t, storageProvider.DID(), put.provider)
+	}
 }

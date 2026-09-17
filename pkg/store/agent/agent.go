@@ -59,6 +59,11 @@ type Store interface {
 	Write(ctx context.Context, message ucan.Container, index []IndexEntry) error
 	// GetInvocation retrieves an invocation by its task CID. May return [ErrInvocationNotFound].
 	GetInvocation(ctx context.Context, task cid.Cid) (ucan.Invocation, error)
+	// GetInvocations retrieves invocations by task CID in one lookup, so a
+	// caller with many tasks does not pay a round trip per task. The result
+	// holds every invocation found, keyed by task; a task with no invocation
+	// is absent rather than an error.
+	GetInvocations(ctx context.Context, tasks []cid.Cid) (map[cid.Cid]ucan.Invocation, error)
 	// GetReceipt retrieves a receipt by its task CID. May return [ErrReceiptNotFound].
 	GetReceipt(ctx context.Context, task cid.Cid) (ucan.Receipt, error)
 	// List agent messages with invocations and receipts relevant to the task CID.

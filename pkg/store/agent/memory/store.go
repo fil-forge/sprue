@@ -37,18 +37,43 @@ func (s *Store) GetInvocation(ctx context.Context, task cid.Cid) (ucan.Invocatio
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
+	inv, ok := s.invocation(task)
+	if !ok {
+		return nil, agent.ErrInvocationNotFound
+	}
+	return inv, nil
+}
+
+func (s *Store) GetInvocations(ctx context.Context, tasks []cid.Cid) (map[cid.Cid]ucan.Invocation, error) {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+
+	found := make(map[cid.Cid]ucan.Invocation, len(tasks))
+	for _, task := range tasks {
+		if _, ok := found[task]; ok {
+			continue
+		}
+		if inv, ok := s.invocation(task); ok {
+			found[task] = inv
+		}
+	}
+	return found, nil
+}
+
+// invocation looks a task up in the index; the caller holds the lock.
+func (s *Store) invocation(task cid.Cid) (ucan.Invocation, bool) {
 	key := fmt.Sprintf("/%s/invocation/", task)
 	records, ok := s.index[key]
 	if !ok || len(records) == 0 {
-		return nil, agent.ErrInvocationNotFound
+		return nil, false
 	}
 	ct := s.store[records[0]]
 	for _, inv := range ct.Invocations() {
 		if inv.Task().Link() == task {
-			return inv, nil
+			return inv, true
 		}
 	}
-	return nil, agent.ErrInvocationNotFound
+	return nil, false
 }
 
 func (s *Store) GetReceipt(ctx context.Context, task cid.Cid) (ucan.Receipt, error) {

@@ -29,6 +29,10 @@ func (r *recordingAgentStore) GetInvocation(context.Context, cid.Cid) (ucan.Invo
 	return nil, agent.ErrInvocationNotFound
 }
 
+func (r *recordingAgentStore) GetInvocations(context.Context, []cid.Cid) (map[cid.Cid]ucan.Invocation, error) {
+	return map[cid.Cid]ucan.Invocation{}, nil
+}
+
 func (r *recordingAgentStore) GetReceipt(context.Context, cid.Cid) (ucan.Receipt, error) {
 	return nil, agent.ErrReceiptNotFound
 }
