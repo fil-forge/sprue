@@ -293,15 +293,34 @@ func groupAcceptances(results []piriclient.AcceptResult, metas []ucan.Container)
 	return acceptances
 }
 
+// acceptResult decodes what a successful accept receipt reports and checks it
+// is an acceptance anyone can use: one that names the location commitment the
+// deliverer needs and the PDP task it promises. A node answering success with
+// anything less has not accepted the blob, whatever its receipt says.
+func acceptResult(rcpt ucan.Receipt) (*blobcmds.AcceptOK, error) {
+	out, _ := rcpt.Out().Unpack()
+	var acceptOK blobcmds.AcceptOK
+	if err := acceptOK.UnmarshalCBOR(bytes.NewReader(out)); err != nil {
+		return nil, fmt.Errorf("decoding accept result: %w", err)
+	}
+	if !acceptOK.Site.Defined() {
+		return nil, fmt.Errorf("accept result names no location commitment")
+	}
+	if !acceptOK.PDP.Task.Defined() {
+		return nil, fmt.Errorf("accept result names no PDP task")
+	}
+	return &acceptOK, nil
+}
+
 // attachedLinks reports what an accept receipt names: its location commitment
-// and the PDP task it promises. A failure receipt names nothing.
+// and the PDP task it promises. A failure receipt, or a success whose result
+// is unusable, names nothing.
 func attachedLinks(rcpt ucan.Receipt) []cid.Cid {
 	if rcpt.Out().IsErr() {
 		return nil
 	}
-	out, _ := rcpt.Out().Unpack()
-	var acceptOK blobcmds.AcceptOK
-	if err := acceptOK.UnmarshalCBOR(bytes.NewReader(out)); err != nil {
+	acceptOK, err := acceptResult(rcpt)
+	if err != nil {
 		return nil
 	}
 	return []cid.Cid{acceptOK.Site, acceptOK.PDP.Task}
@@ -348,8 +367,9 @@ func writeAgentMessages(ctx context.Context, agentStore agent.Store, acceptances
 // than polling for it.
 //
 // A blob whose acceptance failed is reported by its own failure receipt and
-// is not registered; that is not an error for the rest of the batch. An error
-// means the provider could not be reached at all.
+// is not registered, as is one whose success result does not decode as an
+// acceptance; neither is an error for the rest of the batch. An error means
+// the provider could not be reached at all.
 func acceptOnProvider(
 	ctx context.Context,
 	router *routing.Service,
@@ -440,8 +460,16 @@ func acceptOnProvider(
 			log.Error("failed execution of blob accept", zap.String("name", model.ErrorName), zap.Error(model))
 			continue
 		}
-		log.Debug("accept success")
-		err := blobRegistry.Register(ctx, put.space, put.blob, put.cause)
+		// A success receipt whose result is not a usable acceptance registers
+		// nothing: the node has not shown where the blob is. The receipt still
+		// goes back to the deliverer, who fails to unpack it the same way.
+		acceptOK, err := acceptResult(res.Receipt)
+		if err != nil {
+			log.Error("malformed blob accept result", zap.Error(err))
+			continue
+		}
+		log.Debug("accept success", zap.Stringer("site", acceptOK.Site))
+		err = blobRegistry.Register(ctx, put.space, put.blob, put.cause)
 		// it's ok if there's already a registration of this blob in this space
 		if err != nil && !errors.Is(err, blobregistry.ErrEntryExists) {
 			return accInvs, accRcpts, err

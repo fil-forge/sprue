@@ -54,6 +54,9 @@ type countingPiri struct {
 	accepts  atomic.Int64
 	// reject fails the accept of any digest whose string form is a key.
 	reject map[string]bool
+	// malformed holds, per digest, the success result the node answers
+	// with instead of an AcceptOK.
+	malformed map[string]datamodel.Map
 
 	// acceptTasks records the task link of every accept executed, so a test
 	// can look the stored receipts up the way a polling deliverer would.
@@ -73,7 +76,7 @@ func (p *countingPiri) acceptTask(t *testing.T, digest multihash.Multihash) cid.
 
 func newCountingPiri(t *testing.T, storageProvider ucan.Issuer, uploadService identity.Identity) *countingPiri {
 	t.Helper()
-	p := &countingPiri{reject: map[string]bool{}, acceptTasks: map[string]cid.Cid{}}
+	p := &countingPiri{reject: map[string]bool{}, malformed: map[string]datamodel.Map{}, acceptTasks: map[string]cid.Cid{}}
 
 	srv := server.NewHTTP(
 		storageProvider,
@@ -93,6 +96,15 @@ func newCountingPiri(t *testing.T, storageProvider ucan.Issuer, uploadService id
 		p.mu.Unlock()
 		if p.reject[string(args.Blob.Digest)] {
 			return res.SetFailure(errors.New("BlobNotFound", "blob not delivered"))
+		}
+		// A node reporting success with a result that is not an acceptance:
+		// issued directly, since the typed response only emits an AcceptOK.
+		if payload, ok := p.malformed[string(args.Blob.Digest)]; ok {
+			rcpt, err := receipt.IssueOK(storageProvider, req.Task().Link(), payload)
+			if err != nil {
+				return err
+			}
+			return res.SetReceipt(rcpt)
 		}
 		// A real node attaches its location commitment and the PDP accept it
 		// promises to the receipt, and the conclude response must carry both
@@ -500,4 +512,48 @@ func TestHTTPPutConcludeKeepsCommitmentsRetrievableByAcceptTask(t *testing.T) {
 		require.True(t, commitment, "blob %d of %d: accept receipt retrievable without the location commitment it names (%s)", i, blobs, acceptOK.Site)
 		require.True(t, pdp, "blob %d of %d: accept receipt retrievable without the PDP accept it promises (%s)", i, blobs, acceptOK.PDP.Task)
 	}
+}
+
+// A success receipt is only an acceptance if its result says where the blob
+// is. A node that reports success with a result that does not decode, or
+// decodes to no location commitment, has not accepted the blob and must not
+// get it registered; the rest of the batch is unaffected, and the deliverer
+// gets the receipt to judge for itself.
+func TestHTTPPutConcludeRegistersOnlyUsableAcceptances(t *testing.T) {
+	logger := zaptest.NewLogger(t)
+	ctx := t.Context()
+	uploadService := testutil.WebService
+
+	sp := testutil.RandomIssuer(t)
+	piri := newCountingPiri(t, sp, uploadService)
+	deps := newHTTPPutDeps(t, piriclient.NewProvider(uploadService, logger), logger)
+	require.NoError(t, deps.spStore.Put(ctx, sp.DID(), *piri.url, 100, nil, testutil.ProviderProofs(t, sp, uploadService)))
+
+	space := testutil.RandomIssuer(t)
+	provisionConcludeSpace(t, ctx, deps, uploadService, space.DID())
+	cause := testutil.RandomCID(t)
+	parked := parkBlobs(t, ctx, deps, uploadService, sp, space.DID(), cause, 3)
+
+	// Blob 1's result is not an AcceptOK at all; blob 2's decodes to one that
+	// names nothing.
+	piri.malformed[string(parked[1].digest)] = datamodel.Map{"site": "nowhere in particular"}
+	piri.malformed[string(parked[2].digest)] = datamodel.Map{}
+
+	conclusions := make([]Conclusion, len(parked))
+	for i, p := range parked {
+		conclusions[i] = p.conc
+	}
+	meta, err := deps.ch.Handler(ctx, conclusions)
+	require.NoError(t, err)
+	require.EqualValues(t, 3, piri.accepts.Load(), "every accept ran")
+
+	_, err = deps.blobReg.Get(ctx, space.DID(), parked[0].digest)
+	require.NoError(t, err, "the blob with a usable acceptance is registered")
+	for _, i := range []int{1, 2} {
+		_, err := deps.blobReg.Get(ctx, space.DID(), parked[i].digest)
+		require.Error(t, err, "blob %d reported success without a usable result and must not be registered", i)
+	}
+
+	// The deliverer still gets every receipt, the unusable ones included.
+	require.Len(t, meta.Receipts(), 3)
 }
