@@ -175,12 +175,12 @@ func (c *Client) Accept(ctx context.Context, req *AcceptRequest, proofStore ucan
 // nonce alone.
 const acceptInvocationTTL = ucan.UnixTimestamp(30 * 60)
 
-// MaxAcceptBatch caps the accepts sent in one request. A UCAN container holds
+// maxAcceptBatch caps the accepts sent in one request. A UCAN container holds
 // at most 8192 tokens, and each accept costs one receipt plus the two
 // invocations piri attaches to it (the location claim and the PDP promise),
 // so a node's response is ~3 tokens per accept. 1000 leaves ample headroom
 // and keeps any single request's latency bounded.
-const MaxAcceptBatch = 1000
+const maxAcceptBatch = 1000
 
 // AcceptResult pairs an accept request with the invocation sent for it and
 // the receipt the node returned. Receipt is nil only when the request
@@ -192,7 +192,7 @@ type AcceptResult struct {
 }
 
 // AcceptBatch sends many /blob/accept invocations to the piri node, in as few
-// requests as MaxAcceptBatch allows, and returns one result per request in
+// requests as maxAcceptBatch allows, and returns one result per request in
 // the order given along with the containers the node responded with (its
 // location claims and PDP promises travel there).
 //
@@ -227,8 +227,8 @@ func (c *Client) AcceptBatch(ctx context.Context, reqs []*AcceptRequest, proofSt
 	// acceptances are real and the caller must still persist and register
 	// them, or the node holds blobs sprue has no record of.
 	var metas []ucan.Container
-	for start := 0; start < len(invs); start += MaxAcceptBatch {
-		end := min(start+MaxAcceptBatch, len(invs))
+	for start := 0; start < len(invs); start += maxAcceptBatch {
+		end := min(start+maxAcceptBatch, len(invs))
 		c.logger.Debug("executing accept batch", zap.Int("invocations", end-start))
 		res, err := c.client.ExecuteBatch(batch.NewRequest(ctx, invs[start:end], batch.WithDelegations(prfs...)))
 		if err != nil {

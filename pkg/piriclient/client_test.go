@@ -1,17 +1,28 @@
-package piriclient_test
+package piriclient
 
 import (
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
+	"sync/atomic"
 	"testing"
 
 	blobcmds "github.com/fil-forge/libforge/commands/blob"
+	"github.com/fil-forge/libforge/identity"
 	ucanlib "github.com/fil-forge/libforge/ucan"
 	"github.com/fil-forge/sprue/internal/testutil"
-	"github.com/fil-forge/sprue/pkg/piriclient"
+	"github.com/fil-forge/ucantone/binding"
+	"github.com/fil-forge/ucantone/client"
+	"github.com/fil-forge/ucantone/did/key"
+	"github.com/fil-forge/ucantone/did/resolver"
+	"github.com/fil-forge/ucantone/server"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/container"
 	"github.com/fil-forge/ucantone/ucan/delegation"
 	"github.com/fil-forge/ucantone/ucan/invocation"
+	"github.com/fil-forge/ucantone/ucan/promise"
+	"github.com/fil-forge/ucantone/validator"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 )
@@ -35,7 +46,7 @@ func TestAcceptInvocationExpiry(t *testing.T) {
 	storageProvider := testutil.RandomIssuer(t)
 
 	endpoint := testutil.Must(url.Parse("https://piri.example"))(t)
-	client, err := piriclient.New(endpoint, storageProvider.DID(), uploadService, zaptest.NewLogger(t))
+	client, err := New(endpoint, storageProvider.DID(), uploadService, zaptest.NewLogger(t))
 	require.NoError(t, err)
 
 	// The provider's registration delegation, as the router hands it over.
@@ -44,7 +55,7 @@ func TestAcceptInvocationExpiry(t *testing.T) {
 			delegation.WithNoExpiration()))(t)
 	proofStore := ucanlib.NewContainerProofStore(container.New(container.WithDelegations(acceptProof)))
 
-	req := &piriclient.AcceptRequest{
+	req := &AcceptRequest{
 		Space:  testutil.RandomDID(t),
 		Digest: testutil.RandomMultihash(t),
 		Size:   1024,
@@ -65,4 +76,134 @@ func TestAcceptInvocationExpiry(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, inv.Task().Link(), again.Task().Link(),
 		"the accept task link must not depend on when the invocation was minted")
+}
+
+// acceptingNode is a storage node that answers /blob/accept, counting the
+// requests it receives so a test can tell one batched request from several.
+type acceptingNode struct {
+	url      *url.URL
+	requests atomic.Int64
+}
+
+func newAcceptingNode(t *testing.T, node ucan.Issuer, uploadService identity.Identity) *acceptingNode {
+	t.Helper()
+	n := &acceptingNode{}
+
+	srv := server.NewHTTP(node,
+		server.WithValidationOptions(validator.WithDIDResolver(resolver.Tiered{
+			resolver.WellKnown{uploadService.DID(): testutil.Must(uploadService.DIDDocument())(t)},
+			key.Resolver,
+		})),
+	)
+	srv.Handle(blobcmds.Accept.Command, blobcmds.Accept.Handler(func(
+		req *binding.Request[*blobcmds.AcceptArguments],
+		res *binding.Response[*blobcmds.AcceptOK],
+	) error {
+		return res.SetSuccess(&blobcmds.AcceptOK{
+			Site: testutil.RandomCID(t),
+			PDP:  promise.AwaitOK{Task: testutil.RandomCID(t)},
+		})
+	}))
+
+	httpSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n.requests.Add(1)
+		srv.ServeHTTP(w, r)
+	}))
+	t.Cleanup(httpSrv.Close)
+	n.url = testutil.Must(url.Parse(httpSrv.URL))(t)
+	return n
+}
+
+// failAfter fails every request after the first n, so a test can break a
+// specific chunk of a batch rather than the whole call.
+type failAfter struct {
+	inner http.RoundTripper
+	n     int64
+	calls atomic.Int64
+}
+
+func (f *failAfter) RoundTrip(r *http.Request) (*http.Response, error) {
+	if f.calls.Add(1) > f.n {
+		return nil, fmt.Errorf("node unreachable")
+	}
+	return f.inner.RoundTrip(r)
+}
+
+// acceptFixture is the common setup: a node, the provider proofs it granted
+// the upload service, and a client pointed at it.
+func acceptFixture(t *testing.T, transport http.RoundTripper) (*Client, ucanlib.ProofStore, *acceptingNode) {
+	t.Helper()
+	uploadService := testutil.WebService
+	node := testutil.RandomIssuer(t)
+	accepting := newAcceptingNode(t, node, uploadService)
+
+	opts := []client.HTTPOption{}
+	if transport != nil {
+		opts = append(opts, client.WithHTTPClient(&http.Client{Transport: transport}))
+	}
+	c, err := New(accepting.url, node.DID(), uploadService, zaptest.NewLogger(t), opts...)
+	require.NoError(t, err)
+
+	acceptProof := testutil.Must(
+		blobcmds.Accept.Delegate(node, uploadService.DID(), node.DID(), delegation.WithNoExpiration()))(t)
+	store := ucanlib.NewContainerProofStore(container.New(container.WithDelegations(acceptProof)))
+	return c, store, accepting
+}
+
+func acceptRequests(t *testing.T, n int) []*AcceptRequest {
+	t.Helper()
+	reqs := make([]*AcceptRequest, n)
+	for i := range reqs {
+		reqs[i] = &AcceptRequest{
+			Space:  testutil.RandomDID(t),
+			Digest: testutil.RandomMultihash(t),
+			Size:   1024,
+			Put:    testutil.RandomCID(t),
+		}
+	}
+	return reqs
+}
+
+// TestAcceptBatchChunks pins the chunking boundary: more accepts than fit in
+// one request are split across several, and every accept still comes back
+// with its own receipt, in the order it was asked for.
+func TestAcceptBatchChunks(t *testing.T) {
+	c, proofs, node := acceptFixture(t, nil)
+
+	// One past the boundary, so the last chunk is a partial one.
+	reqs := acceptRequests(t, maxAcceptBatch+1)
+	results, metas, err := c.AcceptBatch(t.Context(), reqs, proofs, invocation.WithNoNonce())
+	require.NoError(t, err)
+
+	require.EqualValues(t, 2, node.requests.Load(), "one past the cap must split into exactly two requests")
+	require.Len(t, metas, 2)
+	require.Len(t, results, len(reqs))
+	for i, res := range results {
+		require.Same(t, reqs[i], res.Request, "results must stay in the order asked for")
+		require.NotNil(t, res.Receipt, "accept %d of %d lost its receipt", i, len(reqs))
+		require.Equal(t, res.Invocation.Task().Link(), res.Receipt.Ran())
+	}
+}
+
+// TestAcceptBatchKeepsCompletedChunks pins that a chunk failing does not
+// discard the ones before it. Those accepts have already run on the node, so
+// losing them here would leave it holding blobs the upload service has no
+// record of.
+func TestAcceptBatchKeepsCompletedChunks(t *testing.T) {
+	c, proofs, _ := acceptFixture(t, &failAfter{inner: http.DefaultTransport, n: 1})
+
+	reqs := acceptRequests(t, maxAcceptBatch+1)
+	results, metas, err := c.AcceptBatch(t.Context(), reqs, proofs, invocation.WithNoNonce())
+
+	require.Error(t, err, "the second chunk failed, so the call reports an error")
+	require.Len(t, metas, 1, "the completed chunk's response is kept")
+	require.Len(t, results, len(reqs), "every request still has a result slot")
+
+	// The first chunk ran and must be preserved; the rest never did.
+	for i := 0; i < maxAcceptBatch; i++ {
+		require.NotNil(t, results[i].Receipt, "completed accept %d was discarded", i)
+	}
+	for i := maxAcceptBatch; i < len(reqs); i++ {
+		require.Nil(t, results[i].Receipt, "accept %d never ran, so it has no receipt", i)
+	}
 }
