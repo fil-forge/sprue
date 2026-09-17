@@ -65,11 +65,13 @@ func TestAcceptInvocationExpiry(t *testing.T) {
 	inv, _, err := client.AcceptInvocation(ctx, req, proofStore, invocation.WithNoNonce())
 	require.NoError(t, err)
 
-	// Comfortably beyond the 30s default, so a long batch cannot age out
-	// mid-flight.
+	// The invariant is a relationship, not a number: every invocation of a
+	// batch is minted before the request goes out, so the last one is
+	// validated as the request ends. An expiry that does not outlast a
+	// full-length request lets the tail of a batch age out mid-flight.
 	require.NotNil(t, inv.Expiration(), "an accept must carry an expiry, not run forever")
-	require.Greater(t, int64(*inv.Expiration()), int64(ucan.Now())+20*60,
-		"accept expiry must outlast a whole batch, not a single call")
+	require.Greater(t, int64(*inv.Expiration()), int64(ucan.Now())+int64(piriRequestTimeout.Seconds()),
+		"accept expiry must outlast a request that runs to the timeout")
 
 	// Minted again — a different envelope, the same task.
 	again, _, err := client.AcceptInvocation(ctx, req, proofStore, invocation.WithNoNonce())

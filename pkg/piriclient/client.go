@@ -165,15 +165,15 @@ func (c *Client) Accept(ctx context.Context, req *AcceptRequest, proofStore ucan
 	return acceptOK, inv, rcpt, meta, nil
 }
 
-// acceptInvocationTTL is how long an accept invocation stays valid. The
-// 30-second default is a poor fit for a batch: the node validates each
-// invocation immediately before executing it, one at a time, so the last of a
-// large batch is checked long after the first was minted, and any clock skew
-// between the two hosts comes out of the same budget. This is sized to
-// outlast a whole batch rather than a single call; it does not affect the
-// accept's task link, which is derived from subject, command, arguments and
-// nonce alone.
-const acceptInvocationTTL = ucan.UnixTimestamp(30 * 60)
+// acceptInvocationTTL is how long (in seconds) an accept invocation stays
+// valid. It must outlast a whole request, not a single call: every invocation
+// of a batch is minted before the request is sent, the node validates each one
+// immediately before executing it, and so the last is checked once the request
+// is nearly over — which is why the 30-second default cannot serve a batch.
+// It therefore exceeds piriRequestTimeout, with the remainder absorbing clock
+// skew between the two hosts. It does not affect the accept's task link, which
+// is derived from subject, command, arguments and nonce alone.
+const acceptInvocationTTL = 5 * 60
 
 // maxAcceptBatch caps the accepts sent in one request. A UCAN container holds
 // at most 8192 tokens, and each accept costs one receipt plus the two

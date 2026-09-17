@@ -17,9 +17,13 @@ import (
 // never answers hold a request open forever.
 const (
 	maxIdleConnsPerPiri = 64
-	// Generous: a batched accept makes the node do per-blob work (location
-	// claim, IPNI advertisement, PDP enqueue) before it answers.
-	piriRequestTimeout = 30 * time.Minute
+	// A backstop for a node that stops answering, not the expected duration.
+	// The node executes a batch one accept at a time, doing per-blob work for
+	// each (location claim, IPNI advertisement, PDP enqueue), so the figure is
+	// sized against maxAcceptBatch: a full batch runs ~10s against a local
+	// stack and ~20-30s once the indexer round trip is a real one, and this
+	// leaves roughly double that before giving up.
+	piriRequestTimeout = 60 * time.Second
 )
 
 // Provider creates piri clients for communicating with storage nodes.
