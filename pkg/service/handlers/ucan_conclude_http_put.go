@@ -310,10 +310,10 @@ func acceptOnProvider(
 			zap.Stringer("accept", res.Invocation.Task().Link()),
 		)
 		if res.Receipt == nil {
-			// The node answered the request but not this invocation. Nothing
-			// attests the blob was accepted, so it is not registered; the
-			// deliverer sees a missing receipt and can retry.
-			log.Error("blob accept returned no receipt")
+			// The request carrying this invocation failed before the node
+			// answered it. Nothing attests the blob was accepted, so it is not
+			// registered; the deliverer sees a missing receipt and can retry.
+			log.Error("blob accept was not executed")
 			continue
 		}
 		if res.Receipt.Out().IsErr() {

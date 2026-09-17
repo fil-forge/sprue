@@ -5,14 +5,12 @@ import (
 	"context"
 	"fmt"
 	"reflect"
-	"slices"
 
 	"github.com/fil-forge/sprue/pkg/lib/zapipld"
 	"github.com/fil-forge/ucantone/client"
 	edm "github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
 	"github.com/fil-forge/ucantone/ucan"
-	"github.com/ipfs/go-cid"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	"go.uber.org/zap"
 )
@@ -76,52 +74,4 @@ func Execute[T cbg.CBORUnmarshaler](
 		return zero, nil, nil, fmt.Errorf("unmarshaling invocation response: %w", err)
 	}
 	return ok, rcpt, resp.Metadata(), nil
-}
-
-// ExecuteBatch sends many invocations in one request and returns the response
-// container holding their receipts. Unlike Execute it decodes nothing: the
-// caller matches each receipt to its invocation by Ran() and unpacks the
-// outcomes it cares about, because a batch has no single result.
-//
-// invs must be non-empty. The first invocation is the request's primary task
-// — ucantone requires one — and the rest ride the same container; the server
-// executes every invocation addressed to it, so all of them run.
-func ExecuteBatch(
-	ctx context.Context,
-	client *client.HTTPClient,
-	logger *zap.Logger,
-	invs []ucan.Invocation,
-	options ...execution.RequestOption,
-) (ucan.Container, error) {
-	if len(invs) == 0 {
-		return nil, fmt.Errorf("executing batch: no invocations")
-	}
-	log := logger.With(
-		zap.Int("invocations", len(invs)),
-		zap.Stringer("command", invs[0].Command()),
-		zap.Stringer("audience", invs[0].Audience()),
-	)
-	log.Debug("executing invocation batch")
-
-	options = append(slices.Clone(options), execution.WithInvocations(invs[1:]...))
-	resp, err := client.Execute(execution.NewRequest(ctx, invs[0], options...))
-	if err != nil {
-		log.Error("failed to execute invocation batch", zap.Error(err))
-		return nil, fmt.Errorf("executing invocation batch: %w", err)
-	}
-	return resp.Metadata(), nil
-}
-
-// ReceiptsByRan indexes a container's receipts by the task they ran, so a
-// batch's outcomes can be matched to its invocations in one pass rather than
-// rescanning the container per invocation.
-func ReceiptsByRan(c ucan.Container) map[cid.Cid]ucan.Receipt {
-	if c == nil {
-		return nil
-	}
-	byRan := make(map[cid.Cid]ucan.Receipt, len(c.Receipts()))
-	for _, r := range c.Receipts() {
-		byRan[r.Ran()] = r
-	}
-	return byRan
 }

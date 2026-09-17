@@ -14,6 +14,7 @@ import (
 	"github.com/fil-forge/ucantone/client"
 	"github.com/fil-forge/ucantone/did"
 	"github.com/fil-forge/ucantone/execution"
+	"github.com/fil-forge/ucantone/execution/batch"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/fil-forge/ucantone/ucan/promise"
@@ -164,6 +165,16 @@ func (c *Client) Accept(ctx context.Context, req *AcceptRequest, proofStore ucan
 	return acceptOK, inv, rcpt, meta, nil
 }
 
+// acceptInvocationTTL is how long an accept invocation stays valid. The
+// 30-second default is a poor fit for a batch: the node validates each
+// invocation immediately before executing it, one at a time, so the last of a
+// large batch is checked long after the first was minted, and any clock skew
+// between the two hosts comes out of the same budget. This is sized to
+// outlast a whole batch rather than a single call; it does not affect the
+// accept's task link, which is derived from subject, command, arguments and
+// nonce alone.
+const acceptInvocationTTL = ucan.UnixTimestamp(30 * 60)
+
 // MaxAcceptBatch caps the accepts sent in one request. A UCAN container holds
 // at most 8192 tokens, and each accept costs one receipt plus the two
 // invocations piri attaches to it (the location claim and the PDP promise),
@@ -172,8 +183,8 @@ func (c *Client) Accept(ctx context.Context, req *AcceptRequest, proofStore ucan
 const MaxAcceptBatch = 1000
 
 // AcceptResult pairs an accept request with the invocation sent for it and
-// the receipt the node returned. Receipt is nil if the node's response
-// carried none for that invocation.
+// the receipt the node returned. Receipt is nil only when the request
+// carrying this invocation never completed, so the node did not answer it.
 type AcceptResult struct {
 	Request    *AcceptRequest
 	Invocation ucan.Invocation
@@ -218,15 +229,16 @@ func (c *Client) AcceptBatch(ctx context.Context, reqs []*AcceptRequest, proofSt
 	var metas []ucan.Container
 	for start := 0; start < len(invs); start += MaxAcceptBatch {
 		end := min(start+MaxAcceptBatch, len(invs))
-		meta, err := ucan_client.ExecuteBatch(ctx, c.client, c.logger, invs[start:end],
-			execution.WithDelegations(prfs...))
+		c.logger.Debug("executing accept batch", zap.Int("invocations", end-start))
+		res, err := c.client.ExecuteBatch(batch.NewRequest(ctx, invs[start:end], batch.WithDelegations(prfs...)))
 		if err != nil {
-			return results, metas, err
+			c.logger.Error("failed to execute accept batch", zap.Error(err))
+			return results, metas, fmt.Errorf("executing accept batch: %w", err)
 		}
-		metas = append(metas, meta)
-		byRan := ucan_client.ReceiptsByRan(meta)
+		metas = append(metas, res.Metadata())
+		// The client guarantees a receipt for every invocation it sent.
 		for i := start; i < end; i++ {
-			results[i].Receipt = byRan[invs[i].Task().Link()]
+			results[i].Receipt, _ = res.Receipt(invs[i].Task().Link())
 		}
 	}
 	return results, metas, nil
@@ -266,6 +278,7 @@ func (c *Client) acceptInvocation(req *AcceptRequest, options []invocation.Optio
 		options,
 		invocation.WithAudience(c.piriDID),
 		invocation.WithProofs(prfLinks...),
+		invocation.WithExpiration(ucan.Now()+acceptInvocationTTL),
 	)
 
 	inv, err := blobcmds.Accept.Invoke(
