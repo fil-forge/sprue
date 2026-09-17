@@ -443,8 +443,10 @@ func TestHTTPPutConcludeKeepsCommitmentsRetrievableByAcceptTask(t *testing.T) {
 	cause := testutil.RandomCID(t)
 
 	// A budget small enough that the acceptances cannot be persisted in one
-	// message, which is the only condition under which they can be split.
-	const blobs = 8
+	// message, which is the only condition under which they can be split, and
+	// enough blobs that the conclusion spans more messages than the receipts
+	// endpoint lists for a task.
+	const blobs = 30
 	setContainerTokenBudget(t, 4)
 	parked := parkBlobs(t, ctx, deps, uploadService, sp, space.DID(), cause, blobs)
 	conclusions := make([]Conclusion, len(parked))
@@ -461,6 +463,10 @@ func TestHTTPPutConcludeKeepsCommitmentsRetrievableByAcceptTask(t *testing.T) {
 		// Exactly what the receipts endpoint serves for this task.
 		page, err := deps.agentStore.List(ctx, task, agent.WithListLimit(25))
 		require.NoError(t, err)
+		// The store indexes per task, so this page holds the messages carrying
+		// this acceptance and no others. However many messages the conclusion
+		// wrote in total, a poll for one task is answered without paging.
+		require.Nil(t, page.Cursor, "blob %d of %d: acceptance does not fit the page the endpoint requests", i, blobs)
 		var invs []ucan.Invocation
 		var rcpts []ucan.Receipt
 		for _, msg := range page.Results {
