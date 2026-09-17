@@ -375,13 +375,13 @@ func TestHTTPPutConcludeAnswersLargeBatchByPolling(t *testing.T) {
 	provisionConcludeSpace(t, ctx, deps, uploadService, space.DID())
 	cause := testutil.RandomCID(t)
 
-	// Each acceptance contributes four tokens to the response — the accept
-	// invocation and receipt, plus the location commitment and PDP promise.
-	// Reaching the real budget takes a couple of thousand blobs, so the
-	// budget is shrunk instead: the paths under test are the same, and the
-	// test stays fast enough to belong in the unit suite.
+	// Reaching the real budget takes a couple of thousand blobs, so the budget
+	// is shrunk instead: the paths under test are the same, and the test stays
+	// fast enough for the unit suite. One token is below anything a non-empty
+	// conclusion can produce, so the assertions do not depend on how many
+	// artifacts the mock node happens to attach per accept.
 	const blobs = 8
-	handlers.SetContainerTokenBudget(t, 4*blobs-1)
+	handlers.SetContainerTokenBudget(t, 1)
 	parked := parkBlobs(t, ctx, deps, uploadService, sp, space.DID(), cause, blobs)
 	conclusions := make([]handlers.Conclusion, len(parked))
 	for i, p := range parked {

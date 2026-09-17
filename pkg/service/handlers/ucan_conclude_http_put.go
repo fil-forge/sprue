@@ -192,15 +192,21 @@ func resolveAllocations(ctx context.Context, agentStore agent.Store, conclusions
 // on purpose — handing back an accept receipt without the location commitment
 // it names would look like a malformed acceptance rather than a missing one.
 func concludeResponse(invs []ucan.Invocation, rcpts []ucan.Receipt, log *zap.Logger) ucan.Container {
-	if len(invs)+len(rcpts) > containerTokenBudget {
-		log.Warn("conclusion too large to answer in one container; the deliverer must poll for its receipts",
-			zap.Int("invocations", len(invs)), zap.Int("receipts", len(rcpts)))
-		return nil
-	}
-	return container.New(
+	ct := container.New(
 		container.WithInvocations(invs...),
 		container.WithReceipts(rcpts...),
 	)
+	// Measure the container rather than the slices handed in. It deduplicates
+	// by link, and an accept receipt arrives twice — once as the result of its
+	// own invocation and again in the node's response metadata — so the raw
+	// lengths overstate what actually gets encoded.
+	tokens := len(ct.Invocations()) + len(ct.Receipts()) + len(ct.Delegations())
+	if tokens > containerTokenBudget {
+		log.Warn("conclusion too large to answer in one container; the deliverer must poll for its receipts",
+			zap.Int("tokens", tokens), zap.Int("budget", containerTokenBudget))
+		return nil
+	}
+	return ct
 }
 
 // writeAgentMessages persists invocations and receipts as one or more agent

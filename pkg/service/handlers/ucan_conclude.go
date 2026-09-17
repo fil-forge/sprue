@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -11,6 +10,7 @@ import (
 	"github.com/fil-forge/libforge/identity"
 	"github.com/fil-forge/sprue/pkg/store/agent"
 	"github.com/fil-forge/ucantone/binding"
+	"github.com/fil-forge/ucantone/errors"
 	"github.com/fil-forge/ucantone/server"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/container"
