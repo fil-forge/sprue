@@ -169,8 +169,8 @@ func registerStoredBlob(
 		invocation.WithAudience(storageProvider.DID()),
 	))(t)
 	putInv := testutil.Must(httpcmds.Put.Invoke(
-		deriveBlobProvider(t, blob.Digest),
-		deriveBlobProvider(t, blob.Digest).DID(),
+		testutil.DeriveBlobProvider(t, blob.Digest),
+		testutil.DeriveBlobProvider(t, blob.Digest).DID(),
 		&httpcmds.PutArguments{
 			Body:        blob,
 			Destination: promise.AwaitOK{Task: allocInv.Task().Link()},

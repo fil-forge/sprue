@@ -1,8 +1,6 @@
 package handlers_test
 
 import (
-	"crypto/ed25519"
-	"net/http/httptest"
 	"net/url"
 	"testing"
 	"time"
@@ -27,23 +25,16 @@ import (
 	spacediff_store "github.com/fil-forge/sprue/pkg/store/space_diff/memory"
 	storage_provider_store "github.com/fil-forge/sprue/pkg/store/storage_provider/memory"
 	subscription_store "github.com/fil-forge/sprue/pkg/store/subscription/memory"
-	"github.com/fil-forge/ucantone/binding"
 	"github.com/fil-forge/ucantone/did"
-	"github.com/fil-forge/ucantone/did/key"
-	"github.com/fil-forge/ucantone/did/resolver"
 	"github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
 	"github.com/fil-forge/ucantone/multikey"
-	ed25519signer "github.com/fil-forge/ucantone/multikey/ed25519"
 	"github.com/fil-forge/ucantone/server"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/container"
-	"github.com/fil-forge/ucantone/ucan/delegation"
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/fil-forge/ucantone/ucan/promise"
 	"github.com/fil-forge/ucantone/ucan/receipt"
-	"github.com/fil-forge/ucantone/validator"
-	"github.com/multiformats/go-multihash"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
@@ -109,58 +100,6 @@ func provisionSpace(t *testing.T, deps *blobAddTestDeps, uploadService ucan.Issu
 		testutil.RandomCID(t),
 	)
 	require.NoError(t, err)
-}
-
-// newMockPiriServer stands up a UCAN HTTP server that handles /blob/allocate &
-// /blob/accept by returning the canned responses. Wraps the upload service's
-// did:web identity so signatures verify against the underlying did:key.
-func newMockPiriServer(
-	t *testing.T,
-	storageProvider ucan.Issuer,
-	uploadService identity.Identity,
-	allocateOK *blobcmds.AllocateOK,
-	acceptOK *blobcmds.AcceptOK,
-) *httptest.Server {
-	t.Helper()
-
-	srv := server.NewHTTP(
-		storageProvider,
-		server.WithValidationOptions(validator.WithDIDResolver(resolver.Tiered{
-			resolver.WellKnown{uploadService.DID(): testutil.Must(uploadService.DIDDocument())(t)},
-			key.Resolver,
-		})),
-	)
-
-	srv.Handle(blobcmds.Allocate.Command, blobcmds.Allocate.Handler(func(
-		req *binding.Request[*blobcmds.AllocateArguments],
-		res *binding.Response[*blobcmds.AllocateOK],
-	) error {
-		return res.SetSuccess(allocateOK)
-	}))
-
-	srv.Handle(blobcmds.Accept.Command, blobcmds.Accept.Handler(func(
-		req *binding.Request[*blobcmds.AcceptArguments],
-		res *binding.Response[*blobcmds.AcceptOK],
-	) error {
-		return res.SetSuccess(acceptOK)
-	}))
-
-	httpSrv := httptest.NewServer(srv)
-	t.Cleanup(httpSrv.Close)
-	return httpSrv
-}
-
-// providerProofs builds the proof container a storage provider grants the
-// upload service at registration: self-issued delegations (subject = provider)
-// authorizing `/blob/allocate` and `/blob/accept`.
-func providerProofs(t *testing.T, storageProvider, uploadService ucan.Issuer) ucan.Container {
-	t.Helper()
-	// No expiration: delegations default to 30 seconds, which a test slow
-	// enough to outlive them would fail against in a way that looks like a
-	// protocol bug rather than a stale fixture.
-	allocProof := testutil.Must(blobcmds.Allocate.Delegate(storageProvider, uploadService.DID(), storageProvider.DID(), delegation.WithNoExpiration()))(t)
-	acceptProof := testutil.Must(blobcmds.Accept.Delegate(storageProvider, uploadService.DID(), storageProvider.DID(), delegation.WithNoExpiration()))(t)
-	return container.New(container.WithDelegations(allocProof, acceptProof))
 }
 
 func TestBlobAddHandler(t *testing.T) {
@@ -286,13 +225,13 @@ func TestBlobAddHandler(t *testing.T) {
 			PDP:  promise.AwaitOK{Task: testutil.RandomCID(t)},
 		}
 
-		piriSrv := newMockPiriServer(t, storageProvider, uploadService, allocateOK, acceptOK)
+		piriSrv := testutil.NewMockPiriServer(t, storageProvider, uploadService, allocateOK, acceptOK)
 		piriURL := testutil.Must(url.Parse(piriSrv.URL))(t)
 
 		// The upload service is authorized to invoke /blob/allocate and /blob/accept
 		// by the proofs the provider granted it at registration, sourced from the
 		// provider record rather than the invocation metadata.
-		err := deps.spStore.Put(ctx, storageProvider.DID(), *piriURL, 100, nil, providerProofs(t, storageProvider, uploadService))
+		err := deps.spStore.Put(ctx, storageProvider.DID(), *piriURL, 100, nil, testutil.ProviderProofs(t, storageProvider, uploadService))
 		require.NoError(t, err)
 
 		args := blobcmds.AddArguments{
@@ -345,9 +284,9 @@ func TestBlobAddHandler(t *testing.T) {
 			Site: testutil.RandomCID(t),
 			PDP:  promise.AwaitOK{Task: testutil.RandomCID(t)},
 		}
-		piriSrv := newMockPiriServer(t, candidate, uploadService, allocateOK, acceptOK)
+		piriSrv := testutil.NewMockPiriServer(t, candidate, uploadService, allocateOK, acceptOK)
 		piriURL := testutil.Must(url.Parse(piriSrv.URL))(t)
-		require.NoError(t, deps.spStore.Put(ctx, candidate.DID(), *piriURL, 1, nil, providerProofs(t, candidate, uploadService)))
+		require.NoError(t, deps.spStore.Put(ctx, candidate.DID(), *piriURL, 1, nil, testutil.ProviderProofs(t, candidate, uploadService)))
 
 		outside := testutil.RandomIssuer(t)
 		outsideURL := testutil.Must(url.Parse("http://127.0.0.1:1/unreachable"))(t)
@@ -443,10 +382,10 @@ func TestBlobAddHandler(t *testing.T) {
 			PDP:  promise.AwaitOK{Task: testutil.RandomCID(t)},
 		}
 
-		piriSrv := newMockPiriServer(t, storageProvider, uploadService, allocateOK, acceptOK)
+		piriSrv := testutil.NewMockPiriServer(t, storageProvider, uploadService, allocateOK, acceptOK)
 		piriURL := testutil.Must(url.Parse(piriSrv.URL))(t)
 
-		err := deps.spStore.Put(ctx, storageProvider.DID(), *piriURL, 100, nil, providerProofs(t, storageProvider, uploadService))
+		err := deps.spStore.Put(ctx, storageProvider.DID(), *piriURL, 100, nil, testutil.ProviderProofs(t, storageProvider, uploadService))
 		require.NoError(t, err)
 
 		args := blobcmds.AddArguments{
@@ -489,7 +428,7 @@ func TestBlobAddHandler(t *testing.T) {
 
 		// Build the chain that the handler will walk back through:
 		//   addRcpt → accInv/accRcpt → putInv/putRcpt → allocInv/allocRcpt
-		blobProvider := deriveBlobProvider(t, digest)
+		blobProvider := testutil.DeriveBlobProvider(t, digest)
 
 		// /blob/allocate
 		allocInv := testutil.Must(blobcmds.Allocate.Invoke(
@@ -593,15 +532,4 @@ func TestBlobAddHandler(t *testing.T) {
 		require.Len(t, res.Metadata().Invocations(), 3)
 		require.Len(t, res.Metadata().Receipts(), 3)
 	})
-}
-
-// deriveBlobProvider mirrors the production handler's logic for deriving a
-// signer from a blob's digest, used to sign /http/put invocations and receipts.
-func deriveBlobProvider(t *testing.T, digest multihash.Multihash) ucan.Issuer {
-	t.Helper()
-	require.GreaterOrEqual(t, len(digest), ed25519.SeedSize)
-	seed := digest[len(digest)-ed25519.SeedSize:]
-	s, err := ed25519signer.FromRaw(seed)
-	require.NoError(t, err)
-	return multikey.KeyIssuer(s)
 }

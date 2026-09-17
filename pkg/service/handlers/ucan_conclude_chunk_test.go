@@ -54,7 +54,7 @@ func testInvocation(t *testing.T, n int) ucan.Invocation {
 // as several messages — otherwise the record of acceptances the node has
 // already performed is lost at the encode step.
 func TestWriteAgentMessagesChunks(t *testing.T) {
-	SetContainerTokenBudget(t, 4)
+	setContainerTokenBudget(t, 4)
 
 	// Distinct artifacts, since a container deduplicates by link.
 	invs := make([]ucan.Invocation, 7)
@@ -76,10 +76,20 @@ func TestWriteAgentMessagesChunks(t *testing.T) {
 
 // A conclusion within the budget still writes exactly one message.
 func TestWriteAgentMessagesSingleMessage(t *testing.T) {
-	SetContainerTokenBudget(t, 64)
+	setContainerTokenBudget(t, 64)
 
 	invs := []ucan.Invocation{testInvocation(t, 0), testInvocation(t, 1)}
 	rec := &recordingAgentStore{}
 	require.NoError(t, writeAgentMessages(context.Background(), rec, invs, nil))
 	require.Equal(t, []int{2}, rec.sizes)
+}
+
+// setContainerTokenBudget lowers the response and agent-message token budget
+// for the duration of a test, so the oversized-conclusion paths can be
+// exercised with a handful of blobs instead of the couple of thousand the
+// real budget needs.
+func setContainerTokenBudget(t *testing.T, tokens int) {
+	previous := containerTokenBudget
+	containerTokenBudget = tokens
+	t.Cleanup(func() { containerTokenBudget = previous })
 }

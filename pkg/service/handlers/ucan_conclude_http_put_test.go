@@ -1,4 +1,4 @@
-package handlers_test
+package handlers
 
 import (
 	"net/url"
@@ -10,7 +10,6 @@ import (
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/piriclient"
 	"github.com/fil-forge/sprue/pkg/routing"
-	"github.com/fil-forge/sprue/pkg/service/handlers"
 	"github.com/fil-forge/sprue/pkg/store/agent"
 	agent_store "github.com/fil-forge/sprue/pkg/store/agent/memory"
 	blob_registry "github.com/fil-forge/sprue/pkg/store/blob_registry/memory"
@@ -29,7 +28,7 @@ import (
 )
 
 type httpPutDeps struct {
-	ch            handlers.ConclusionHandler
+	ch            ConclusionHandler
 	spStore       *storage_provider_store.Store
 	agentStore    *agent_store.Store
 	consumerStore *consumer_store.Store
@@ -48,7 +47,7 @@ func newHTTPPutDeps(t *testing.T, nodeProvider piriclient.Provider, logger *zap.
 		metrics_store.NewSpaceStore(),
 		metrics_store.New(),
 	)
-	ch := handlers.NewHTTPPutConcludeHandler(router, nodeProvider, agentStore, blobReg, logger)
+	ch := NewHTTPPutConcludeHandler(router, nodeProvider, agentStore, blobReg, logger)
 	return &httpPutDeps{
 		ch:            ch,
 		spStore:       spStore,
@@ -71,7 +70,7 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 		// Destination.Task points to an invocation that's not in the agent store.
 		nonExistentAllocTask := testutil.RandomCID(t)
 
-		blobProvider := deriveBlobProvider(t, digest)
+		blobProvider := testutil.DeriveBlobProvider(t, digest)
 		putInv, err := httpcmds.Put.Invoke(
 			blobProvider,
 			blobProvider.DID(),
@@ -90,7 +89,7 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		_, err = deps.ch.Handler(ctx, []handlers.Conclusion{{Invocation: putInv, Receipt: putRcpt}})
+		_, err = deps.ch.Handler(ctx, []Conclusion{{Invocation: putInv, Receipt: putRcpt}})
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "getting allocation invocation")
 	})
@@ -124,7 +123,7 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 		)
 		require.NoError(t, deps.agentStore.Write(ctx, msg, agent.Index(msg)))
 
-		blobProvider := deriveBlobProvider(t, digest)
+		blobProvider := testutil.DeriveBlobProvider(t, digest)
 		putInv, err := httpcmds.Put.Invoke(
 			blobProvider,
 			blobProvider.DID(),
@@ -142,7 +141,7 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		_, err = deps.ch.Handler(ctx, []handlers.Conclusion{{Invocation: putInv, Receipt: putRcpt}})
+		_, err = deps.ch.Handler(ctx, []Conclusion{{Invocation: putInv, Receipt: putRcpt}})
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "getting storage provider info")
 	})
@@ -161,7 +160,7 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 			Site: testutil.RandomCID(t),
 			PDP:  promise.AwaitOK{Task: testutil.RandomCID(t)},
 		}
-		piriSrv := newMockPiriServer(
+		piriSrv := testutil.NewMockPiriServer(
 			t, storageProvider, uploadService,
 			&blobcmds.AllocateOK{Size: blob.Size},
 			acceptOK,
@@ -169,7 +168,7 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 		piriURL := testutil.Must(url.Parse(piriSrv.URL))(t)
 
 		deps := newHTTPPutDeps(t, piriclient.NewProvider(uploadService, logger), logger)
-		require.NoError(t, deps.spStore.Put(ctx, storageProvider.DID(), *piriURL, 100, nil, providerProofs(t, storageProvider, uploadService)))
+		require.NoError(t, deps.spStore.Put(ctx, storageProvider.DID(), *piriURL, 100, nil, testutil.ProviderProofs(t, storageProvider, uploadService)))
 
 		// Provision the space so blob_registry.Register succeeds.
 		account := testutil.Must(didmailto.New("alice@example.com"))(t)
@@ -198,7 +197,7 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 		require.NoError(t, deps.agentStore.Write(ctx, msg, agent.Index(msg)))
 
 		// /http/put invocation referring to the allocation task.
-		blobProvider := deriveBlobProvider(t, digest)
+		blobProvider := testutil.DeriveBlobProvider(t, digest)
 		putInv, err := httpcmds.Put.Invoke(
 			blobProvider,
 			blobProvider.DID(),
@@ -219,7 +218,7 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 		// The upload service is authorized to invoke /blob/accept by the proofs
 		// the provider granted it at registration (sourced from the provider
 		// record), so no proof travels in the conclude metadata.
-		meta, err := deps.ch.Handler(ctx, []handlers.Conclusion{{Invocation: putInv, Receipt: putRcpt}})
+		meta, err := deps.ch.Handler(ctx, []Conclusion{{Invocation: putInv, Receipt: putRcpt}})
 		require.NoError(t, err)
 
 		// The accept receipt travels back in the conclude response, so the

@@ -1,4 +1,4 @@
-package handlers_test
+package handlers
 
 import (
 	"context"
@@ -15,7 +15,6 @@ import (
 	"github.com/fil-forge/libforge/identity"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/piriclient"
-	"github.com/fil-forge/sprue/pkg/service/handlers"
 	"github.com/fil-forge/sprue/pkg/store/agent"
 	"github.com/fil-forge/ucantone/binding"
 	"github.com/fil-forge/ucantone/did"
@@ -119,7 +118,7 @@ func newCountingPiri(t *testing.T, storageProvider ucan.Issuer, uploadService id
 // invocation is in the agent store and the put receipt is ready to deliver.
 type parkedBlob struct {
 	digest multihash.Multihash
-	conc   handlers.Conclusion
+	conc   Conclusion
 }
 
 // parkBlobs records an allocation per blob on the given provider and returns
@@ -141,7 +140,7 @@ func parkBlobs(t *testing.T, ctx context.Context, deps *httpPutDeps, uploadServi
 		msg := container.New(container.WithInvocations(allocInv))
 		require.NoError(t, deps.agentStore.Write(ctx, msg, agent.Index(msg)))
 
-		blobProvider := deriveBlobProvider(t, digest)
+		blobProvider := testutil.DeriveBlobProvider(t, digest)
 		putInv, err := httpcmds.Put.Invoke(
 			blobProvider,
 			blobProvider.DID(),
@@ -152,7 +151,7 @@ func parkBlobs(t *testing.T, ctx context.Context, deps *httpPutDeps, uploadServi
 		putRcpt, err := receipt.IssueOK(blobProvider, putInv.Task().Link(), &httpcmds.PutOK{})
 		require.NoError(t, err)
 
-		out[i] = parkedBlob{digest: digest, conc: handlers.Conclusion{Invocation: putInv, Receipt: putRcpt}}
+		out[i] = parkedBlob{digest: digest, conc: Conclusion{Invocation: putInv, Receipt: putRcpt}}
 	}
 	return out
 }
@@ -181,8 +180,8 @@ func TestHTTPPutConcludeBatch(t *testing.T) {
 		piriB := newCountingPiri(t, spB, uploadService)
 
 		deps := newHTTPPutDeps(t, piriclient.NewProvider(uploadService, logger), logger)
-		require.NoError(t, deps.spStore.Put(ctx, spA.DID(), *piriA.url, 100, nil, providerProofs(t, spA, uploadService)))
-		require.NoError(t, deps.spStore.Put(ctx, spB.DID(), *piriB.url, 100, nil, providerProofs(t, spB, uploadService)))
+		require.NoError(t, deps.spStore.Put(ctx, spA.DID(), *piriA.url, 100, nil, testutil.ProviderProofs(t, spA, uploadService)))
+		require.NoError(t, deps.spStore.Put(ctx, spB.DID(), *piriB.url, 100, nil, testutil.ProviderProofs(t, spB, uploadService)))
 
 		space := testutil.RandomIssuer(t)
 		provisionConcludeSpace(t, ctx, deps, uploadService, space.DID())
@@ -193,7 +192,7 @@ func TestHTTPPutConcludeBatch(t *testing.T) {
 
 		// Interleave the two providers' blobs: grouping is by allocation, not
 		// by delivery order.
-		var conclusions []handlers.Conclusion
+		var conclusions []Conclusion
 		for i := 0; i < blobsPerProvider; i++ {
 			conclusions = append(conclusions, parkedA[i].conc, parkedB[i].conc)
 		}
@@ -222,7 +221,7 @@ func TestHTTPPutConcludeBatch(t *testing.T) {
 		piri := newCountingPiri(t, sp, uploadService)
 
 		deps := newHTTPPutDeps(t, piriclient.NewProvider(uploadService, logger), logger)
-		require.NoError(t, deps.spStore.Put(ctx, sp.DID(), *piri.url, 100, nil, providerProofs(t, sp, uploadService)))
+		require.NoError(t, deps.spStore.Put(ctx, sp.DID(), *piri.url, 100, nil, testutil.ProviderProofs(t, sp, uploadService)))
 
 		space := testutil.RandomIssuer(t)
 		provisionConcludeSpace(t, ctx, deps, uploadService, space.DID())
@@ -233,7 +232,7 @@ func TestHTTPPutConcludeBatch(t *testing.T) {
 		doomed := parked[1]
 		piri.reject[string(doomed.digest)] = true
 
-		conclusions := make([]handlers.Conclusion, len(parked))
+		conclusions := make([]Conclusion, len(parked))
 		for i, p := range parked {
 			conclusions[i] = p.conc
 		}
@@ -276,7 +275,7 @@ func TestHTTPPutConcludeAcceptsEveryInvocationInABatch(t *testing.T) {
 	sp := testutil.RandomIssuer(t)
 	piri := newCountingPiri(t, sp, uploadService)
 	deps := newHTTPPutDeps(t, piriclient.NewProvider(uploadService, logger), logger)
-	require.NoError(t, deps.spStore.Put(ctx, sp.DID(), *piri.url, 100, nil, providerProofs(t, sp, uploadService)))
+	require.NoError(t, deps.spStore.Put(ctx, sp.DID(), *piri.url, 100, nil, testutil.ProviderProofs(t, sp, uploadService)))
 
 	space := testutil.RandomIssuer(t)
 	provisionConcludeSpace(t, ctx, deps, uploadService, space.DID())
@@ -284,7 +283,7 @@ func TestHTTPPutConcludeAcceptsEveryInvocationInABatch(t *testing.T) {
 
 	const blobs = 5
 	parked := parkBlobs(t, ctx, deps, uploadService, sp, space.DID(), cause, blobs)
-	conclusions := make([]handlers.Conclusion, len(parked))
+	conclusions := make([]Conclusion, len(parked))
 	for i, p := range parked {
 		conclusions[i] = p.conc
 	}
@@ -318,7 +317,7 @@ func TestHTTPPutConcludeSkipsFailedPuts(t *testing.T) {
 	piri := newCountingPiri(t, sp, uploadService)
 
 	deps := newHTTPPutDeps(t, piriclient.NewProvider(uploadService, logger), logger)
-	require.NoError(t, deps.spStore.Put(ctx, sp.DID(), *piri.url, 100, nil, providerProofs(t, sp, uploadService)))
+	require.NoError(t, deps.spStore.Put(ctx, sp.DID(), *piri.url, 100, nil, testutil.ProviderProofs(t, sp, uploadService)))
 
 	space := testutil.RandomIssuer(t)
 	provisionConcludeSpace(t, ctx, deps, uploadService, space.DID())
@@ -326,18 +325,18 @@ func TestHTTPPutConcludeSkipsFailedPuts(t *testing.T) {
 	parked := parkBlobs(t, ctx, deps, uploadService, sp, space.DID(), cause, 3)
 
 	// The middle blob's client reports that its upload failed.
-	conclusions := make([]handlers.Conclusion, len(parked))
+	conclusions := make([]Conclusion, len(parked))
 	for i, p := range parked {
 		conclusions[i] = p.conc
 	}
 	failed := parked[1]
-	blobProvider := deriveBlobProvider(t, failed.digest)
+	blobProvider := testutil.DeriveBlobProvider(t, failed.digest)
 	failedRcpt, err := receipt.IssueErr(blobProvider, failed.conc.Invocation.Task().Link(), datamodel.Map{
 		"name":    "UploadFailed",
 		"message": "the bytes never arrived",
 	})
 	require.NoError(t, err)
-	conclusions[1] = handlers.Conclusion{Invocation: failed.conc.Invocation, Receipt: failedRcpt}
+	conclusions[1] = Conclusion{Invocation: failed.conc.Invocation, Receipt: failedRcpt}
 
 	_, err = deps.ch.Handler(ctx, conclusions)
 	require.NoError(t, err)
@@ -369,7 +368,7 @@ func TestHTTPPutConcludeAnswersLargeBatchByPolling(t *testing.T) {
 	sp := testutil.RandomIssuer(t)
 	piri := newCountingPiri(t, sp, uploadService)
 	deps := newHTTPPutDeps(t, piriclient.NewProvider(uploadService, logger), logger)
-	require.NoError(t, deps.spStore.Put(ctx, sp.DID(), *piri.url, 100, nil, providerProofs(t, sp, uploadService)))
+	require.NoError(t, deps.spStore.Put(ctx, sp.DID(), *piri.url, 100, nil, testutil.ProviderProofs(t, sp, uploadService)))
 
 	space := testutil.RandomIssuer(t)
 	provisionConcludeSpace(t, ctx, deps, uploadService, space.DID())
@@ -381,9 +380,9 @@ func TestHTTPPutConcludeAnswersLargeBatchByPolling(t *testing.T) {
 	// conclusion can produce, so the assertions do not depend on how many
 	// artifacts the mock node happens to attach per accept.
 	const blobs = 8
-	handlers.SetContainerTokenBudget(t, 1)
+	setContainerTokenBudget(t, 1)
 	parked := parkBlobs(t, ctx, deps, uploadService, sp, space.DID(), cause, blobs)
-	conclusions := make([]handlers.Conclusion, len(parked))
+	conclusions := make([]Conclusion, len(parked))
 	for i, p := range parked {
 		conclusions[i] = p.conc
 	}
