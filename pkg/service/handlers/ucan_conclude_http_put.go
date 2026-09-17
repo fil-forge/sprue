@@ -203,18 +203,139 @@ func concludeResponse(invs []ucan.Invocation, rcpts []ucan.Receipt, log *zap.Log
 	return ct
 }
 
-// writeAgentMessages persists invocations and receipts as one or more agent
-// messages, each within a container's token budget. A single message per call
-// would fail to encode once a conclusion is large enough, losing the record of
-// acceptances the node has already performed.
-func writeAgentMessages(ctx context.Context, agentStore agent.Store, invs []ucan.Invocation, rcpts []ucan.Receipt) error {
-	for len(invs) > 0 || len(rcpts) > 0 {
-		nInvs := min(len(invs), containerTokenBudget)
-		nRcpts := min(len(rcpts), containerTokenBudget-nInvs)
-		if err := writeAgentMessage(ctx, agentStore, invs[:nInvs], rcpts[:nRcpts]); err != nil {
-			return err
+// acceptance is one accepted blob together with the artifacts the node
+// attached to it: the location commitment its receipt names and the PDP
+// promise it awaits.
+type acceptance struct {
+	invs  []ucan.Invocation
+	rcpts []ucan.Receipt
+}
+
+func (a acceptance) tokens() int { return len(a.invs) + len(a.rcpts) }
+
+// groupAcceptances pairs each accept receipt with the artifacts the node
+// attached to it. The node attaches them per request rather than per blob, so
+// an acceptance claims its own by the links its receipt names. Whatever no
+// acceptance claims is kept as a group of its own so it is still persisted.
+func groupAcceptances(results []piriclient.AcceptResult, metas []ucan.Container) []acceptance {
+	invsByLink := make(map[cid.Cid]ucan.Invocation)
+	invsByTask := make(map[cid.Cid]ucan.Invocation)
+	rcptsByRan := make(map[cid.Cid][]ucan.Receipt)
+	for _, meta := range metas {
+		if meta == nil {
+			continue
 		}
-		invs, rcpts = invs[nInvs:], rcpts[nRcpts:]
+		for _, inv := range meta.Invocations() {
+			invsByLink[inv.Link()] = inv
+			invsByTask[inv.Task().Link()] = inv
+		}
+		for _, rcpt := range meta.Receipts() {
+			rcptsByRan[rcpt.Ran()] = append(rcptsByRan[rcpt.Ran()], rcpt)
+		}
+	}
+
+	claimedInvs := make(map[cid.Cid]bool)
+	claimedRcpts := make(map[cid.Cid]bool)
+	var acceptances []acceptance
+	for _, res := range results {
+		// A chunk that never ran has no receipt; persisting its invocation
+		// alone would index an accept task that was never executed.
+		if res.Receipt == nil {
+			continue
+		}
+		a := acceptance{
+			invs:  []ucan.Invocation{res.Invocation},
+			rcpts: []ucan.Receipt{res.Receipt},
+		}
+		claimedRcpts[res.Receipt.Link()] = true
+		for _, link := range attachedLinks(res.Receipt) {
+			// A node names its location commitment by the invocation's own
+			// link and its PDP promise by a task, so both indexes are tried.
+			inv, ok := invsByLink[link]
+			if !ok {
+				inv, ok = invsByTask[link]
+			}
+			if !ok || claimedInvs[inv.Link()] {
+				continue
+			}
+			claimedInvs[inv.Link()] = true
+			a.invs = append(a.invs, inv)
+			for _, rcpt := range rcptsByRan[inv.Task().Link()] {
+				if claimedRcpts[rcpt.Link()] {
+					continue
+				}
+				claimedRcpts[rcpt.Link()] = true
+				a.rcpts = append(a.rcpts, rcpt)
+			}
+		}
+		acceptances = append(acceptances, a)
+	}
+
+	// In the order the node sent them, so what lands in which message does
+	// not depend on map iteration order.
+	for _, meta := range metas {
+		if meta == nil {
+			continue
+		}
+		for _, inv := range meta.Invocations() {
+			if !claimedInvs[inv.Link()] {
+				claimedInvs[inv.Link()] = true
+				acceptances = append(acceptances, acceptance{invs: []ucan.Invocation{inv}})
+			}
+		}
+		for _, rcpt := range meta.Receipts() {
+			if !claimedRcpts[rcpt.Link()] {
+				claimedRcpts[rcpt.Link()] = true
+				acceptances = append(acceptances, acceptance{rcpts: []ucan.Receipt{rcpt}})
+			}
+		}
+	}
+	return acceptances
+}
+
+// attachedLinks reports what an accept receipt names: its location commitment
+// and the PDP task it promises. A failure receipt names nothing.
+func attachedLinks(rcpt ucan.Receipt) []cid.Cid {
+	if rcpt.Out().IsErr() {
+		return nil
+	}
+	out, _ := rcpt.Out().Unpack()
+	var acceptOK blobcmds.AcceptOK
+	if err := acceptOK.UnmarshalCBOR(bytes.NewReader(out)); err != nil {
+		return nil
+	}
+	return []cid.Cid{acceptOK.Site, acceptOK.PDP.Task}
+}
+
+// writeAgentMessages persists acceptances as one or more agent messages, each
+// within a container's token budget. A single message per call would fail to
+// encode once a conclusion is large enough, losing the record of acceptances
+// the node has already performed.
+//
+// An acceptance is never split across messages. The receipts endpoint answers
+// a poll from the messages the store indexes under the polled task, and a
+// location commitment is indexed under its own task, not the acceptance's, so
+// a commitment in another message is unreachable from the accept task the
+// deliverer polls — leaving it an acceptance it cannot use.
+func writeAgentMessages(ctx context.Context, agentStore agent.Store, acceptances []acceptance) error {
+	var invs []ucan.Invocation
+	var rcpts []ucan.Receipt
+	flush := func() error {
+		err := writeAgentMessage(ctx, agentStore, invs, rcpts)
+		invs, rcpts = nil, nil
+		return err
+	}
+	for _, a := range acceptances {
+		if len(invs)+len(rcpts) > 0 && len(invs)+len(rcpts)+a.tokens() > containerTokenBudget {
+			if err := flush(); err != nil {
+				return err
+			}
+		}
+		invs = append(invs, a.invs...)
+		rcpts = append(rcpts, a.rcpts...)
+	}
+	if len(invs)+len(rcpts) > 0 {
+		return flush()
 	}
 	return nil
 }
@@ -275,31 +396,21 @@ func acceptOnProvider(
 	}
 
 	// The accept receipts and the artifacts piri attached to them (location
-	// commitments, PDP promises) are persisted in one agent message, which is
-	// what makes them retrievable by task link from the receipts endpoint.
-	var accInvs []ucan.Invocation
-	var accRcpts []ucan.Receipt
-	for _, res := range results {
-		// A chunk that never ran has no receipt; persisting its invocation
-		// alone would index an accept task that was never executed.
-		if res.Receipt == nil {
-			continue
-		}
-		accInvs = append(accInvs, res.Invocation)
-		accRcpts = append(accRcpts, res.Receipt)
-	}
-	for _, meta := range metas {
-		if meta == nil {
-			continue
-		}
-		accInvs = append(accInvs, meta.Invocations()...)
-		accRcpts = append(accRcpts, meta.Receipts()...)
-	}
+	// commitments, PDP promises) are persisted together, which is what makes
+	// them retrievable by task link from the receipts endpoint.
+	//
 	// Written in container-sized messages: one container cannot hold more
 	// than containerTokenBudget tokens, and a large conclusion produces more
 	// than that. Persistence has to succeed whatever the batch size, since it
 	// is what makes these receipts retrievable by task link afterwards.
-	if err := writeAgentMessages(ctx, agentStore, accInvs, accRcpts); err != nil {
+	acceptances := groupAcceptances(results, metas)
+	var accInvs []ucan.Invocation
+	var accRcpts []ucan.Receipt
+	for _, a := range acceptances {
+		accInvs = append(accInvs, a.invs...)
+		accRcpts = append(accRcpts, a.rcpts...)
+	}
+	if err := writeAgentMessages(ctx, agentStore, acceptances); err != nil {
 		log.Error("failed to write agent message", zap.Error(err))
 		return accInvs, accRcpts, fmt.Errorf("writing agent message: %w", err)
 	}

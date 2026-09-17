@@ -57,13 +57,13 @@ func TestWriteAgentMessagesChunks(t *testing.T) {
 	setContainerTokenBudget(t, 4)
 
 	// Distinct artifacts, since a container deduplicates by link.
-	invs := make([]ucan.Invocation, 7)
-	for i := range invs {
-		invs[i] = testInvocation(t, i)
+	acceptances := make([]acceptance, 7)
+	for i := range acceptances {
+		acceptances[i] = acceptance{invs: []ucan.Invocation{testInvocation(t, i)}}
 	}
 
 	rec := &recordingAgentStore{}
-	require.NoError(t, writeAgentMessages(context.Background(), rec, invs, nil))
+	require.NoError(t, writeAgentMessages(context.Background(), rec, acceptances))
 
 	require.Greater(t, len(rec.sizes), 1, "artifacts beyond the budget must span several messages")
 	var total int
@@ -71,16 +71,35 @@ func TestWriteAgentMessagesChunks(t *testing.T) {
 		require.LessOrEqual(t, size, 4, "no single message may exceed the budget")
 		total += size
 	}
-	require.Equal(t, len(invs), total, "every artifact must be written exactly once")
+	require.Equal(t, len(acceptances), total, "every artifact must be written exactly once")
+}
+
+// An acceptance is what the deliverer polls for, so chunking packs whole
+// acceptances and never splits one across messages, even where splitting
+// would pack the budget more tightly.
+func TestWriteAgentMessagesKeepsAcceptancesWhole(t *testing.T) {
+	setContainerTokenBudget(t, 4)
+
+	// Three tokens each: two fit in no single message of four.
+	acceptances := make([]acceptance, 3)
+	for i := range acceptances {
+		acceptances[i] = acceptance{invs: []ucan.Invocation{
+			testInvocation(t, i*3), testInvocation(t, i*3+1), testInvocation(t, i*3+2),
+		}}
+	}
+
+	rec := &recordingAgentStore{}
+	require.NoError(t, writeAgentMessages(context.Background(), rec, acceptances))
+	require.Equal(t, []int{3, 3, 3}, rec.sizes, "each message holds whole acceptances")
 }
 
 // A conclusion within the budget still writes exactly one message.
 func TestWriteAgentMessagesSingleMessage(t *testing.T) {
 	setContainerTokenBudget(t, 64)
 
-	invs := []ucan.Invocation{testInvocation(t, 0), testInvocation(t, 1)}
+	acceptances := []acceptance{{invs: []ucan.Invocation{testInvocation(t, 0), testInvocation(t, 1)}}}
 	rec := &recordingAgentStore{}
-	require.NoError(t, writeAgentMessages(context.Background(), rec, invs, nil))
+	require.NoError(t, writeAgentMessages(context.Background(), rec, acceptances))
 	require.Equal(t, []int{2}, rec.sizes)
 }
 

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"net/http"
 	"net/http/httptest"
@@ -39,6 +40,10 @@ import (
 // assertLocationCommand is the location commitment a node publishes inside
 // an acceptance; the conclude response must carry it back with the receipt.
 var assertLocationCommand = command.MustParse("/assert/location")
+
+// pdpAcceptCommand completes when the piece has been aggregated. A node
+// promises it from an acceptance, so it travels with one.
+var pdpAcceptCommand = command.MustParse("/pdp/accept")
 
 // countingPiri is a mock storage node that answers /blob/accept per digest and
 // counts the HTTP requests it received, which is what batching is meant to
@@ -89,19 +94,28 @@ func newCountingPiri(t *testing.T, storageProvider ucan.Issuer, uploadService id
 		if p.reject[string(args.Blob.Digest)] {
 			return res.SetFailure(errors.New("BlobNotFound", "blob not delivered"))
 		}
-		// A real node attaches its location commitment to the receipt; the
-		// conclude response must carry those back to the deliverer.
+		// A real node attaches its location commitment and the PDP accept it
+		// promises to the receipt, and the conclude response must carry both
+		// back to the deliverer. The two are named differently, as piri names
+		// them (`pkg/ucanhandlers/blob/accept.go`): the commitment by the
+		// invocation's own link, the PDP by its task link.
 		claim, err := invocation.Invoke(storageProvider, storageProvider.DID(),
 			assertLocationCommand, datamodel.Map{"digest": []byte(args.Blob.Digest)})
 		if err != nil {
 			return err
 		}
-		if err := res.SetMetadata(container.New(container.WithInvocations(claim))); err != nil {
+		pdpAccept, err := invocation.Invoke(storageProvider, storageProvider.DID(),
+			pdpAcceptCommand, datamodel.Map{"blob": []byte(args.Blob.Digest)},
+			invocation.WithNoExpiration(), invocation.WithNoNonce())
+		if err != nil {
+			return err
+		}
+		if err := res.SetMetadata(container.New(container.WithInvocations(claim, pdpAccept))); err != nil {
 			return err
 		}
 		return res.SetSuccess(&blobcmds.AcceptOK{
-			Site: claim.Task().Link(),
-			PDP:  promise.AwaitOK{Task: claim.Task().Link()},
+			Site: claim.Link(),
+			PDP:  promise.AwaitOK{Task: pdpAccept.Task().Link()},
 		})
 	}))
 
@@ -404,5 +418,80 @@ func TestHTTPPutConcludeAnswersLargeBatchByPolling(t *testing.T) {
 	for _, p := range []parkedBlob{parked[0], parked[blobs/2], parked[blobs-1]} {
 		_, err := deps.agentStore.GetReceipt(ctx, piri.acceptTask(t, p.digest))
 		require.NoError(t, err, "accept receipt for %x not retrievable", p.digest)
+	}
+}
+
+// An acceptance is only useful to the deliverer with the location commitment
+// it names: polling for the accept task must return both. The receipts
+// endpoint answers from the agent messages the store indexes under that task
+// (`Index` keys a message by each invocation's task link and each receipt's
+// ran task), so a commitment that lands in a different message than its
+// accept receipt is unreachable from the accept task and the deliverer is
+// left with an acceptance it cannot use.
+func TestHTTPPutConcludeKeepsCommitmentsRetrievableByAcceptTask(t *testing.T) {
+	logger := zaptest.NewLogger(t)
+	ctx := t.Context()
+	uploadService := testutil.WebService
+
+	sp := testutil.RandomIssuer(t)
+	piri := newCountingPiri(t, sp, uploadService)
+	deps := newHTTPPutDeps(t, piriclient.NewProvider(uploadService, logger), logger)
+	require.NoError(t, deps.spStore.Put(ctx, sp.DID(), *piri.url, 100, nil, testutil.ProviderProofs(t, sp, uploadService)))
+
+	space := testutil.RandomIssuer(t)
+	provisionConcludeSpace(t, ctx, deps, uploadService, space.DID())
+	cause := testutil.RandomCID(t)
+
+	// A budget small enough that the acceptances cannot be persisted in one
+	// message, which is the only condition under which they can be split.
+	const blobs = 8
+	setContainerTokenBudget(t, 4)
+	parked := parkBlobs(t, ctx, deps, uploadService, sp, space.DID(), cause, blobs)
+	conclusions := make([]Conclusion, len(parked))
+	for i, p := range parked {
+		conclusions[i] = p.conc
+	}
+
+	_, err := deps.ch.Handler(ctx, conclusions)
+	require.NoError(t, err)
+
+	for i, p := range parked {
+		task := piri.acceptTask(t, p.digest)
+
+		// Exactly what the receipts endpoint serves for this task.
+		page, err := deps.agentStore.List(ctx, task, agent.WithListLimit(25))
+		require.NoError(t, err)
+		var invs []ucan.Invocation
+		var rcpts []ucan.Receipt
+		for _, msg := range page.Results {
+			invs = append(invs, msg.Invocations()...)
+			rcpts = append(rcpts, msg.Receipts()...)
+		}
+
+		var accRcpt ucan.Receipt
+		for _, r := range rcpts {
+			if r.Ran() == task {
+				accRcpt = r
+			}
+		}
+		require.NotNil(t, accRcpt, "blob %d of %d: no accept receipt retrievable", i, blobs)
+
+		out, _ := accRcpt.Out().Unpack()
+		var acceptOK blobcmds.AcceptOK
+		require.NoError(t, acceptOK.UnmarshalCBOR(bytes.NewReader(out)))
+
+		// The commitment is named by the invocation's own link and the PDP by
+		// its task link, so each is looked up the way the node named it.
+		var commitment, pdp bool
+		for _, inv := range invs {
+			if inv.Link() == acceptOK.Site {
+				commitment = true
+			}
+			if inv.Task().Link() == acceptOK.PDP.Task {
+				pdp = true
+			}
+		}
+		require.True(t, commitment, "blob %d of %d: accept receipt retrievable without the location commitment it names (%s)", i, blobs, acceptOK.Site)
+		require.True(t, pdp, "blob %d of %d: accept receipt retrievable without the PDP accept it promises (%s)", i, blobs, acceptOK.PDP.Task)
 	}
 }
