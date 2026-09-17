@@ -2,10 +2,10 @@ package handlers_test
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -34,7 +34,6 @@ import (
 	"github.com/ipfs/go-cid"
 	"github.com/multiformats/go-multihash"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 )
 
@@ -51,11 +50,26 @@ type countingPiri struct {
 	accepts  atomic.Int64
 	// reject fails the accept of any digest whose string form is a key.
 	reject map[string]bool
+
+	// acceptTasks records the task link of every accept executed, so a test
+	// can look the stored receipts up the way a polling deliverer would.
+	mu          sync.Mutex
+	acceptTasks map[string]cid.Cid
+}
+
+// acceptTask returns the /blob/accept task link recorded for a digest.
+func (p *countingPiri) acceptTask(t *testing.T, digest multihash.Multihash) cid.Cid {
+	t.Helper()
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	task, ok := p.acceptTasks[string(digest)]
+	require.True(t, ok, "no accept recorded for %x", digest)
+	return task
 }
 
 func newCountingPiri(t *testing.T, storageProvider ucan.Issuer, uploadService identity.Identity) *countingPiri {
 	t.Helper()
-	p := &countingPiri{reject: map[string]bool{}}
+	p := &countingPiri{reject: map[string]bool{}, acceptTasks: map[string]cid.Cid{}}
 
 	srv := server.NewHTTP(
 		storageProvider,
@@ -70,6 +84,9 @@ func newCountingPiri(t *testing.T, storageProvider ucan.Issuer, uploadService id
 	) error {
 		p.accepts.Add(1)
 		args := req.Task().Arguments()
+		p.mu.Lock()
+		p.acceptTasks[string(args.Blob.Digest)] = req.Task().Link()
+		p.mu.Unlock()
 		if p.reject[string(args.Blob.Digest)] {
 			return res.SetFailure(errors.New("BlobNotFound", "blob not delivered"))
 		}
@@ -246,56 +263,145 @@ func TestHTTPPutConcludeBatch(t *testing.T) {
 	})
 }
 
-// BenchmarkHTTPPutConclude measures sprue's own cost of concluding N puts —
-// store lookups, invocation signing, and the requests to the node — with the
-// receipts delivered one per conclusion versus all in one. It isolates the
-// upload service's overhead from the network between the real services.
-func BenchmarkHTTPPutConclude(b *testing.B) {
-	for _, n := range []int{1, 100, 1000} {
-		b.Run(fmt.Sprintf("blobs=%d/batched", n), func(b *testing.B) {
-			benchConclude(b, n, true)
-		})
-		b.Run(fmt.Sprintf("blobs=%d/one-at-a-time", n), func(b *testing.B) {
-			benchConclude(b, n, false)
-		})
-	}
-}
-
-func benchConclude(b *testing.B, blobs int, batched bool) {
-	t := &testing.T{}
-	logger := zap.NewNop()
-	ctx := b.Context()
+// TestHTTPPutConcludeAcceptsEveryInvocationInABatch pins the two properties a
+// batched accept rests on, both of which are easy to assume and hard to spot
+// if they regress: the node executes every invocation in one request, not
+// just the first, and the response carries a receipt for every one of them —
+// including the primary, whose receipt ucantone also surfaces separately.
+func TestHTTPPutConcludeAcceptsEveryInvocationInABatch(t *testing.T) {
+	logger := zaptest.NewLogger(t)
+	ctx := t.Context()
 	uploadService := testutil.WebService
 
 	sp := testutil.RandomIssuer(t)
 	piri := newCountingPiri(t, sp, uploadService)
 	deps := newHTTPPutDeps(t, piriclient.NewProvider(uploadService, logger), logger)
-	if err := deps.spStore.Put(ctx, sp.DID(), *piri.url, 100, nil, providerProofs(t, sp, uploadService)); err != nil {
-		b.Fatal(err)
-	}
+	require.NoError(t, deps.spStore.Put(ctx, sp.DID(), *piri.url, 100, nil, providerProofs(t, sp, uploadService)))
+
 	space := testutil.RandomIssuer(t)
 	provisionConcludeSpace(t, ctx, deps, uploadService, space.DID())
+	cause := testutil.RandomCID(t)
 
-	for b.Loop() {
-		b.StopTimer()
-		parked := parkBlobs(t, ctx, deps, uploadService, sp, space.DID(), testutil.RandomCID(t), blobs)
-		conclusions := make([]handlers.Conclusion, len(parked))
-		for i, p := range parked {
-			conclusions[i] = p.conc
-		}
-		b.StartTimer()
+	const blobs = 5
+	parked := parkBlobs(t, ctx, deps, uploadService, sp, space.DID(), cause, blobs)
+	conclusions := make([]handlers.Conclusion, len(parked))
+	for i, p := range parked {
+		conclusions[i] = p.conc
+	}
 
-		if batched {
-			if _, err := deps.ch.Handler(ctx, conclusions); err != nil {
-				b.Fatal(err)
-			}
+	meta, err := deps.ch.Handler(ctx, conclusions)
+	require.NoError(t, err)
+
+	// One request, every invocation executed.
+	require.EqualValues(t, 1, piri.requests.Load())
+	require.EqualValues(t, blobs, piri.accepts.Load())
+
+	// A receipt came back for every blob, the first included, and every blob
+	// registered. A response that dropped the primary receipt would leave the
+	// first blob of each request unregistered.
+	require.Len(t, meta.Receipts(), blobs)
+	for i, p := range parked {
+		_, err := deps.blobReg.Get(ctx, space.DID(), p.digest)
+		require.NoError(t, err, "blob %d (of %d) not registered", i, blobs)
+	}
+}
+
+// TestHTTPPutConcludeSkipsFailedPuts pins that a failed /http/put is never
+// accepted: the bytes never landed, so there is nothing for the node to
+// accept, and the rest of the batch must still go through.
+func TestHTTPPutConcludeSkipsFailedPuts(t *testing.T) {
+	logger := zaptest.NewLogger(t)
+	ctx := t.Context()
+	uploadService := testutil.WebService
+
+	sp := testutil.RandomIssuer(t)
+	piri := newCountingPiri(t, sp, uploadService)
+
+	deps := newHTTPPutDeps(t, piriclient.NewProvider(uploadService, logger), logger)
+	require.NoError(t, deps.spStore.Put(ctx, sp.DID(), *piri.url, 100, nil, providerProofs(t, sp, uploadService)))
+
+	space := testutil.RandomIssuer(t)
+	provisionConcludeSpace(t, ctx, deps, uploadService, space.DID())
+	cause := testutil.RandomCID(t)
+	parked := parkBlobs(t, ctx, deps, uploadService, sp, space.DID(), cause, 3)
+
+	// The middle blob's client reports that its upload failed.
+	conclusions := make([]handlers.Conclusion, len(parked))
+	for i, p := range parked {
+		conclusions[i] = p.conc
+	}
+	failed := parked[1]
+	blobProvider := deriveBlobProvider(t, failed.digest)
+	failedRcpt, err := receipt.IssueErr(blobProvider, failed.conc.Invocation.Task().Link(), datamodel.Map{
+		"name":    "UploadFailed",
+		"message": "the bytes never arrived",
+	})
+	require.NoError(t, err)
+	conclusions[1] = handlers.Conclusion{Invocation: failed.conc.Invocation, Receipt: failedRcpt}
+
+	_, err = deps.ch.Handler(ctx, conclusions)
+	require.NoError(t, err)
+
+	// Only the two successful puts reached the node.
+	require.EqualValues(t, 2, piri.accepts.Load(), "a failed put must not be accepted")
+
+	_, err = deps.blobReg.Get(ctx, space.DID(), failed.digest)
+	require.Error(t, err, "a failed put must not register its blob")
+	for i, p := range parked {
+		if i == 1 {
 			continue
 		}
-		for _, c := range conclusions {
-			if _, err := deps.ch.Handler(ctx, []handlers.Conclusion{c}); err != nil {
-				b.Fatal(err)
-			}
-		}
+		_, err := deps.blobReg.Get(ctx, space.DID(), p.digest)
+		require.NoError(t, err, "blob %d should still be registered", i)
 	}
-	b.ReportMetric(float64(piri.requests.Load()), "node-requests")
+}
+
+// TestHTTPPutConcludeAnswersLargeBatchByPolling pins what happens when a
+// conclusion is too large to answer in one container: every put is still
+// accepted and registered, and the response carries nothing rather than a
+// truncated set, leaving the deliverer to poll. Anything that decoded is
+// processed — the wire format's own limit is the only ceiling.
+func TestHTTPPutConcludeAnswersLargeBatchByPolling(t *testing.T) {
+	logger := zaptest.NewLogger(t)
+	ctx := t.Context()
+	uploadService := testutil.WebService
+
+	sp := testutil.RandomIssuer(t)
+	piri := newCountingPiri(t, sp, uploadService)
+	deps := newHTTPPutDeps(t, piriclient.NewProvider(uploadService, logger), logger)
+	require.NoError(t, deps.spStore.Put(ctx, sp.DID(), *piri.url, 100, nil, providerProofs(t, sp, uploadService)))
+
+	space := testutil.RandomIssuer(t)
+	provisionConcludeSpace(t, ctx, deps, uploadService, space.DID())
+	cause := testutil.RandomCID(t)
+
+	// Each acceptance contributes four tokens to the response — the accept
+	// invocation and receipt, plus the location commitment and PDP promise —
+	// so this clears the budget while staying well inside what the request
+	// container itself can carry.
+	const blobs = 2100
+	parked := parkBlobs(t, ctx, deps, uploadService, sp, space.DID(), cause, blobs)
+	conclusions := make([]handlers.Conclusion, len(parked))
+	for i, p := range parked {
+		conclusions[i] = p.conc
+	}
+
+	meta, err := deps.ch.Handler(ctx, conclusions)
+	require.NoError(t, err)
+	require.Nil(t, meta, "an unanswerable conclusion returns no container, not a truncated one")
+
+	// The work still happened: every blob accepted and registered.
+	require.EqualValues(t, blobs, piri.accepts.Load())
+	for i, p := range parked {
+		_, err := deps.blobReg.Get(ctx, space.DID(), p.digest)
+		require.NoError(t, err, "blob %d of %d not registered", i, blobs)
+	}
+
+	// And every accept receipt is retrievable by task link, which is what the
+	// deliverer polls for. One agent message could not have held them all, so
+	// this is what proves persistence chunked rather than failed.
+	for _, p := range []parkedBlob{parked[0], parked[blobs/2], parked[blobs-1]} {
+		_, err := deps.agentStore.GetReceipt(ctx, piri.acceptTask(t, p.digest))
+		require.NoError(t, err, "accept receipt for %x not retrievable", p.digest)
+	}
 }

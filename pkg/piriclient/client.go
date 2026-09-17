@@ -211,13 +211,17 @@ func (c *Client) AcceptBatch(ctx context.Context, reqs []*AcceptRequest, proofSt
 		results[i] = AcceptResult{Request: req, Invocation: inv}
 	}
 
+	// A chunk that fails leaves the earlier chunks already executed on the
+	// node, so the results so far are returned alongside the error: their
+	// acceptances are real and the caller must still persist and register
+	// them, or the node holds blobs sprue has no record of.
 	var metas []ucan.Container
 	for start := 0; start < len(invs); start += MaxAcceptBatch {
 		end := min(start+MaxAcceptBatch, len(invs))
 		meta, err := ucan_client.ExecuteBatch(ctx, c.client, c.logger, invs[start:end],
 			execution.WithDelegations(prfs...))
 		if err != nil {
-			return nil, nil, err
+			return results, metas, err
 		}
 		metas = append(metas, meta)
 		byRan := ucan_client.ReceiptsByRan(meta)

@@ -31,6 +31,17 @@ import (
 // limit keeps a large batch from swamping the store.
 const allocationLookupConcurrency = 16
 
+// maxContainerTokens is the most a UCAN container can carry: the wire format
+// caps its token array, and encoding or decoding more than this fails.
+// Invocations, delegations and receipts share the budget, deduplicated by
+// link.
+const maxContainerTokens = 8192
+
+// containerTokenBudget leaves headroom under maxContainerTokens for the tokens
+// the server wraps around ours — the conclusion's own receipt, and whatever a
+// sibling conclusion handler contributes to the same response.
+const containerTokenBudget = maxContainerTokens - 256
+
 // concludedPut is one delivered /http/put receipt resolved to the allocation
 // it fulfils — the space, blob and provider its acceptance needs.
 type concludedPut struct {
@@ -62,7 +73,24 @@ func NewHTTPPutConcludeHandler(
 			log := log.With(zap.Int("puts", len(conclusions)))
 			log.Debug("handling conclude")
 
-			puts, err := resolveAllocations(ctx, agentStore, conclusions, log)
+			// A failed /http/put means the bytes never landed, so there is
+			// nothing to accept. The delivery itself is still valid — the
+			// client is reporting a real outcome — so the failure is skipped
+			// rather than failing the whole conclusion.
+			delivered := make([]Conclusion, 0, len(conclusions))
+			for _, c := range conclusions {
+				if c.Receipt.Out().IsErr() {
+					log.Warn("skipping conclusion of a failed put",
+						zap.Stringer("ran", c.Receipt.Ran()))
+					continue
+				}
+				delivered = append(delivered, c)
+			}
+			if len(delivered) == 0 {
+				return nil, nil
+			}
+
+			puts, err := resolveAllocations(ctx, agentStore, delivered, log)
 			if err != nil {
 				return nil, err
 			}
@@ -87,16 +115,10 @@ func NewHTTPPutConcludeHandler(
 				invocations = append(invocations, invs...)
 				receipts = append(receipts, rcpts...)
 				if err != nil {
-					return container.New(
-						container.WithInvocations(invocations...),
-						container.WithReceipts(receipts...),
-					), err
+					return concludeResponse(invocations, receipts, log), err
 				}
 			}
-			return container.New(
-				container.WithInvocations(invocations...),
-				container.WithReceipts(receipts...),
-			), nil
+			return concludeResponse(invocations, receipts, log), nil
 		},
 	}
 }
@@ -160,6 +182,41 @@ func resolveAllocations(ctx context.Context, agentStore agent.Store, conclusions
 	return puts, nil
 }
 
+// concludeResponse packs the acceptances into the conclusion's response.
+// Returning them is a courtesy that saves the deliverer a poll per blob, not
+// part of the result, so a conclusion too large to answer in one container
+// answers with none: the artifacts are all persisted either way, and the
+// deliverer falls back to the receipts endpoint. Trimming is all-or-nothing
+// on purpose — handing back an accept receipt without the location commitment
+// it names would look like a malformed acceptance rather than a missing one.
+func concludeResponse(invs []ucan.Invocation, rcpts []ucan.Receipt, log *zap.Logger) ucan.Container {
+	if len(invs)+len(rcpts) > containerTokenBudget {
+		log.Warn("conclusion too large to answer in one container; the deliverer must poll for its receipts",
+			zap.Int("invocations", len(invs)), zap.Int("receipts", len(rcpts)))
+		return nil
+	}
+	return container.New(
+		container.WithInvocations(invs...),
+		container.WithReceipts(rcpts...),
+	)
+}
+
+// writeAgentMessages persists invocations and receipts as one or more agent
+// messages, each within a container's token budget. A single message per call
+// would fail to encode once a conclusion is large enough, losing the record of
+// acceptances the node has already performed.
+func writeAgentMessages(ctx context.Context, agentStore agent.Store, invs []ucan.Invocation, rcpts []ucan.Receipt) error {
+	for len(invs) > 0 || len(rcpts) > 0 {
+		nInvs := min(len(invs), containerTokenBudget)
+		nRcpts := min(len(rcpts), containerTokenBudget-nInvs)
+		if err := writeAgentMessage(ctx, agentStore, invs[:nInvs], rcpts[:nRcpts]); err != nil {
+			return err
+		}
+		invs, rcpts = invs[nInvs:], rcpts[nRcpts:]
+	}
+	return nil
+}
+
 // acceptOnProvider accepts every concluded put that landed on one provider,
 // persists the results, and registers the blobs that were accepted. It
 // returns the accept invocations and receipts (with the extras the node
@@ -205,10 +262,14 @@ func acceptOnProvider(
 	// what the client polls the receipts endpoint for. A divergence
 	// here means the receipt is stored under a CID nobody polls for,
 	// producing "receipt not found after N attempts" client-side.
-	results, metas, err := client.AcceptBatch(ctx, reqs, proofStore, invocation.WithNoNonce())
-	if err != nil {
-		log.Error("failed to execute blob accept", zap.Error(err))
-		return nil, nil, fmt.Errorf("executing blob accept: %w", err)
+	// AcceptBatch may fail partway and still return the chunks it completed.
+	// Those acceptances exist on the node, so they are persisted and
+	// registered below before the error is reported; dropping them would
+	// leave the node holding blobs sprue has no record of.
+	results, metas, acceptErr := client.AcceptBatch(ctx, reqs, proofStore, invocation.WithNoNonce())
+	if acceptErr != nil {
+		log.Error("failed to execute blob accept", zap.Error(acceptErr))
+		acceptErr = fmt.Errorf("executing blob accept: %w", acceptErr)
 	}
 
 	// The accept receipts and the artifacts piri attached to them (location
@@ -217,10 +278,13 @@ func acceptOnProvider(
 	var accInvs []ucan.Invocation
 	var accRcpts []ucan.Receipt
 	for _, res := range results {
-		accInvs = append(accInvs, res.Invocation)
-		if res.Receipt != nil {
-			accRcpts = append(accRcpts, res.Receipt)
+		// A chunk that never ran has no receipt; persisting its invocation
+		// alone would index an accept task that was never executed.
+		if res.Receipt == nil {
+			continue
 		}
+		accInvs = append(accInvs, res.Invocation)
+		accRcpts = append(accRcpts, res.Receipt)
 	}
 	for _, meta := range metas {
 		if meta == nil {
@@ -229,7 +293,11 @@ func acceptOnProvider(
 		accInvs = append(accInvs, meta.Invocations()...)
 		accRcpts = append(accRcpts, meta.Receipts()...)
 	}
-	if err := writeAgentMessage(ctx, agentStore, accInvs, accRcpts); err != nil {
+	// Written in container-sized messages: one container cannot hold more
+	// than containerTokenBudget tokens, and a large conclusion produces more
+	// than that. Persistence has to succeed whatever the batch size, since it
+	// is what makes these receipts retrievable by task link afterwards.
+	if err := writeAgentMessages(ctx, agentStore, accInvs, accRcpts); err != nil {
 		log.Error("failed to write agent message", zap.Error(err))
 		return accInvs, accRcpts, fmt.Errorf("writing agent message: %w", err)
 	}
@@ -265,5 +333,5 @@ func acceptOnProvider(
 			return accInvs, accRcpts, err
 		}
 	}
-	return accInvs, accRcpts, nil
+	return accInvs, accRcpts, acceptErr
 }

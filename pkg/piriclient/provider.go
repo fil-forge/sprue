@@ -39,14 +39,26 @@ type PiriProvider struct {
 var _ Provider = (*PiriProvider)(nil)
 
 func NewProvider(issuer ucan.Issuer, logger *zap.Logger) *PiriProvider {
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.MaxIdleConnsPerHost = maxIdleConnsPerPiri
-	transport.MaxIdleConns = maxIdleConnsPerPiri * 8
 	return &PiriProvider{
 		issuer: issuer,
 		logger: logger,
-		http:   &http.Client{Transport: transport, Timeout: piriRequestTimeout},
+		http:   &http.Client{Transport: pooledTransport(), Timeout: piriRequestTimeout},
 	}
+}
+
+// pooledTransport returns the default transport with the connection pool
+// widened. A process that replaced http.DefaultTransport with some other
+// RoundTripper keeps it as-is: the pool settings are a tuning detail, and
+// honouring the caller's transport matters more than applying them.
+func pooledTransport() http.RoundTripper {
+	def, ok := http.DefaultTransport.(*http.Transport)
+	if !ok {
+		return http.DefaultTransport
+	}
+	transport := def.Clone()
+	transport.MaxIdleConnsPerHost = maxIdleConnsPerPiri
+	transport.MaxIdleConns = maxIdleConnsPerPiri * 8
+	return transport
 }
 
 // Client provides a client configured to communicate with the specified storage
