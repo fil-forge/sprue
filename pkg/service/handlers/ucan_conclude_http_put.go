@@ -39,8 +39,10 @@ const maxContainerTokens = 8192
 
 // containerTokenBudget leaves headroom under maxContainerTokens for the tokens
 // the server wraps around ours — the conclusion's own receipt, and whatever a
-// sibling conclusion handler contributes to the same response.
-const containerTokenBudget = maxContainerTokens - 256
+// sibling conclusion handler contributes to the same response. A package-level
+// var so tests can shrink it: reaching the real budget takes a couple of
+// thousand blobs, which is far too slow to drive through a unit test.
+var containerTokenBudget = maxContainerTokens - 256
 
 // concludedPut is one delivered /http/put receipt resolved to the allocation
 // it fulfils — the space, blob and provider its acceptance needs.

@@ -38,6 +38,7 @@ import (
 	"github.com/fil-forge/ucantone/server"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/container"
+	"github.com/fil-forge/ucantone/ucan/delegation"
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/fil-forge/ucantone/ucan/promise"
 	"github.com/fil-forge/ucantone/ucan/receipt"
@@ -154,8 +155,11 @@ func newMockPiriServer(
 // authorizing `/blob/allocate` and `/blob/accept`.
 func providerProofs(t *testing.T, storageProvider, uploadService ucan.Issuer) ucan.Container {
 	t.Helper()
-	allocProof := testutil.Must(blobcmds.Allocate.Delegate(storageProvider, uploadService.DID(), storageProvider.DID()))(t)
-	acceptProof := testutil.Must(blobcmds.Accept.Delegate(storageProvider, uploadService.DID(), storageProvider.DID()))(t)
+	// No expiration: delegations default to 30 seconds, which a test slow
+	// enough to outlive them would fail against in a way that looks like a
+	// protocol bug rather than a stale fixture.
+	allocProof := testutil.Must(blobcmds.Allocate.Delegate(storageProvider, uploadService.DID(), storageProvider.DID(), delegation.WithNoExpiration()))(t)
+	acceptProof := testutil.Must(blobcmds.Accept.Delegate(storageProvider, uploadService.DID(), storageProvider.DID(), delegation.WithNoExpiration()))(t)
 	return container.New(container.WithDelegations(allocProof, acceptProof))
 }
 

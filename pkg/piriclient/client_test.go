@@ -10,6 +10,7 @@ import (
 	"github.com/fil-forge/sprue/pkg/piriclient"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/container"
+	"github.com/fil-forge/ucantone/ucan/delegation"
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
@@ -39,7 +40,8 @@ func TestAcceptInvocationExpiry(t *testing.T) {
 
 	// The provider's registration delegation, as the router hands it over.
 	acceptProof := testutil.Must(
-		blobcmds.Accept.Delegate(storageProvider, uploadService.DID(), storageProvider.DID()))(t)
+		blobcmds.Accept.Delegate(storageProvider, uploadService.DID(), storageProvider.DID(),
+			delegation.WithNoExpiration()))(t)
 	proofStore := ucanlib.NewContainerProofStore(container.New(container.WithDelegations(acceptProof)))
 
 	req := &piriclient.AcceptRequest{

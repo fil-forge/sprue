@@ -376,10 +376,12 @@ func TestHTTPPutConcludeAnswersLargeBatchByPolling(t *testing.T) {
 	cause := testutil.RandomCID(t)
 
 	// Each acceptance contributes four tokens to the response — the accept
-	// invocation and receipt, plus the location commitment and PDP promise —
-	// so this clears the budget while staying well inside what the request
-	// container itself can carry.
-	const blobs = 2100
+	// invocation and receipt, plus the location commitment and PDP promise.
+	// Reaching the real budget takes a couple of thousand blobs, so the
+	// budget is shrunk instead: the paths under test are the same, and the
+	// test stays fast enough to belong in the unit suite.
+	const blobs = 8
+	handlers.SetContainerTokenBudget(t, 4*blobs-1)
 	parked := parkBlobs(t, ctx, deps, uploadService, sp, space.DID(), cause, blobs)
 	conclusions := make([]handlers.Conclusion, len(parked))
 	for i, p := range parked {
