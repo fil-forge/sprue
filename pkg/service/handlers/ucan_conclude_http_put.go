@@ -31,18 +31,12 @@ import (
 // limit keeps a large batch from swamping the store.
 const allocationLookupConcurrency = 16
 
-// maxContainerTokens is the most a UCAN container can carry: the wire format
-// caps its token array, and encoding or decoding more than this fails.
-// Invocations, delegations and receipts share the budget, deduplicated by
-// link.
-const maxContainerTokens = 8192
-
-// containerTokenBudget leaves headroom under maxContainerTokens for the tokens
+// containerTokenBudget leaves headroom under container.MaxTokens for the tokens
 // the server wraps around ours — the conclusion's own receipt, and whatever a
 // sibling conclusion handler contributes to the same response. A package-level
 // var so tests can shrink it: reaching the real budget takes a couple of
 // thousand blobs, which is far too slow to drive through a unit test.
-var containerTokenBudget = maxContainerTokens - 256
+var containerTokenBudget = container.MaxTokens - 256
 
 // concludedPut is one delivered /http/put receipt resolved to the allocation
 // it fulfils — the space, blob and provider its acceptance needs.
