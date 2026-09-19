@@ -34,6 +34,7 @@ Routes blob allocations to Piri nodes and tracks upload state in PostgreSQL.`,
 	rootCmd.AddCommand(serveCmd)
 	rootCmd.AddCommand(client.Cmd)
 	rootCmd.AddCommand(identity.Cmd)
+	rootCmd.AddCommand(versionCmd)
 
 	// Global flags
 	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "", "config file path (default: looks for config.yaml in current dir)")

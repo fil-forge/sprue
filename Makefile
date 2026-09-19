@@ -15,7 +15,7 @@ sprue: FORCE
 	@if [ ! -f sprue ] || \
 	   [ -n "$$(find cmd pkg internal -name '*.go' -type f -newer sprue 2>/dev/null)" ]; then \
 		echo "Building sprue..."; \
-		go build $(GOFLAGS) -o ./sprue ./cmd/main.go; \
+		go build $(GOFLAGS) -o ./sprue ./cmd; \
 	fi
 
 FORCE:
