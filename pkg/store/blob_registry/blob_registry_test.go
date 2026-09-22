@@ -281,7 +281,7 @@ func TestBlobRegistryStore(t *testing.T) {
 				bl := randomBlob(t, 8192)
 				require.NoError(t, b.registry.Register(t.Context(), space, bl, cause))
 
-				spaceM, err := b.spaceMetrics.Get(t.Context(), space)
+				spaceM, err := b.spaceMetrics.Get(t.Context(), provider, space)
 				require.NoError(t, err)
 				require.Equal(t, uint64(1), spaceM[metrics.BlobAddTotalMetric])
 				require.Equal(t, uint64(8192), spaceM[metrics.BlobAddSizeTotalMetric])
@@ -304,7 +304,7 @@ func TestBlobRegistryStore(t *testing.T) {
 				require.NoError(t, b.registry.Register(t.Context(), space, bl, cause))
 				require.NoError(t, b.registry.Deregister(t.Context(), space, bl.Digest, cause))
 
-				spaceM, err := b.spaceMetrics.Get(t.Context(), space)
+				spaceM, err := b.spaceMetrics.Get(t.Context(), provider, space)
 				require.NoError(t, err)
 				require.Equal(t, uint64(1), spaceM[metrics.BlobRemoveTotalMetric])
 				require.Equal(t, uint64(4096), spaceM[metrics.BlobRemoveSizeTotalMetric])

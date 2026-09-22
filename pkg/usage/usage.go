@@ -9,7 +9,6 @@ import (
 	"time"
 
 	metricscmds "github.com/fil-forge/libforge/commands/metrics"
-	"github.com/fil-forge/libforge/identity"
 	"github.com/fil-forge/sprue/pkg/store/metrics"
 	spacediff "github.com/fil-forge/sprue/pkg/store/space_diff"
 	"github.com/fil-forge/ucantone/did"
@@ -78,19 +77,23 @@ type Sample struct {
 	BytesIngested uint64
 }
 
-// Series is a dense run of samples: one per window over [From, To), ordered by
-// ascending End, with no gaps. To is the requested end clamped to the current
-// time.
+// Series holds one dense run of samples per storage provider: one sample per
+// window over [From, To), ordered by ascending End, with no gaps. Every
+// provider's run shares the one bucket grid. To is the requested end clamped to
+// the current time.
+//
+// The runs describe the same stored bytes from each provider's side rather than
+// parts of a whole, so adding them together would count the same bytes once per
+// provider.
 type Series struct {
 	From    time.Time
 	To      time.Time
 	Window  time.Duration
-	Samples []Sample
+	Samples map[did.DID][]Sample
 }
 
-// Service answers usage queries for the spaces this service provides for.
+// Service answers usage queries against the recorded space diffs.
 type Service struct {
-	provider     did.DID
 	diffs        spacediff.Store
 	spaceMetrics metrics.SpaceStore
 	logger       *zap.Logger
@@ -104,16 +107,10 @@ func WithClock(now func() time.Time) Option {
 	return func(s *Service) { s.now = now }
 }
 
-// NewService builds a usage service reading the diffs recorded against this
-// service's own DID.
-//
-// Diffs are keyed by provider and this service writes one row per provider per
-// change, while the counters are incremented once. Reading a single provider is
-// therefore what keeps the two consistent, and this service's own DID is the
-// provider present from a space's first change onwards.
-func NewService(id identity.Identity, diffs spacediff.Store, spaceMetrics metrics.SpaceStore, logger *zap.Logger, opts ...Option) *Service {
+// NewService builds a usage service over the space diff log and the space byte
+// counters.
+func NewService(diffs spacediff.Store, spaceMetrics metrics.SpaceStore, logger *zap.Logger, opts ...Option) *Service {
 	s := &Service{
-		provider:     id.DID(),
 		diffs:        diffs,
 		spaceMetrics: spaceMetrics,
 		logger:       logger,
@@ -139,8 +136,15 @@ func ParseRange(from, to, window int64) (time.Time, time.Time, time.Duration, er
 }
 
 // Sample returns the usage series for a space over [from, to) in buckets of
-// window, ending no later than the present. A space with nothing stored, and
-// one this service has never seen, both return a series of zeros.
+// window, ending no later than the present, one run per storage provider given.
+// A space with nothing stored, and one this service has never seen, both return
+// runs of zeros.
+//
+// The provider is part of the reading, not a detail of it. A change to a space
+// writes a diff row and moves the running totals for each of the space's
+// providers, so a provider's totals balance its own rows however long it has
+// served the space. Reading several providers means replaying each separately.
+// The range is clamped once, so every run shares one grid.
 //
 // The last bucket is short whenever window does not divide the range covered.
 // Its stored bytes are exact, being a reading taken where it ends, while its
@@ -149,7 +153,7 @@ func ParseRange(from, to, window int64) (time.Time, time.Time, time.Duration, er
 // It may return [ErrInvalidRange], [ErrInvalidWindow], [ErrRangeTooBusy],
 // [ErrUsageUnstable], or a TooManySamples failure when the range holds more
 // buckets than [MaxSamples].
-func (s *Service) Sample(ctx context.Context, space did.DID, from, to time.Time, window time.Duration) (Series, error) {
+func (s *Service) Sample(ctx context.Context, providers []did.DID, space did.DID, from, to time.Time, window time.Duration) (Series, error) {
 	if from.IsZero() || !to.After(from) {
 		return Series{}, ErrInvalidRange
 	}
@@ -169,7 +173,7 @@ func (s *Service) Sample(ctx context.Context, space did.DID, from, to time.Time,
 		}
 	}
 	if !to.After(from) {
-		return Series{From: from, To: to, Window: window}, nil
+		return Series{From: from, To: to, Window: window, Samples: emptyRuns(providers)}, nil
 	}
 
 	n := int((to.Sub(from) + window - 1) / window)
@@ -177,9 +181,33 @@ func (s *Service) Sample(ctx context.Context, space did.DID, from, to time.Time,
 		return Series{}, errTooManySamples(n)
 	}
 
-	stored, rows, err := s.read(ctx, space, from)
+	runs := make(map[did.DID][]Sample, len(providers))
+	for _, provider := range providers {
+		samples, err := s.run(ctx, provider, space, from, to, window, n)
+		if err != nil {
+			return Series{}, err
+		}
+		runs[provider] = samples
+	}
+
+	return Series{From: from, To: to, Window: window, Samples: runs}, nil
+}
+
+// emptyRuns gives every provider an empty run, so a caller can index the map by
+// provider whether or not the range covered anything.
+func emptyRuns(providers []did.DID) map[did.DID][]Sample {
+	runs := make(map[did.DID][]Sample, len(providers))
+	for _, p := range providers {
+		runs[p] = []Sample{}
+	}
+	return runs
+}
+
+// run replays one provider's diffs into n buckets of window over [from, to).
+func (s *Service) run(ctx context.Context, provider, space did.DID, from, to time.Time, window time.Duration, n int) ([]Sample, error) {
+	stored, rows, err := s.read(ctx, provider, space, from)
 	if err != nil {
-		return Series{}, err
+		return nil, err
 	}
 
 	// Bucket k covers [from+(k-1)*window, from+k*window) and is indexed from 1.
@@ -234,11 +262,12 @@ func (s *Service) Sample(ctx context.Context, space did.DID, from, to time.Time,
 		cur -= deltas[k]
 	}
 
-	return Series{From: from, To: to, Window: window, Samples: samples}, nil
+	return samples, nil
 }
 
-// read returns the space's currently stored bytes together with the diffs from
-// the start of the range onwards, both describing the same instant.
+// read returns the bytes the space currently holds according to one provider,
+// together with that provider's diffs from the start of the range onwards, both
+// describing the same instant.
 //
 // The two come from different tables and one total anchors every sample, so a
 // blob landing between the reads would shift the whole series by its size. The
@@ -246,19 +275,19 @@ func (s *Service) Sample(ctx context.Context, space did.DID, from, to time.Time,
 // exactly that: unchanged means nothing committed for this space while the scan
 // ran. A change and an equal removal are caught too, because the counters are
 // compared separately rather than by their difference.
-func (s *Service) read(ctx context.Context, space did.DID, from time.Time) (int64, []spacediff.DifferenceRecord, error) {
-	totals, err := s.spaceMetrics.Get(ctx, space)
+func (s *Service) read(ctx context.Context, provider, space did.DID, from time.Time) (int64, []spacediff.DifferenceRecord, error) {
+	totals, err := s.spaceMetrics.Get(ctx, provider, space)
 	if err != nil {
 		return 0, nil, fmt.Errorf("getting space metrics: %w", err)
 	}
 
 	for attempt := 1; ; attempt++ {
-		rows, err := s.scan(ctx, space, from)
+		rows, err := s.scan(ctx, provider, space, from)
 		if err != nil {
 			return 0, nil, err
 		}
 
-		after, err := s.spaceMetrics.Get(ctx, space)
+		after, err := s.spaceMetrics.Get(ctx, provider, space)
 		if err != nil {
 			return 0, nil, fmt.Errorf("getting space metrics: %w", err)
 		}
@@ -288,7 +317,7 @@ func (s *Service) read(ctx context.Context, space did.DID, from time.Time) (int6
 //
 // This pages by hand rather than through store.Collect so the row count can be
 // bounded.
-func (s *Service) scan(ctx context.Context, space did.DID, from time.Time) ([]spacediff.DifferenceRecord, error) {
+func (s *Service) scan(ctx context.Context, provider, space did.DID, from time.Time) ([]spacediff.DifferenceRecord, error) {
 	after := from.Add(-time.Second)
 
 	var rows []spacediff.DifferenceRecord
@@ -298,7 +327,7 @@ func (s *Service) scan(ctx context.Context, space did.DID, from time.Time) ([]sp
 		if cursor != nil {
 			opts = append(opts, spacediff.WithListCursor(*cursor))
 		}
-		page, err := s.diffs.List(ctx, s.provider, space, after, opts...)
+		page, err := s.diffs.List(ctx, provider, space, after, opts...)
 		if err != nil {
 			return nil, fmt.Errorf("listing space diffs: %w", err)
 		}

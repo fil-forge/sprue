@@ -142,8 +142,9 @@ func TestSpaceStore(t *testing.T) {
 			t.Run("returns empty metrics for unknown space", func(t *testing.T) {
 				s := makeSpaceStore(t, k)
 				space := testutil.RandomDID(t)
+				provider := testutil.RandomDID(t)
 
-				result, err := s.Get(t.Context(), space)
+				result, err := s.Get(t.Context(), provider, space)
 				require.NoError(t, err)
 				require.Empty(t, result)
 			})
@@ -151,14 +152,15 @@ func TestSpaceStore(t *testing.T) {
 			t.Run("increments totals for a space", func(t *testing.T) {
 				s := makeSpaceStore(t, k)
 				space := testutil.RandomDID(t)
+				provider := testutil.RandomDID(t)
 
-				err := s.IncrementTotals(t.Context(), space, map[string]uint64{
+				err := s.IncrementTotals(t.Context(), provider, space, map[string]uint64{
 					metrics.BlobAddTotalMetric:     3,
 					metrics.BlobAddSizeTotalMetric: 2048,
 				})
 				require.NoError(t, err)
 
-				result, err := s.Get(t.Context(), space)
+				result, err := s.Get(t.Context(), provider, space)
 				require.NoError(t, err)
 				require.Equal(t, uint64(3), result[metrics.BlobAddTotalMetric])
 				require.Equal(t, uint64(2048), result[metrics.BlobAddSizeTotalMetric])
@@ -167,45 +169,69 @@ func TestSpaceStore(t *testing.T) {
 			t.Run("accumulates increments across multiple calls for a space", func(t *testing.T) {
 				s := makeSpaceStore(t, k)
 				space := testutil.RandomDID(t)
+				provider := testutil.RandomDID(t)
 
-				err := s.IncrementTotals(t.Context(), space, map[string]uint64{
+				err := s.IncrementTotals(t.Context(), provider, space, map[string]uint64{
 					metrics.BlobAddTotalMetric: 4,
 				})
 				require.NoError(t, err)
 
-				err = s.IncrementTotals(t.Context(), space, map[string]uint64{
+				err = s.IncrementTotals(t.Context(), provider, space, map[string]uint64{
 					metrics.BlobAddTotalMetric: 6,
 				})
 				require.NoError(t, err)
 
-				result, err := s.Get(t.Context(), space)
+				result, err := s.Get(t.Context(), provider, space)
 				require.NoError(t, err)
 				require.Equal(t, uint64(10), result[metrics.BlobAddTotalMetric])
 			})
 
+			t.Run("isolates metrics between the providers of one space", func(t *testing.T) {
+				s := makeSpaceStore(t, k)
+				space := testutil.RandomDID(t)
+				first := testutil.RandomDID(t)
+				second := testutil.RandomDID(t)
+
+				require.NoError(t, s.IncrementTotals(t.Context(), first, space, map[string]uint64{
+					metrics.BlobAddSizeTotalMetric: 1024,
+				}))
+				require.NoError(t, s.IncrementTotals(t.Context(), second, space, map[string]uint64{
+					metrics.BlobAddSizeTotalMetric: 4096,
+				}))
+
+				firstTotals, err := s.Get(t.Context(), first, space)
+				require.NoError(t, err)
+				require.Equal(t, uint64(1024), firstTotals[metrics.BlobAddSizeTotalMetric])
+
+				secondTotals, err := s.Get(t.Context(), second, space)
+				require.NoError(t, err)
+				require.Equal(t, uint64(4096), secondTotals[metrics.BlobAddSizeTotalMetric])
+			})
+
 			t.Run("isolates metrics between spaces", func(t *testing.T) {
 				s := makeSpaceStore(t, k)
+				provider := testutil.RandomDID(t)
 				space1 := testutil.RandomDID(t)
 				space2 := testutil.RandomDID(t)
 
-				err := s.IncrementTotals(t.Context(), space1, map[string]uint64{
+				err := s.IncrementTotals(t.Context(), provider, space1, map[string]uint64{
 					metrics.BlobAddTotalMetric:     10,
 					metrics.BlobAddSizeTotalMetric: 4096,
 				})
 				require.NoError(t, err)
 
-				err = s.IncrementTotals(t.Context(), space2, map[string]uint64{
+				err = s.IncrementTotals(t.Context(), provider, space2, map[string]uint64{
 					metrics.BlobAddTotalMetric:     3,
 					metrics.BlobAddSizeTotalMetric: 512,
 				})
 				require.NoError(t, err)
 
-				result1, err := s.Get(t.Context(), space1)
+				result1, err := s.Get(t.Context(), provider, space1)
 				require.NoError(t, err)
 				require.Equal(t, uint64(10), result1[metrics.BlobAddTotalMetric])
 				require.Equal(t, uint64(4096), result1[metrics.BlobAddSizeTotalMetric])
 
-				result2, err := s.Get(t.Context(), space2)
+				result2, err := s.Get(t.Context(), provider, space2)
 				require.NoError(t, err)
 				require.Equal(t, uint64(3), result2[metrics.BlobAddTotalMetric])
 				require.Equal(t, uint64(512), result2[metrics.BlobAddSizeTotalMetric])
@@ -214,8 +240,9 @@ func TestSpaceStore(t *testing.T) {
 			t.Run("increments multiple metrics independently for a space", func(t *testing.T) {
 				s := makeSpaceStore(t, k)
 				space := testutil.RandomDID(t)
+				provider := testutil.RandomDID(t)
 
-				err := s.IncrementTotals(t.Context(), space, map[string]uint64{
+				err := s.IncrementTotals(t.Context(), provider, space, map[string]uint64{
 					metrics.BlobAddTotalMetric:        1,
 					metrics.BlobRemoveTotalMetric:     2,
 					metrics.UploadAddTotalMetric:      3,
@@ -225,7 +252,7 @@ func TestSpaceStore(t *testing.T) {
 				})
 				require.NoError(t, err)
 
-				result, err := s.Get(t.Context(), space)
+				result, err := s.Get(t.Context(), provider, space)
 				require.NoError(t, err)
 				require.Equal(t, uint64(1), result[metrics.BlobAddTotalMetric])
 				require.Equal(t, uint64(2), result[metrics.BlobRemoveTotalMetric])

@@ -85,20 +85,23 @@ func (s *Store) Register(ctx context.Context, space did.DID, blob blobregistry.B
 		return fmt.Errorf("inserting blob registry entry: %w", err)
 	}
 
+	inc := map[string]uint64{
+		metrics.BlobAddTotalMetric:     1,
+		metrics.BlobAddSizeTotalMetric: blob.Size,
+	}
+
+	// Each provider gets the diff row and the counter movement together, so its
+	// counters always balance its own rows.
 	receiptAt := time.Now()
 	for _, c := range consumers {
 		if err := pgspacediff.PutWith(ctx, tx, c.Provider, space, c.Subscription, cause, int64(blob.Size), receiptAt); err != nil {
 			return err
 		}
+		if err := pgmetrics.IncrementSpaceWith(ctx, tx, c.Provider, space, inc); err != nil {
+			return err
+		}
 	}
 
-	inc := map[string]uint64{
-		metrics.BlobAddTotalMetric:     1,
-		metrics.BlobAddSizeTotalMetric: blob.Size,
-	}
-	if err := pgmetrics.IncrementSpaceWith(ctx, tx, space, inc); err != nil {
-		return err
-	}
 	if err := pgmetrics.IncrementAdminWith(ctx, tx, inc); err != nil {
 		return err
 	}
@@ -136,20 +139,21 @@ func (s *Store) Deregister(ctx context.Context, space did.DID, digest multihash.
 		return blobregistry.ErrEntryNotFound
 	}
 
+	inc := map[string]uint64{
+		metrics.BlobRemoveTotalMetric:     1,
+		metrics.BlobRemoveSizeTotalMetric: existing.Blob.Size,
+	}
+
 	receiptAt := time.Now()
 	for _, c := range consumers {
 		if err := pgspacediff.PutWith(ctx, tx, c.Provider, space, c.Subscription, cause, -int64(existing.Blob.Size), receiptAt); err != nil {
 			return err
 		}
+		if err := pgmetrics.IncrementSpaceWith(ctx, tx, c.Provider, space, inc); err != nil {
+			return err
+		}
 	}
 
-	inc := map[string]uint64{
-		metrics.BlobRemoveTotalMetric:     1,
-		metrics.BlobRemoveSizeTotalMetric: existing.Blob.Size,
-	}
-	if err := pgmetrics.IncrementSpaceWith(ctx, tx, space, inc); err != nil {
-		return err
-	}
 	if err := pgmetrics.IncrementAdminWith(ctx, tx, inc); err != nil {
 		return err
 	}

@@ -40,36 +40,43 @@ func (a *Store) IncrementTotals(ctx context.Context, inc map[string]uint64) erro
 	return nil
 }
 
+// spaceKey identifies one provider's totals for one space.
+type spaceKey struct {
+	provider did.DID
+	space    did.DID
+}
+
 type SpaceStore struct {
 	mutex   sync.RWMutex
-	metrics map[did.DID]*Store
+	metrics map[spaceKey]*Store
 }
 
 var _ metrics.SpaceStore = (*SpaceStore)(nil)
 
 func NewSpaceStore() *SpaceStore {
 	return &SpaceStore{
-		metrics: map[did.DID]*Store{},
+		metrics: map[spaceKey]*Store{},
 	}
 }
 
-func (a *SpaceStore) Get(ctx context.Context, space did.DID) (map[string]uint64, error) {
+func (a *SpaceStore) Get(ctx context.Context, provider did.DID, space did.DID) (map[string]uint64, error) {
 	a.mutex.RLock()
 	defer a.mutex.RUnlock()
-	s, ok := a.metrics[space]
+	s, ok := a.metrics[spaceKey{provider, space}]
 	if !ok {
 		return map[string]uint64{}, nil
 	}
 	return s.Get(ctx)
 }
 
-func (a *SpaceStore) IncrementTotals(ctx context.Context, space did.DID, inc map[string]uint64) error {
+func (a *SpaceStore) IncrementTotals(ctx context.Context, provider did.DID, space did.DID, inc map[string]uint64) error {
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
-	s, ok := a.metrics[space]
+	key := spaceKey{provider, space}
+	s, ok := a.metrics[key]
 	if !ok {
 		s = New()
-		a.metrics[space] = s
+		a.metrics[key] = s
 	}
 	return s.IncrementTotals(ctx, inc)
 }

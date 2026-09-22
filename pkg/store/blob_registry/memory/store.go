@@ -51,20 +51,21 @@ func (s *Store) Deregister(ctx context.Context, space did.DID, digest multihash.
 			if err != nil {
 				return fmt.Errorf("collecting consumers: %w", err)
 			}
-			// There should only be one subscription per provider, but in theory you
-			// could have multiple providers for the same consumer (space).
-			for _, c := range consumers {
-				s.spaceDiffStore.Put(ctx, c.Provider, space, c.Subscription, cause, -int64(ent.Blob.Size), time.Now())
-			}
-
 			inc := map[string]uint64{
 				metrics.BlobRemoveTotalMetric:     1,
 				metrics.BlobRemoveSizeTotalMetric: ent.Blob.Size,
 			}
-			err = s.spaceMetrics.IncrementTotals(ctx, space, inc)
-			if err != nil {
-				return fmt.Errorf("incrementing space metrics: %w", err)
+			// There should only be one subscription per provider, but in theory you
+			// could have multiple providers for the same consumer (space). Each one
+			// gets the diff row and the counter movement together, so its counters
+			// always balance its own rows.
+			for _, c := range consumers {
+				s.spaceDiffStore.Put(ctx, c.Provider, space, c.Subscription, cause, -int64(ent.Blob.Size), time.Now())
+				if err := s.spaceMetrics.IncrementTotals(ctx, c.Provider, space, inc); err != nil {
+					return fmt.Errorf("incrementing space metrics: %w", err)
+				}
 			}
+
 			err = s.adminMetrics.IncrementTotals(ctx, inc)
 			if err != nil {
 				return fmt.Errorf("incrementing admin metrics: %w", err)
@@ -150,20 +151,21 @@ func (s *Store) Register(ctx context.Context, space did.DID, blob blob.Blob, cau
 	if err != nil {
 		return fmt.Errorf("collecting consumers: %w", err)
 	}
-	// There should only be one subscription per provider, but in theory you
-	// could have multiple providers for the same consumer (space).
-	for _, c := range consumers {
-		s.spaceDiffStore.Put(ctx, c.Provider, space, c.Subscription, cause, int64(blob.Size), time.Now())
-	}
-
 	inc := map[string]uint64{
 		metrics.BlobAddTotalMetric:     1,
 		metrics.BlobAddSizeTotalMetric: blob.Size,
 	}
-	err = s.spaceMetrics.IncrementTotals(ctx, space, inc)
-	if err != nil {
-		return fmt.Errorf("incrementing space metrics: %w", err)
+	// There should only be one subscription per provider, but in theory you
+	// could have multiple providers for the same consumer (space). Each one gets
+	// the diff row and the counter movement together, so its counters always
+	// balance its own rows.
+	for _, c := range consumers {
+		s.spaceDiffStore.Put(ctx, c.Provider, space, c.Subscription, cause, int64(blob.Size), time.Now())
+		if err := s.spaceMetrics.IncrementTotals(ctx, c.Provider, space, inc); err != nil {
+			return fmt.Errorf("incrementing space metrics: %w", err)
+		}
 	}
+
 	err = s.adminMetrics.IncrementTotals(ctx, inc)
 	if err != nil {
 		return fmt.Errorf("incrementing admin metrics: %w", err)

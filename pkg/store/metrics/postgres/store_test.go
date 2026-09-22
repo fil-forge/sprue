@@ -34,9 +34,11 @@ func TestIncrementAdminWithSortsKeys(t *testing.T) {
 func TestIncrementSpaceWithSortsKeys(t *testing.T) {
 	space, err := did.Parse("did:web:example.com")
 	require.NoError(t, err)
+	provider, err := did.Parse("did:web:provider.example")
+	require.NoError(t, err)
 
 	rec := &recordingExec{}
 	inc := map[string]uint64{"zebra": 1, "alpha": 2, "mike": 3}
-	require.NoError(t, metricspostgres.IncrementSpaceWith(context.Background(), rec, space, inc))
+	require.NoError(t, metricspostgres.IncrementSpaceWith(context.Background(), rec, provider, space, inc))
 	require.Equal(t, []string{"alpha", "mike", "zebra"}, rec.metrics)
 }
