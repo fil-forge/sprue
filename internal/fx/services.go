@@ -18,6 +18,7 @@ import (
 	"github.com/fil-forge/sprue/pkg/routing"
 	"github.com/fil-forge/sprue/pkg/store/consumer"
 	"github.com/fil-forge/sprue/pkg/store/subscription"
+	"github.com/fil-forge/sprue/pkg/usage"
 )
 
 var ServicesModule = fx.Module("services",
@@ -25,6 +26,7 @@ var ServicesModule = fx.Module("services",
 	fx.Provide(NewProvisioningService),
 	fx.Provide(billing.NewService),
 	fx.Provide(routing.NewService),
+	fx.Provide(usage.NewService),
 )
 
 func NewMailingService(deploymentCfg config.DeploymentConfig, mailerCfg config.MailerConfig, logger *zap.Logger) (mailer.Mailer, error) {
