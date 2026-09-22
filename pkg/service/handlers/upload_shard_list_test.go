@@ -7,7 +7,6 @@ import (
 	shardcmds "github.com/fil-forge/libforge/commands/upload/shard"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/service/handlers"
-	upload_store "github.com/fil-forge/sprue/pkg/store/upload/memory"
 	"github.com/fil-forge/ucantone/execution"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/invocation"
@@ -48,10 +47,11 @@ func TestUploadShardListHandler(t *testing.T) {
 	alice := testutil.Alice
 
 	t.Run("empty shards", func(t *testing.T) {
-		store := upload_store.New()
+		store := newUploadStoreFixture(t)
 		handler := handlers.NewUploadShardListHandler(store, logger)
 
 		space := testutil.RandomIssuer(t)
+		store.provision(t, space.DID())
 		root := testutil.RandomCID(t)
 
 		// Upload exists with no shards.
@@ -68,10 +68,11 @@ func TestUploadShardListHandler(t *testing.T) {
 	})
 
 	t.Run("lists shards", func(t *testing.T) {
-		store := upload_store.New()
+		store := newUploadStoreFixture(t)
 		handler := handlers.NewUploadShardListHandler(store, logger)
 
 		space := testutil.RandomIssuer(t)
+		store.provision(t, space.DID())
 		root := testutil.RandomCID(t)
 		shard1 := testutil.RandomCID(t)
 		shard2 := testutil.RandomCID(t)
@@ -96,10 +97,11 @@ func TestUploadShardListHandler(t *testing.T) {
 	})
 
 	t.Run("with size limit", func(t *testing.T) {
-		store := upload_store.New()
+		store := newUploadStoreFixture(t)
 		handler := handlers.NewUploadShardListHandler(store, logger)
 
 		space := testutil.RandomIssuer(t)
+		store.provision(t, space.DID())
 		root := testutil.RandomCID(t)
 		shard1 := testutil.RandomCID(t)
 		shard2 := testutil.RandomCID(t)
@@ -119,10 +121,11 @@ func TestUploadShardListHandler(t *testing.T) {
 	})
 
 	t.Run("with cursor pagination", func(t *testing.T) {
-		store := upload_store.New()
+		store := newUploadStoreFixture(t)
 		handler := handlers.NewUploadShardListHandler(store, logger)
 
 		space := testutil.RandomIssuer(t)
+		store.provision(t, space.DID())
 		root := testutil.RandomCID(t)
 		shard1 := testutil.RandomCID(t)
 		shard2 := testutil.RandomCID(t)

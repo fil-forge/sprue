@@ -7,7 +7,7 @@ import (
 	uploadcmds "github.com/fil-forge/libforge/commands/upload"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/service/handlers"
-	upload_store "github.com/fil-forge/sprue/pkg/store/upload/memory"
+	"github.com/fil-forge/sprue/pkg/store/metrics"
 	"github.com/fil-forge/ucantone/execution"
 	"github.com/fil-forge/ucantone/server"
 	"github.com/fil-forge/ucantone/ucan"
@@ -49,10 +49,11 @@ func TestUploadRemoveHandler(t *testing.T) {
 	alice := testutil.Alice
 
 	t.Run("removes existing upload", func(t *testing.T) {
-		store := upload_store.New()
+		store := newUploadStoreFixture(t)
 		route := handlers.NewUploadRemoveHandler(store, logger)
 
 		space := testutil.RandomIssuer(t)
+		store.provision(t, space.DID())
 		root := testutil.RandomCID(t)
 		require.NoError(t, store.Upsert(ctx, space.DID(), root, nil, nil, testutil.RandomCID(t)))
 
@@ -66,21 +67,30 @@ func TestUploadRemoveHandler(t *testing.T) {
 	})
 
 	t.Run("unknown root is idempotent success", func(t *testing.T) {
-		store := upload_store.New()
+		store := newUploadStoreFixture(t)
 		route := handlers.NewUploadRemoveHandler(store, logger)
 
 		space := testutil.RandomIssuer(t)
+		store.provision(t, space.DID())
 		rcpt := invokeUploadRemove(t, ctx, route, alice, uploadService, space, testutil.RandomCID(t))
 		_, err := uploadcmds.Remove.Unpack(rcpt)
 		require.NoError(t, err)
+
+		// The handler reports the missing root as success, but nothing was
+		// removed, so the space's object count must not move.
+		spaceM, err := store.spaceMetrics.Get(ctx, space.DID())
+		require.NoError(t, err)
+		require.Zero(t, spaceM[metrics.UploadRemoveTotalMetric])
 	})
 
 	t.Run("only removes the requested space's entry", func(t *testing.T) {
-		store := upload_store.New()
+		store := newUploadStoreFixture(t)
 		route := handlers.NewUploadRemoveHandler(store, logger)
 
 		spaceA := testutil.RandomIssuer(t)
+		store.provision(t, spaceA.DID())
 		spaceB := testutil.RandomIssuer(t)
+		store.provision(t, spaceB.DID())
 		root := testutil.RandomCID(t)
 		require.NoError(t, store.Upsert(ctx, spaceA.DID(), root, nil, nil, testutil.RandomCID(t)))
 		require.NoError(t, store.Upsert(ctx, spaceB.DID(), root, nil, nil, testutil.RandomCID(t)))

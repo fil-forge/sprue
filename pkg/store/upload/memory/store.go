@@ -3,29 +3,41 @@ package memory
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"slices"
 	"sync"
 	"time"
 
 	"github.com/fil-forge/sprue/pkg/store"
+	"github.com/fil-forge/sprue/pkg/store/consumer"
+	"github.com/fil-forge/sprue/pkg/store/metrics"
 	"github.com/fil-forge/sprue/pkg/store/upload"
+	uploaddiff "github.com/fil-forge/sprue/pkg/store/upload_diff"
 	"github.com/fil-forge/ucantone/did"
 	"github.com/ipfs/go-cid"
 )
 
 type Store struct {
-	mutex   sync.RWMutex
-	uploads map[did.DID][]upload.UploadRecord
-	shards  map[did.DID]map[cid.Cid][]cid.Cid
+	mutex           sync.RWMutex
+	uploads         map[did.DID][]upload.UploadRecord
+	shards          map[did.DID]map[cid.Cid][]cid.Cid
+	uploadDiffStore uploaddiff.Store
+	consumerStore   consumer.Store
+	spaceMetrics    metrics.SpaceStore
+	adminMetrics    metrics.Store
 }
 
 var _ upload.Store = (*Store)(nil)
 
-func New() *Store {
+func New(uploadDiffStore uploaddiff.Store, consumerStore consumer.Store, spaceMetrics metrics.SpaceStore, adminMetrics metrics.Store) *Store {
 	return &Store{
 		uploads: map[did.DID][]upload.UploadRecord{},
 		// space -> upload root -> shards
-		shards: map[did.DID]map[cid.Cid][]cid.Cid{},
+		shards:          map[did.DID]map[cid.Cid][]cid.Cid{},
+		uploadDiffStore: uploadDiffStore,
+		consumerStore:   consumerStore,
+		spaceMetrics:    spaceMetrics,
+		adminMetrics:    adminMetrics,
 	}
 }
 
@@ -127,7 +139,7 @@ func (m *Store) ListShards(ctx context.Context, space did.DID, root cid.Cid, opt
 	return store.Page[cid.Cid]{Results: shards, Cursor: cursor}, nil
 }
 
-func (m *Store) Remove(ctx context.Context, space did.DID, root cid.Cid) error {
+func (m *Store) Remove(ctx context.Context, space did.DID, root cid.Cid, cause cid.Cid) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
@@ -138,12 +150,14 @@ func (m *Store) Remove(ctx context.Context, space did.DID, root cid.Cid) error {
 	idx := slices.IndexFunc(uploads, func(r upload.UploadRecord) bool {
 		return r.Root.String() == root.String()
 	})
+	// Nothing was removed, so nothing is counted. The handler reports a missing
+	// root as idempotent success; the count must not move for it.
 	if idx == -1 {
 		return upload.ErrUploadNotFound
 	}
 	m.uploads[space] = append(uploads[:idx], uploads[idx+1:]...)
 	delete(m.shards[space], root)
-	return nil
+	return m.recordDelta(ctx, space, cause, -1, metrics.UploadRemoveTotalMetric)
 }
 
 func (m *Store) Upsert(ctx context.Context, space did.DID, root cid.Cid, index *cid.Cid, shards []cid.Cid, cause cid.Cid) error {
@@ -158,7 +172,8 @@ func (m *Store) Upsert(ctx context.Context, space did.DID, root cid.Cid, index *
 	idx := slices.IndexFunc(uploads, func(r upload.UploadRecord) bool {
 		return r.Root.String() == root.String()
 	})
-	if idx == -1 {
+	inserted := idx == -1
+	if inserted {
 		uploads = append(uploads, upload.UploadRecord{
 			Space:      space,
 			Root:       root,
@@ -189,5 +204,59 @@ func (m *Store) Upsert(ctx context.Context, space did.DID, root cid.Cid, index *
 	slices.SortFunc(shardsByUpload[root], func(a, b cid.Cid) int {
 		return bytes.Compare(a.Bytes(), b.Bytes())
 	})
+	// Only a new root counts. The capability is an upsert by spec — adding the
+	// same root again merges shards and replaces the index — so a client retry
+	// must leave the count where it was.
+	if !inserted {
+		return nil
+	}
+	return m.recordDelta(ctx, space, cause, 1, metrics.UploadAddTotalMetric)
+}
+
+// recordDelta writes one object-count change: an upload_diff row per the
+// space's consumers and the matching metric increment at both the space and
+// admin scope. metric is the counter to bump (adds and removes have their own,
+// each monotonically increasing); delta is the signed change the diff log
+// carries, so the count at a time is the cumulative sum up to it.
+func (m *Store) recordDelta(ctx context.Context, space did.DID, cause cid.Cid, delta int64, metric string) error {
+	consumers, err := m.collectConsumers(ctx, space)
+	if err != nil {
+		return err
+	}
+	receiptAt := time.Now()
+	for _, c := range consumers {
+		if err := m.uploadDiffStore.Put(ctx, c.Provider, space, c.Subscription, cause, delta, receiptAt); err != nil {
+			return fmt.Errorf("putting upload diff: %w", err)
+		}
+	}
+
+	inc := map[string]uint64{metric: 1}
+	if err := m.spaceMetrics.IncrementTotals(ctx, space, inc); err != nil {
+		return fmt.Errorf("incrementing space metrics: %w", err)
+	}
+	if err := m.adminMetrics.IncrementTotals(ctx, inc); err != nil {
+		return fmt.Errorf("incrementing admin metrics: %w", err)
+	}
 	return nil
+}
+
+// collectConsumers returns the space's provider/subscription pairs, which the
+// upload_diff rows are keyed by. A space with none cannot be billed against, so
+// it is an error here — the upload/add handler rejects such a space with
+// InsufficientStorage before it ever reaches the store.
+func (m *Store) collectConsumers(ctx context.Context, space did.DID) ([]consumer.Record, error) {
+	results, err := store.Collect(ctx, func(ctx context.Context, options store.PaginationConfig) (store.Page[consumer.Record], error) {
+		opts := []consumer.ListOption{}
+		if options.Cursor != nil {
+			opts = append(opts, consumer.WithListCursor(*options.Cursor))
+		}
+		return m.consumerStore.List(ctx, space, opts...)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("listing consumers: %w", err)
+	}
+	if len(results) == 0 {
+		return nil, consumer.ErrConsumerNotFound
+	}
+	return results, nil
 }

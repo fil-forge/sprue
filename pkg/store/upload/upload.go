@@ -68,7 +68,8 @@ type Store interface {
 	// Lists the shards of an upload.
 	ListShards(ctx context.Context, space did.DID, root cid.Cid, options ...ListShardsOption) (store.Page[cid.Cid], error)
 	// Removes an item from the table but fails if the item does not exist.
-	Remove(ctx context.Context, space did.DID, root cid.Cid) error
+	// cause is the task that removed it, recorded on the upload diff.
+	Remove(ctx context.Context, space did.DID, root cid.Cid, cause cid.Cid) error
 	// Inserts an item in the table if it does not already exist or updates an
 	// existing item if it does exist.
 	Upsert(ctx context.Context, space did.DID, root cid.Cid, index *cid.Cid, shards []cid.Cid, cause cid.Cid) error

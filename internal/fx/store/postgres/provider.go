@@ -35,6 +35,8 @@ import (
 	pgroutingpolicy "github.com/fil-forge/sprue/pkg/store/routing_policy/postgres"
 	spacediff "github.com/fil-forge/sprue/pkg/store/space_diff"
 	pgspacediff "github.com/fil-forge/sprue/pkg/store/space_diff/postgres"
+	uploaddiff "github.com/fil-forge/sprue/pkg/store/upload_diff"
+	pguploaddiff "github.com/fil-forge/sprue/pkg/store/upload_diff/postgres"
 	storageprovider "github.com/fil-forge/sprue/pkg/store/storage_provider"
 	pgstorageprovider "github.com/fil-forge/sprue/pkg/store/storage_provider/postgres"
 	"github.com/fil-forge/sprue/pkg/store/subscription"
@@ -65,6 +67,7 @@ var Module = fx.Module("postgres-store",
 		fx.Annotate(NewRevocationStore, fx.As(new(revocation.Store))),
 		fx.Annotate(NewRoutingPolicyStore, fx.As(new(routingpolicy.Store))),
 		fx.Annotate(NewSpaceDiffStore, fx.As(fx.Self()), fx.As(new(spacediff.Store))),
+		fx.Annotate(NewUploadDiffStore, fx.As(fx.Self()), fx.As(new(uploaddiff.Store))),
 		fx.Annotate(NewStorageProviderStore, fx.As(new(storageprovider.Store))),
 		fx.Annotate(NewSubscriptionStore, fx.As(new(subscription.Store))),
 		fx.Annotate(NewUploadStore, fx.As(new(upload.Store))),
@@ -235,6 +238,10 @@ func NewSpaceDiffStore(mdb *MigratedPool) *pgspacediff.Store {
 	return pgspacediff.New(mdb.Pool)
 }
 
+func NewUploadDiffStore(mdb *MigratedPool) *pguploaddiff.Store {
+	return pguploaddiff.New(mdb.Pool)
+}
+
 func NewStorageProviderStore(mdb *MigratedPool) storageprovider.Store {
 	return pgstorageprovider.New(mdb.Pool)
 }
@@ -243,6 +250,6 @@ func NewSubscriptionStore(mdb *MigratedPool) subscription.Store {
 	return pgsubscription.New(mdb.Pool)
 }
 
-func NewUploadStore(mdb *MigratedPool) upload.Store {
-	return pgupload.New(mdb.Pool)
+func NewUploadStore(mdb *MigratedPool, consumerStore consumer.Store) upload.Store {
+	return pgupload.New(mdb.Pool, consumerStore)
 }

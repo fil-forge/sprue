@@ -7,7 +7,6 @@ import (
 	uploadcmds "github.com/fil-forge/libforge/commands/upload"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/service/handlers"
-	upload_store "github.com/fil-forge/sprue/pkg/store/upload/memory"
 	"github.com/fil-forge/ucantone/execution"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/invocation"
@@ -48,10 +47,11 @@ func TestUploadListHandler(t *testing.T) {
 	alice := testutil.Alice
 
 	t.Run("empty list", func(t *testing.T) {
-		store := upload_store.New()
+		store := newUploadStoreFixture(t)
 		handler := handlers.NewUploadListHandler(store, logger)
 
 		space := testutil.RandomIssuer(t)
+		store.provision(t, space.DID())
 		req, res := invokeUploadList(t, ctx, alice, uploadService, space, &uploadcmds.ListArguments{})
 
 		err := handler.Handler(req, res)
@@ -64,10 +64,11 @@ func TestUploadListHandler(t *testing.T) {
 	})
 
 	t.Run("lists uploads", func(t *testing.T) {
-		store := upload_store.New()
+		store := newUploadStoreFixture(t)
 		handler := handlers.NewUploadListHandler(store, logger)
 
 		space := testutil.RandomIssuer(t)
+		store.provision(t, space.DID())
 		root1 := testutil.RandomCID(t)
 		root2 := testutil.RandomCID(t)
 
@@ -92,10 +93,11 @@ func TestUploadListHandler(t *testing.T) {
 	})
 
 	t.Run("with size limit", func(t *testing.T) {
-		store := upload_store.New()
+		store := newUploadStoreFixture(t)
 		handler := handlers.NewUploadListHandler(store, logger)
 
 		space := testutil.RandomIssuer(t)
+		store.provision(t, space.DID())
 		for range 3 {
 			require.NoError(t, store.Upsert(ctx, space.DID(), testutil.RandomCID(t), nil, nil, testutil.RandomCID(t)))
 		}
@@ -113,10 +115,11 @@ func TestUploadListHandler(t *testing.T) {
 	})
 
 	t.Run("with cursor pagination", func(t *testing.T) {
-		store := upload_store.New()
+		store := newUploadStoreFixture(t)
 		handler := handlers.NewUploadListHandler(store, logger)
 
 		space := testutil.RandomIssuer(t)
+		store.provision(t, space.DID())
 		for range 3 {
 			require.NoError(t, store.Upsert(ctx, space.DID(), testutil.RandomCID(t), nil, nil, testutil.RandomCID(t)))
 		}
@@ -142,11 +145,13 @@ func TestUploadListHandler(t *testing.T) {
 	})
 
 	t.Run("does not list uploads from other spaces", func(t *testing.T) {
-		store := upload_store.New()
+		store := newUploadStoreFixture(t)
 		handler := handlers.NewUploadListHandler(store, logger)
 
 		space1 := testutil.RandomIssuer(t)
+		store.provision(t, space1.DID())
 		space2 := testutil.RandomIssuer(t)
+		store.provision(t, space2.DID())
 
 		require.NoError(t, store.Upsert(ctx, space1.DID(), testutil.RandomCID(t), nil, nil, testutil.RandomCID(t)))
 
@@ -160,10 +165,11 @@ func TestUploadListHandler(t *testing.T) {
 	})
 
 	t.Run("preserves optional index pointer", func(t *testing.T) {
-		store := upload_store.New()
+		store := newUploadStoreFixture(t)
 		handler := handlers.NewUploadListHandler(store, logger)
 
 		space := testutil.RandomIssuer(t)
+		store.provision(t, space.DID())
 		root := testutil.RandomCID(t)
 		index := testutil.RandomCID(t)
 		require.NoError(t, store.Upsert(ctx, space.DID(), root, &index, nil, testutil.RandomCID(t)))
