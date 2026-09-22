@@ -21,14 +21,14 @@ import (
 	memroutingpolicy "github.com/fil-forge/sprue/pkg/store/routing_policy/memory"
 	spacediff "github.com/fil-forge/sprue/pkg/store/space_diff"
 	memspacediff "github.com/fil-forge/sprue/pkg/store/space_diff/memory"
-	uploaddiff "github.com/fil-forge/sprue/pkg/store/upload_diff"
-	memuploaddiff "github.com/fil-forge/sprue/pkg/store/upload_diff/memory"
 	storageprovider "github.com/fil-forge/sprue/pkg/store/storage_provider"
 	memstorageprovider "github.com/fil-forge/sprue/pkg/store/storage_provider/memory"
 	"github.com/fil-forge/sprue/pkg/store/subscription"
 	memsubscription "github.com/fil-forge/sprue/pkg/store/subscription/memory"
 	"github.com/fil-forge/sprue/pkg/store/upload"
 	memupload "github.com/fil-forge/sprue/pkg/store/upload/memory"
+	uploaddiff "github.com/fil-forge/sprue/pkg/store/upload_diff"
+	memuploaddiff "github.com/fil-forge/sprue/pkg/store/upload_diff/memory"
 	"go.uber.org/fx"
 )
 
