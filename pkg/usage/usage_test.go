@@ -430,6 +430,21 @@ func TestSampleRejectsMoreBucketsThanTheLimit(t *testing.T) {
 	require.Len(t, run(t, series), usage.MaxSamples)
 }
 
+// ParseRange keeps the handler from asking for a span this wide, but Sample is
+// exported and must refuse it rather than panic on a negative bucket count.
+func TestSampleRejectsASpanThatSaturatesADuration(t *testing.T) {
+	s := stores{diffs: spacediffmemory.New(), metrics: metricsmemory.NewSpaceStore()}
+	now := time.Unix(1<<40, 0).UTC()
+	svc := newService(t, s, now)
+
+	_, err := svc.Sample(t.Context(), providers(), testutil.RandomDID(t),
+		time.Unix(-1<<62, 0).UTC(), now, time.Second)
+
+	var named errors.Named
+	require.ErrorAs(t, err, &named)
+	require.Equal(t, "TooManySamples", named.Name())
+}
+
 func TestParseRange(t *testing.T) {
 	t.Run("converts seconds to a range", func(t *testing.T) {
 		from, to, w, err := usage.ParseRange(1700000000, 1700003600, 3600)

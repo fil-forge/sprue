@@ -176,7 +176,15 @@ func (s *Service) Sample(ctx context.Context, providers []did.DID, space did.DID
 		return Series{From: from, To: to, Window: window, Samples: emptyRuns(providers)}, nil
 	}
 
-	n := int((to.Sub(from) + window - 1) / window)
+	// Divide first and round up from the remainder. Rounding up by adding
+	// window-1 to the span would overflow for a range starting far enough in
+	// the past that the span saturates a duration, turning the count negative
+	// and the allocations below into a panic.
+	span := to.Sub(from)
+	n := int(span / window)
+	if span%window != 0 {
+		n++
+	}
 	if n > MaxSamples {
 		return Series{}, errTooManySamples(n)
 	}
@@ -275,6 +283,11 @@ func (s *Service) run(ctx context.Context, provider, space did.DID, from, to tim
 // exactly that: unchanged means nothing committed for this space while the scan
 // ran. A change and an equal removal are caught too, because the counters are
 // compared separately rather than by their difference.
+//
+// This assumes the backend makes a change visible in both stores at once, which
+// the postgres stores do by committing them in one transaction. The in-memory
+// stores write them separately, so a reader there can still catch a diff row
+// whose counters have not moved yet; that backend is for development and tests.
 func (s *Service) read(ctx context.Context, provider, space did.DID, from time.Time) (int64, []spacediff.DifferenceRecord, error) {
 	totals, err := s.spaceMetrics.Get(ctx, provider, space)
 	if err != nil {

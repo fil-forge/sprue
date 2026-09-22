@@ -3,8 +3,6 @@ package postgres
 
 import (
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -72,7 +70,7 @@ func (s *Store) List(ctx context.Context, provider did.DID, space did.DID, after
 	conds = append(conds, "provider = $1", "space = $2")
 
 	if cfg.Cursor != nil {
-		receiptAt, cause, err := decodeCursor(*cfg.Cursor)
+		receiptAt, cause, err := spacediff.DecodeCursor(*cfg.Cursor)
 		if err != nil {
 			return store.Page[spacediff.DifferenceRecord]{}, fmt.Errorf("invalid cursor: %w", err)
 		}
@@ -141,31 +139,9 @@ func (s *Store) List(ctx context.Context, provider did.DID, space did.DID, after
 	var cursor *string
 	if len(records) > limit {
 		last := records[limit-1]
-		c := encodeCursor(last.ReceiptAt, last.Cause.String())
+		c := spacediff.EncodeCursor(last.ReceiptAt, last.Cause.String())
 		cursor = &c
 		records = records[:limit]
 	}
 	return store.Page[spacediff.DifferenceRecord]{Results: records, Cursor: cursor}, nil
-}
-
-type cursorPayload struct {
-	ReceiptAt time.Time `json:"r"`
-	Cause     string    `json:"c"`
-}
-
-func encodeCursor(receiptAt time.Time, cause string) string {
-	b, _ := json.Marshal(cursorPayload{ReceiptAt: receiptAt.UTC(), Cause: cause})
-	return base64.RawURLEncoding.EncodeToString(b)
-}
-
-func decodeCursor(cursor string) (time.Time, string, error) {
-	b, err := base64.RawURLEncoding.DecodeString(cursor)
-	if err != nil {
-		return time.Time{}, "", err
-	}
-	var p cursorPayload
-	if err := json.Unmarshal(b, &p); err != nil {
-		return time.Time{}, "", err
-	}
-	return p.ReceiptAt, p.Cause, nil
 }

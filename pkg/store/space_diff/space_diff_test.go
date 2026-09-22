@@ -3,6 +3,7 @@ package spacediff_test
 import (
 	"context"
 	"runtime"
+	"sync"
 	"testing"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	spacediff "github.com/fil-forge/sprue/pkg/store/space_diff"
 	spacediffmemory "github.com/fil-forge/sprue/pkg/store/space_diff/memory"
 	spacediffpostgres "github.com/fil-forge/sprue/pkg/store/space_diff/postgres"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -182,6 +184,37 @@ func TestSpaceDiffStore(t *testing.T) {
 				require.Len(t, all, 5)
 			})
 
+			t.Run("pages through diffs sharing one timestamp", func(t *testing.T) {
+				s := makeStore(t, k)
+				provider := testutil.RandomDID(t)
+				space := testutil.RandomDID(t)
+
+				// Every change lands at the same instant, so paging can only
+				// resume correctly if the cursor names the diff it stopped at
+				// rather than just the timestamp.
+				at := time.Now().UTC()
+				for i := range 5 {
+					require.NoError(t, s.Put(t.Context(), provider, space, "sub1", testutil.RandomCID(t), int64(i+1)*100, at))
+				}
+
+				all, err := store.Collect(t.Context(), func(ctx context.Context, opts store.PaginationConfig) (store.Page[spacediff.DifferenceRecord], error) {
+					listOpts := []spacediff.ListOption{spacediff.WithListLimit(2)}
+					if opts.Cursor != nil {
+						listOpts = append(listOpts, spacediff.WithListCursor(*opts.Cursor))
+					}
+					return s.List(ctx, provider, space, time.Time{}, listOpts...)
+				})
+				require.NoError(t, err)
+				require.Len(t, all, 5)
+
+				// Each diff appears once.
+				seen := map[string]bool{}
+				for _, d := range all {
+					require.False(t, seen[d.Cause.String()], "diff %s listed twice", d.Cause)
+					seen[d.Cause.String()] = true
+				}
+			})
+
 			t.Run("isolates diffs between spaces", func(t *testing.T) {
 				s := makeStore(t, k)
 				provider := testutil.RandomDID(t)
@@ -242,4 +275,24 @@ func TestSpaceDiffStore(t *testing.T) {
 			})
 		})
 	}
+}
+
+// Listing a provider or space the store has never seen must not write to it:
+// reads run concurrently, and a map written under a read lock corrupts or
+// panics. Metrics queries hit this path whenever a space has no diffs yet.
+func TestMemoryStoreConcurrentListOfUnseenSpace(t *testing.T) {
+	s := spacediffmemory.New()
+	provider := testutil.RandomDID(t)
+
+	var wg sync.WaitGroup
+	for range 16 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			page, err := s.List(t.Context(), provider, testutil.RandomDID(t), time.Time{})
+			assert.NoError(t, err)
+			assert.Empty(t, page.Results)
+		}()
+	}
+	wg.Wait()
 }

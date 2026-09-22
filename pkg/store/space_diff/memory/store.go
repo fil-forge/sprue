@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
-	"github.com/fil-forge/sprue/pkg/internal/timeutil"
 	"github.com/fil-forge/sprue/pkg/store"
 	spacediff "github.com/fil-forge/sprue/pkg/store/space_diff"
 	"github.com/fil-forge/ucantone/did"
@@ -42,39 +42,59 @@ func (s *Store) List(ctx context.Context, provider did.DID, space did.DID, after
 		limit = *cfg.Limit
 	}
 
-	if _, ok := s.diffs[provider]; !ok {
-		s.diffs[provider] = map[did.DID][]spacediff.DifferenceRecord{}
-	}
-	if _, ok := s.diffs[provider][space]; !ok {
-		s.diffs[provider][space] = []spacediff.DifferenceRecord{}
-	}
-
+	// Reading a provider or space this store has never seen yields no diffs.
+	// Creating the maps to say so would be a write, and this holds a read lock
+	// that concurrent readers share.
+	var (
+		cursorTime  time.Time
+		cursorCause string
+	)
 	if cfg.Cursor != nil {
-		cursorTime, err := time.Parse(timeutil.SimplifiedISO8601, *cfg.Cursor)
+		var err error
+		cursorTime, cursorCause, err = spacediff.DecodeCursor(*cfg.Cursor)
 		if err != nil {
 			return store.Page[spacediff.DifferenceRecord]{}, fmt.Errorf("invalid cursor: %w", err)
 		}
-		after = cursorTime
 	}
 
 	diffs := []spacediff.DifferenceRecord{}
 	for _, d := range s.diffs[provider][space] {
-		if d.ReceiptAt.After(after) {
-			diffs = append(diffs, d)
+		if cfg.Cursor != nil {
+			// Resume within a group of diffs sharing a timestamp, rather than
+			// past it, which would drop the rest of the group.
+			if !afterKey(d, cursorTime, cursorCause) {
+				continue
+			}
+		} else if !d.ReceiptAt.After(after) {
+			continue
+		}
+		diffs = append(diffs, d)
+		if len(diffs) > limit {
+			break
 		}
 	}
 
 	var cursor *string
 	if len(diffs) > limit {
 		diffs = diffs[:limit]
-		cursorStr := diffs[len(diffs)-1].ReceiptAt.Format(timeutil.SimplifiedISO8601)
-		cursor = &cursorStr
+		last := diffs[len(diffs)-1]
+		c := spacediff.EncodeCursor(last.ReceiptAt, last.Cause.String())
+		cursor = &c
 	}
 
 	return store.Page[spacediff.DifferenceRecord]{
 		Cursor:  cursor,
 		Results: diffs,
 	}, nil
+}
+
+// afterKey reports whether a diff sorts after the (receiptAt, cause) a cursor
+// names, matching the order rows are listed in.
+func afterKey(d spacediff.DifferenceRecord, receiptAt time.Time, cause string) bool {
+	if c := d.ReceiptAt.Compare(receiptAt); c != 0 {
+		return c > 0
+	}
+	return d.Cause.String() > cause
 }
 
 func (s *Store) Put(ctx context.Context, provider did.DID, space did.DID, subscription string, cause cid.Cid, delta int64, receiptAt time.Time) error {
@@ -93,11 +113,15 @@ func (s *Store) Put(ctx context.Context, provider did.DID, space did.DID, subscr
 		Subscription: subscription,
 		Cause:        cause,
 		Delta:        delta,
-		ReceiptAt:    receiptAt.UTC().Truncate(time.Millisecond),
+		ReceiptAt:    receiptAt.UTC(),
 		InsertedAt:   time.Now(),
 	})
+	// Sorted by the same key List pages on.
 	slices.SortFunc(s.diffs[provider][space], func(a, b spacediff.DifferenceRecord) int {
-		return a.ReceiptAt.Compare(b.ReceiptAt)
+		if c := a.ReceiptAt.Compare(b.ReceiptAt); c != 0 {
+			return c
+		}
+		return strings.Compare(a.Cause.String(), b.Cause.String())
 	})
 	return nil
 }

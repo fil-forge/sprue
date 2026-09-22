@@ -1,3 +1,12 @@
+// Package memory holds the in-memory blob registry, for local development and
+// tests.
+//
+// It writes a change to the space diff log and to the space byte counters
+// through two separate stores, each with its own lock, so the pair is not
+// atomic: a reader can catch the diff row before the counters move. Readers
+// that need the two to agree, such as the usage service, can only detect that
+// by re-reading. The postgres registry commits both in one transaction and has
+// no such window, which is why this stays a development backend.
 package memory
 
 import (
