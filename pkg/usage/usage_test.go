@@ -431,18 +431,44 @@ func TestSampleRejectsMoreBucketsThanTheLimit(t *testing.T) {
 }
 
 // ParseRange keeps the handler from asking for a span this wide, but Sample is
-// exported and must refuse it rather than panic on a negative bucket count.
+// exported and must refuse one rather than panic or quietly measure a range it
+// cannot express.
 func TestSampleRejectsASpanThatSaturatesADuration(t *testing.T) {
 	s := stores{diffs: spacediffmemory.New(), metrics: metricsmemory.NewSpaceStore()}
 	now := time.Unix(1<<40, 0).UTC()
 	svc := newService(t, s, now)
+	space := testutil.RandomDID(t)
+	from := time.Unix(-1<<62, 0).UTC()
 
-	_, err := svc.Sample(t.Context(), providers(), testutil.RandomDID(t),
-		time.Unix(-1<<62, 0).UTC(), now, time.Second)
-
+	// A window small enough that the bucket count alone would give it away.
+	_, err := svc.Sample(t.Context(), providers(), space, from, now, time.Second)
 	var named errors.Named
 	require.ErrorAs(t, err, &named)
-	require.Equal(t, "TooManySamples", named.Name())
+	require.Equal(t, "InvalidRange", named.Name())
+
+	// And one wide enough that the saturated span still counts under the sample
+	// limit, where only the saturation itself gives it away.
+	_, err = svc.Sample(t.Context(), providers(), space, from, now, 366*24*time.Hour)
+	require.ErrorAs(t, err, &named)
+	require.Equal(t, "InvalidRange", named.Name())
+}
+
+// A range the service can express is served in full: its last bucket ends where
+// the range does, however far apart the ends are.
+func TestSampleCoversAWideButExpressibleRange(t *testing.T) {
+	s := stores{diffs: spacediffmemory.New(), metrics: metricsmemory.NewSpaceStore()}
+	from := time.Date(1900, 1, 1, 0, 0, 0, 0, time.UTC)
+	now := time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC)
+	svc := newService(t, s, now)
+
+	series, err := svc.Sample(t.Context(), providers(), testutil.RandomDID(t), from, now, 366*24*time.Hour)
+	require.NoError(t, err)
+
+	samples := run(t, series)
+	require.NotEmpty(t, samples)
+	require.True(t, samples[len(samples)-1].End.Equal(now),
+		"series ends at %s, want %s", samples[len(samples)-1].End, now)
+	requireDense(t, series, samples)
 }
 
 func TestParseRange(t *testing.T) {

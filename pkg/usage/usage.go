@@ -176,11 +176,17 @@ func (s *Service) Sample(ctx context.Context, providers []did.DID, space did.DID
 		return Series{From: from, To: to, Window: window, Samples: emptyRuns(providers)}, nil
 	}
 
-	// Divide first and round up from the remainder. Rounding up by adding
-	// window-1 to the span would overflow for a range starting far enough in
-	// the past that the span saturates a duration, turning the count negative
-	// and the allocations below into a panic.
+	// A duration cannot express more than about 292 years, and Sub saturates
+	// rather than wrapping, so a wider range would silently measure as that
+	// much and return a series stopping short of the range asked for.
 	span := to.Sub(from)
+	if span == math.MaxInt64 {
+		return Series{}, ErrInvalidRange
+	}
+
+	// Divide first and round up from the remainder. Rounding up by adding
+	// window-1 to the span would overflow for a range near that limit, turning
+	// the count negative and the allocations below into a panic.
 	n := int(span / window)
 	if span%window != 0 {
 		n++
@@ -248,13 +254,22 @@ func (s *Service) run(ctx context.Context, provider, space did.DID, from, to tim
 
 	// Walk back from the stored bytes at `to`, shedding each bucket's changes to
 	// reach the bytes held when that bucket opened.
-	samples := make([]Sample, n)
-	cur := stored - tail
-	for k := n; k >= 1; k-- {
-		end := from.Add(time.Duration(k) * window)
+	// Bucket ends are accumulated rather than reached by multiplying the window
+	// out, which overflows a duration once the range approaches its limit.
+	ends := make([]time.Time, n)
+	end := from
+	for k := range n {
+		end = end.Add(window)
 		if end.After(to) {
 			end = to
 		}
+		ends[k] = end
+	}
+
+	samples := make([]Sample, n)
+	cur := stored - tail
+	for k := n; k >= 1; k-- {
+		end := ends[k-1]
 		held := cur
 		if held < 0 {
 			// The counters and the diff log disagree. Report nothing held

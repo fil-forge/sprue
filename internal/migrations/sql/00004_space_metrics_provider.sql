@@ -15,14 +15,29 @@ CREATE TABLE space_metrics_by_provider (
     PRIMARY KEY (provider, space, name)
 );
 
--- Existing totals were counted once per change regardless of how many providers
--- served the space, which is what each individual provider recorded, so every
--- provider of the space inherits the whole value. A space with no consumer row
--- cannot have accrued metrics, since registering a blob requires one.
+-- Rebuild each provider's totals from the changes that provider recorded, which
+-- space_diff has held per provider all along. Copying the old space-wide total
+-- to every current provider would instead hand a provider added part way
+-- through a baseline of bytes it never served, which is the very thing keying
+-- these totals by provider is meant to stop.
+--
+-- One diff row is one blob event, and the counters moved once per event, so the
+-- log reconstructs them exactly. A zero-delta row counts as a store: nothing
+-- distinguishes adding from removing an empty blob, and either way it
+-- contributes no bytes. The metric names are the values of the constants in
+-- pkg/store/metrics as of this migration.
 INSERT INTO space_metrics_by_provider (provider, space, name, value)
-SELECT DISTINCT c.provider, m.space, m.name, m.value
-FROM space_metrics m
-JOIN consumer c ON c.consumer = m.space;
+SELECT provider, space, '/blob/add-total', COUNT(*)
+FROM space_diff WHERE delta >= 0 GROUP BY provider, space
+UNION ALL
+SELECT provider, space, '/blob/add-size-total', COALESCE(SUM(delta), 0)
+FROM space_diff WHERE delta >= 0 GROUP BY provider, space
+UNION ALL
+SELECT provider, space, '/blob/remove-total', COUNT(*)
+FROM space_diff WHERE delta < 0 GROUP BY provider, space
+UNION ALL
+SELECT provider, space, '/blob/remove-size-total', -COALESCE(SUM(delta), 0)
+FROM space_diff WHERE delta < 0 GROUP BY provider, space;
 
 DROP TABLE space_metrics;
 ALTER TABLE space_metrics_by_provider RENAME TO space_metrics;
@@ -41,8 +56,10 @@ CREATE TABLE space_metrics_by_space (
     PRIMARY KEY (space, name)
 );
 
--- Collapsing back keeps one value per space. The providers of a space hold the
--- same totals, so the largest is the space's total rather than their sum.
+-- Collapsing back keeps one value per space. A space's providers can hold
+-- different totals, since each counts only what it served, and the old
+-- space-wide counter moved once per change however many providers saw it, so
+-- the fullest history is the space's total rather than their sum.
 INSERT INTO space_metrics_by_space (space, name, value)
 SELECT space, name, MAX(value)
 FROM space_metrics
