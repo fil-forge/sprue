@@ -423,7 +423,9 @@ func maybeAccept(
 		}
 
 		err = blobRegistry.Register(ctx, space, blob, cause)
-		if err != nil {
+		// Another invocation for the same blob, e.g. a duplicate in the same
+		// batch, may have registered it after we checked.
+		if err != nil && !errors.Is(err, blobregistry.ErrEntryExists) {
 			log.Error("failed to register blob", zap.Error(err))
 			return nil, nil, acceptExtras{}, err
 		}
