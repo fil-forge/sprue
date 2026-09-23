@@ -4,6 +4,7 @@ import (
 	"context"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/fil-forge/libforge/commands/blob"
 	"github.com/fil-forge/sprue/internal/testutil"
@@ -17,7 +18,10 @@ import (
 	"github.com/fil-forge/sprue/pkg/store/metrics"
 	metricsmemory "github.com/fil-forge/sprue/pkg/store/metrics/memory"
 	metricspostgres "github.com/fil-forge/sprue/pkg/store/metrics/postgres"
+	spacediff "github.com/fil-forge/sprue/pkg/store/space_diff"
 	spacediffmemory "github.com/fil-forge/sprue/pkg/store/space_diff/memory"
+	spacediffpostgres "github.com/fil-forge/sprue/pkg/store/space_diff/postgres"
+	"github.com/fil-forge/ucantone/did"
 	"github.com/stretchr/testify/require"
 )
 
@@ -35,6 +39,7 @@ var storeKinds = []StoreKind{Memory, Postgres}
 type storeBundle struct {
 	registry     blobregistry.Store
 	consumers    consumer.Store
+	spaceDiffs   spacediff.Store
 	spaceMetrics metrics.SpaceStore
 	adminMetrics metrics.Store
 }
@@ -50,6 +55,7 @@ func makeStores(t *testing.T, k StoreKind) storeBundle {
 		return storeBundle{
 			registry:     registry,
 			consumers:    consumerStore,
+			spaceDiffs:   spaceDiffStore,
 			spaceMetrics: spaceMetrics,
 			adminMetrics: adminMetrics,
 		}
@@ -76,6 +82,7 @@ func createPostgresStores(t *testing.T) storeBundle {
 	return storeBundle{
 		registry:     registry,
 		consumers:    consumerStore,
+		spaceDiffs:   spacediffpostgres.New(pool),
 		spaceMetrics: spaceMetrics,
 		adminMetrics: adminMetrics,
 	}
@@ -314,6 +321,38 @@ func TestBlobRegistryStore(t *testing.T) {
 				require.Equal(t, uint64(1), adminM[metrics.BlobRemoveTotalMetric])
 				require.Equal(t, uint64(4096), adminM[metrics.BlobRemoveSizeTotalMetric])
 			})
+		})
+	}
+}
+
+// A change is one event however many providers record it, so every provider's
+// diff row must carry the same instant. Reading the clock per provider lets a
+// window boundary fall inside the loop, which would scatter one change across
+// different buckets in different providers' series.
+func TestRegisterRecordsOneTimestampAcrossProviders(t *testing.T) {
+	for _, k := range storeKinds {
+		t.Run(string(k), func(t *testing.T) {
+			b := makeStores(t, k)
+			space := testutil.RandomDID(t)
+			customer := testutil.RandomDID(t)
+			first := testutil.RandomDID(t)
+			second := testutil.RandomDID(t)
+
+			require.NoError(t, b.consumers.Add(t.Context(), first, space, customer, "sub1", testutil.RandomCID(t)))
+			require.NoError(t, b.consumers.Add(t.Context(), second, space, customer, "sub2", testutil.RandomCID(t)))
+
+			bl := randomBlob(t, 4096)
+			require.NoError(t, b.registry.Register(t.Context(), space, bl, testutil.RandomCID(t)))
+
+			at := map[did.DID]time.Time{}
+			for _, p := range []did.DID{first, second} {
+				page, err := b.spaceDiffs.List(t.Context(), p, space, time.Time{})
+				require.NoError(t, err)
+				require.Len(t, page.Results, 1, "provider %s", p)
+				at[p] = page.Results[0].ReceiptAt
+			}
+			require.True(t, at[first].Equal(at[second]),
+				"providers recorded the same change at %s and %s", at[first], at[second])
 		})
 	}
 }

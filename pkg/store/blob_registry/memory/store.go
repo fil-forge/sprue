@@ -67,9 +67,13 @@ func (s *Store) Deregister(ctx context.Context, space did.DID, digest multihash.
 			// There should only be one subscription per provider, but you can
 			// have multiple providers for the same consumer (space). Each one
 			// gets the diff row and the counter movement together, so its
-			// counters always balance its own rows.
+			// counters always balance its own rows. One timestamp covers them
+			// all: it is one change, and reading it per provider would let a
+			// window boundary fall inside the loop and scatter that change
+			// across different buckets in different providers' series.
+			receiptAt := time.Now()
 			for _, c := range consumers {
-				s.spaceDiffStore.Put(ctx, c.Provider, space, c.Subscription, cause, -int64(ent.Blob.Size), time.Now())
+				s.spaceDiffStore.Put(ctx, c.Provider, space, c.Subscription, cause, -int64(ent.Blob.Size), receiptAt)
 				if err := s.spaceMetrics.IncrementTotals(ctx, c.Provider, space, inc); err != nil {
 					return fmt.Errorf("incrementing space metrics: %w", err)
 				}
@@ -167,9 +171,12 @@ func (s *Store) Register(ctx context.Context, space did.DID, blob blob.Blob, cau
 	// There should only be one subscription per provider, but you can have
 	// multiple providers for the same consumer (space). Each one gets the diff
 	// row and the counter movement together, so its counters always balance its
-	// own rows.
+	// own rows. One timestamp covers them all: it is one change, and reading it
+	// per provider would let a window boundary fall inside the loop and scatter
+	// that change across different buckets in different providers' series.
+	receiptAt := time.Now()
 	for _, c := range consumers {
-		s.spaceDiffStore.Put(ctx, c.Provider, space, c.Subscription, cause, int64(blob.Size), time.Now())
+		s.spaceDiffStore.Put(ctx, c.Provider, space, c.Subscription, cause, int64(blob.Size), receiptAt)
 		if err := s.spaceMetrics.IncrementTotals(ctx, c.Provider, space, inc); err != nil {
 			return fmt.Errorf("incrementing space metrics: %w", err)
 		}
