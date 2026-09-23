@@ -18,7 +18,7 @@ import (
 	"go.uber.org/zap"
 )
 
-var (
+const (
 	initialWeight            = 0
 	initialReplicationWeight = 0
 )
@@ -69,7 +69,8 @@ func NewAdminProviderRegisterHandler(id identity.Identity, providerStore storage
 				}
 			}
 
-			err = providerStore.Add(req.Context(), args.Provider, *endpoint, initialWeight, &initialReplicationWeight, proofs)
+			replicationWeight := initialReplicationWeight
+			err = providerStore.Add(req.Context(), args.Provider, *endpoint, initialWeight, &replicationWeight, proofs)
 			if err != nil {
 				if errors.Is(err, storageprovider.ErrStorageProviderExists) {
 					log.Warn("Provider already registered", zap.Stringer("provider", args.Provider))
