@@ -90,3 +90,11 @@ func TestLoadEmptyEnvOverridesDefault(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "", cfg.Indexer.Endpoint)
 }
+
+func TestLoadPostgresMaxConnsDefaultsTo100(t *testing.T) {
+	// Matches server.DefaultMaxConcurrency, how many invocations of one request
+	// ucantone executes at the same time.
+	cfg, err := Load(emptyConfigFile(t))
+	assert.NoError(t, err)
+	assert.Equal(t, int32(100), cfg.Storage.Postgres.MaxConns)
+}

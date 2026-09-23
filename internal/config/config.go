@@ -193,7 +193,7 @@ func SetDefaults(v *viper.Viper) {
 
 	// Postgres defaults
 	v.SetDefault("storage.postgres.dsn", "postgres://sprue:sprue@postgres:5432/sprue?sslmode=disable")
-	v.SetDefault("storage.postgres.max_conns", 10)
+	v.SetDefault("storage.postgres.max_conns", 100)
 	v.SetDefault("storage.postgres.min_conns", 0)
 
 	// S3 defaults (used by the postgres backend for blob payloads)
