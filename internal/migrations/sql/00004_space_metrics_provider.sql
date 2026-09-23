@@ -39,6 +39,22 @@ UNION ALL
 SELECT provider, space, '/blob/remove-size-total', -COALESCE(SUM(delta), 0)
 FROM space_diff WHERE delta < 0 GROUP BY provider, space;
 
+-- The diff log describes blob changes and nothing else, so a metric outside
+-- the four above cannot be rebuilt from it and is carried across as it stands,
+-- against each provider of the space. A space has one provider, so this keeps
+-- the value rather than duplicating it. Dropping these instead would lose them
+-- silently, and the store accepts any metric name.
+INSERT INTO space_metrics_by_provider (provider, space, name, value)
+SELECT DISTINCT c.provider, m.space, m.name, m.value
+FROM space_metrics m
+JOIN consumer c ON c.consumer = m.space
+WHERE m.name NOT IN (
+    '/blob/add-total',
+    '/blob/add-size-total',
+    '/blob/remove-total',
+    '/blob/remove-size-total'
+);
+
 DROP TABLE space_metrics;
 ALTER TABLE space_metrics_by_provider RENAME TO space_metrics;
 -- A table rename leaves the primary key named after the table it was built as.
@@ -74,6 +90,19 @@ FROM (SELECT DISTINCT space, cause FROM space_diff WHERE delta < 0) c GROUP BY s
 UNION ALL
 SELECT space, '/blob/remove-size-total', -COALESCE(SUM(delta), 0)
 FROM (SELECT DISTINCT space, cause, delta FROM space_diff WHERE delta < 0) c GROUP BY space;
+
+-- And the same for metrics the log cannot describe, collapsing the providers
+-- of a space back to the one row the old schema held.
+INSERT INTO space_metrics_by_space (space, name, value)
+SELECT space, name, MAX(value)
+FROM space_metrics
+WHERE name NOT IN (
+    '/blob/add-total',
+    '/blob/add-size-total',
+    '/blob/remove-total',
+    '/blob/remove-size-total'
+)
+GROUP BY space, name;
 
 DROP TABLE space_metrics;
 ALTER TABLE space_metrics_by_space RENAME TO space_metrics;
