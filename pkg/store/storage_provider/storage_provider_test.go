@@ -11,6 +11,7 @@ import (
 	storageprovider "github.com/fil-forge/sprue/pkg/store/storage_provider"
 	storageprovidermemory "github.com/fil-forge/sprue/pkg/store/storage_provider/memory"
 	storageproviderpostgres "github.com/fil-forge/sprue/pkg/store/storage_provider/postgres"
+	"github.com/fil-forge/ucantone/did"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/command"
 	"github.com/fil-forge/ucantone/ucan/container"
@@ -66,6 +67,17 @@ func randomProofs(t *testing.T) ucan.Container {
 	dlg, err := delegation.Delegate(testutil.Alice, testutil.Bob.DID(), testutil.Alice.DID(), command.MustParse("/blob/allocate"))
 	require.NoError(t, err)
 	return container.New(container.WithDelegations(dlg))
+}
+
+// weights holds the record fields that Add sets and SetWeights may change.
+type weights struct {
+	Endpoint          url.URL
+	Weight            int
+	ReplicationWeight *int
+}
+
+func weightsOf(rec storageprovider.Record) weights {
+	return weights{rec.Endpoint, rec.Weight, rec.ReplicationWeight}
 }
 
 func TestStorageProviderStore(t *testing.T) {
@@ -152,6 +164,120 @@ func TestStorageProviderStore(t *testing.T) {
 				rec, err := s.Get(t.Context(), provider.DID())
 				require.NoError(t, err)
 				require.Nil(t, rec.ReplicationWeight)
+			})
+
+			t.Run("Add creates a provider", func(t *testing.T) {
+				provider := testutil.RandomDID(t)
+				endpoint := randomEndpoint(t)
+				replWeight := 5
+
+				require.NoError(t, s.Add(t.Context(), provider, endpoint, 10, &replWeight, randomProofs(t)))
+
+				rec, err := s.Get(t.Context(), provider)
+				require.NoError(t, err)
+				require.Equal(t, weights{endpoint, 10, &replWeight}, weightsOf(rec))
+			})
+
+			t.Run("Add returns ErrStorageProviderExists for a registered provider", func(t *testing.T) {
+				provider := testutil.RandomDID(t)
+				require.NoError(t, s.Add(t.Context(), provider, randomEndpoint(t), 10, nil, randomProofs(t)))
+
+				err := s.Add(t.Context(), provider, randomEndpoint(t), 20, nil, randomProofs(t))
+				require.ErrorIs(t, err, storageprovider.ErrStorageProviderExists)
+			})
+
+			t.Run("Add keeps the existing record when the provider is registered", func(t *testing.T) {
+				provider := testutil.RandomDID(t)
+				endpoint := randomEndpoint(t)
+				require.NoError(t, s.Add(t.Context(), provider, endpoint, 10, nil, randomProofs(t)))
+				_ = s.Add(t.Context(), provider, randomEndpoint(t), 20, nil, randomProofs(t))
+
+				rec, err := s.Get(t.Context(), provider)
+				require.NoError(t, err)
+				require.Equal(t, weights{endpoint, 10, nil}, weightsOf(rec))
+			})
+
+			t.Run("Add returns an error when proofs are missing", func(t *testing.T) {
+				require.Error(t, s.Add(t.Context(), testutil.RandomDID(t), randomEndpoint(t), 10, nil, nil))
+			})
+
+			t.Run("SetWeights updates only the weights", func(t *testing.T) {
+				provider := testutil.RandomDID(t)
+				endpoint := randomEndpoint(t)
+				require.NoError(t, s.Add(t.Context(), provider, endpoint, 10, nil, randomProofs(t)))
+				replWeight := 15
+
+				require.NoError(t, s.SetWeights(t.Context(), provider, 20, &replWeight))
+
+				rec, err := s.Get(t.Context(), provider)
+				require.NoError(t, err)
+				require.Equal(t, weights{endpoint, 20, &replWeight}, weightsOf(rec))
+			})
+
+			t.Run("SetWeights returns ErrStorageProviderNotFound for unknown provider", func(t *testing.T) {
+				err := s.SetWeights(t.Context(), testutil.RandomDID(t), 20, nil)
+				require.ErrorIs(t, err, storageprovider.ErrStorageProviderNotFound)
+			})
+
+			t.Run("SetWeights does not recreate a deleted provider", func(t *testing.T) {
+				provider := testutil.RandomDID(t)
+				require.NoError(t, s.Add(t.Context(), provider, randomEndpoint(t), 10, nil, randomProofs(t)))
+				require.NoError(t, s.Delete(t.Context(), provider))
+				_ = s.SetWeights(t.Context(), provider, 20, nil)
+
+				_, err := s.Get(t.Context(), provider)
+				require.ErrorIs(t, err, storageprovider.ErrStorageProviderNotFound)
+			})
+
+			t.Run("Add sets UpdatedAt", func(t *testing.T) {
+				provider := testutil.RandomDID(t)
+				require.NoError(t, s.Add(t.Context(), provider, randomEndpoint(t), 10, nil, randomProofs(t)))
+
+				rec, err := s.Get(t.Context(), provider)
+				require.NoError(t, err)
+				require.False(t, rec.UpdatedAt.IsZero())
+			})
+
+			// Each write stores replication weight 5 from a caller-owned
+			// variable, then the caller changes the variable.
+			writes := map[string]func(t *testing.T, provider did.DID, replWeight *int) error{
+				"Put": func(t *testing.T, provider did.DID, replWeight *int) error {
+					return s.Put(t.Context(), provider, randomEndpoint(t), 10, replWeight, randomProofs(t))
+				},
+				"Add": func(t *testing.T, provider did.DID, replWeight *int) error {
+					return s.Add(t.Context(), provider, randomEndpoint(t), 10, replWeight, randomProofs(t))
+				},
+				"SetWeights": func(t *testing.T, provider did.DID, replWeight *int) error {
+					if err := s.Add(t.Context(), provider, randomEndpoint(t), 10, nil, randomProofs(t)); err != nil {
+						return err
+					}
+					return s.SetWeights(t.Context(), provider, 10, replWeight)
+				},
+			}
+			for name, write := range writes {
+				t.Run(name+" does not keep the caller's replication weight pointer", func(t *testing.T) {
+					provider := testutil.RandomDID(t)
+					replWeight := 5
+					require.NoError(t, write(t, provider, &replWeight))
+					replWeight = 99
+
+					rec, err := s.Get(t.Context(), provider)
+					require.NoError(t, err)
+					require.Equal(t, 5, *rec.ReplicationWeight)
+				})
+			}
+
+			t.Run("changing a returned replication weight does not change the stored record", func(t *testing.T) {
+				provider := testutil.RandomDID(t)
+				replWeight := 5
+				require.NoError(t, s.Add(t.Context(), provider, randomEndpoint(t), 10, &replWeight, randomProofs(t)))
+				rec, err := s.Get(t.Context(), provider)
+				require.NoError(t, err)
+				*rec.ReplicationWeight = 99
+
+				rec, err = s.Get(t.Context(), provider)
+				require.NoError(t, err)
+				require.Equal(t, 5, *rec.ReplicationWeight)
 			})
 
 			t.Run("Get returns ErrStorageProviderNotFound for unknown provider", func(t *testing.T) {

@@ -43,6 +43,7 @@ func (s *Store) Get(ctx context.Context, providerID did.DID) (storageprovider.Re
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 	if sp, ok := s.providers[providerID]; ok {
+		sp.ReplicationWeight = cloneInt(sp.ReplicationWeight)
 		return sp, nil
 	}
 	return storageprovider.Record{}, storageprovider.ErrStorageProviderNotFound
@@ -63,6 +64,9 @@ func (s *Store) List(ctx context.Context, options ...storageprovider.ListOption)
 	defer s.mutex.RUnlock()
 
 	records := slices.Collect(maps.Values(s.providers))
+	for i := range records {
+		records[i].ReplicationWeight = cloneInt(records[i].ReplicationWeight)
+	}
 	slices.SortFunc(records, func(a, b storageprovider.Record) int {
 		return strings.Compare(a.Provider.String(), b.Provider.String())
 	})
@@ -92,12 +96,13 @@ func (s *Store) Put(ctx context.Context, id did.DID, endpoint url.URL, weight in
 	}
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
+	now := time.Now()
 	if sp, ok := s.providers[id]; ok {
 		sp.Endpoint = endpoint
 		sp.Weight = weight
-		sp.ReplicationWeight = replicationWeight
+		sp.ReplicationWeight = cloneInt(replicationWeight)
 		sp.Proofs = proofs
-		sp.UpdatedAt = time.Now()
+		sp.UpdatedAt = now
 		s.providers[id] = sp
 		return nil
 	}
@@ -105,9 +110,56 @@ func (s *Store) Put(ctx context.Context, id did.DID, endpoint url.URL, weight in
 		Provider:          id,
 		Endpoint:          endpoint,
 		Weight:            weight,
-		ReplicationWeight: replicationWeight,
+		ReplicationWeight: cloneInt(replicationWeight),
 		Proofs:            proofs,
-		InsertedAt:        time.Now(),
+		InsertedAt:        now,
+		UpdatedAt:         now,
 	}
 	return nil
+}
+
+func (s *Store) Add(ctx context.Context, id did.DID, endpoint url.URL, weight int, replicationWeight *int, proofs ucan.Container) error {
+	if proofs == nil {
+		return fmt.Errorf("missing proofs")
+	}
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	if _, ok := s.providers[id]; ok {
+		return storageprovider.ErrStorageProviderExists
+	}
+	now := time.Now()
+	s.providers[id] = storageprovider.Record{
+		Provider:          id,
+		Endpoint:          endpoint,
+		Weight:            weight,
+		ReplicationWeight: cloneInt(replicationWeight),
+		Proofs:            proofs,
+		InsertedAt:        now,
+		UpdatedAt:         now,
+	}
+	return nil
+}
+
+func (s *Store) SetWeights(ctx context.Context, id did.DID, weight int, replicationWeight *int) error {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	sp, ok := s.providers[id]
+	if !ok {
+		return storageprovider.ErrStorageProviderNotFound
+	}
+	sp.Weight = weight
+	sp.ReplicationWeight = cloneInt(replicationWeight)
+	sp.UpdatedAt = time.Now()
+	s.providers[id] = sp
+	return nil
+}
+
+// cloneInt copies the pointed-to value, so a stored record never shares an
+// *int with the caller.
+func cloneInt(value *int) *int {
+	if value == nil {
+		return nil
+	}
+	clone := *value
+	return &clone
 }
