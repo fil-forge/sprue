@@ -204,5 +204,20 @@ func (s *Store) collectConsumers(ctx context.Context, space did.DID) ([]consumer
 	if len(results) == 0 {
 		return nil, consumer.ErrConsumerNotFound
 	}
-	return results, nil
+
+	// One record per provider. A change writes that provider a diff row keyed by
+	// (provider, space, receipt_at, cause) and moves its counters, so a provider
+	// listed twice would collide on the key and count the change twice.
+	// Provisioning derives the subscription from the space, giving a provider
+	// one subscription per space, so this holds the schema to that.
+	seen := make(map[did.DID]struct{}, len(results))
+	providers := results[:0]
+	for _, r := range results {
+		if _, ok := seen[r.Provider]; ok {
+			continue
+		}
+		seen[r.Provider] = struct{}{}
+		providers = append(providers, r)
+	}
+	return providers, nil
 }

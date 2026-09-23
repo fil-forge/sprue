@@ -356,3 +356,35 @@ func TestRegisterRecordsOneTimestampAcrossProviders(t *testing.T) {
 		})
 	}
 }
+
+// The consumer schema keys on (subscription, provider), so it can hold a
+// provider twice for one space. Provisioning derives the subscription from the
+// space and so never does, but a change writes each provider one diff row keyed
+// by (provider, space, receipt_at, cause) and moves its counters once: a
+// provider listed twice would collide on that key and abort the registration.
+func TestRegisterToleratesAProviderListedTwice(t *testing.T) {
+	for _, k := range storeKinds {
+		t.Run(string(k), func(t *testing.T) {
+			b := makeStores(t, k)
+			space := testutil.RandomDID(t)
+			customer := testutil.RandomDID(t)
+			provider := testutil.RandomDID(t)
+
+			require.NoError(t, b.consumers.Add(t.Context(), provider, space, customer, "sub1", testutil.RandomCID(t)))
+			require.NoError(t, b.consumers.Add(t.Context(), provider, space, customer, "sub2", testutil.RandomCID(t)))
+
+			bl := randomBlob(t, 2048)
+			require.NoError(t, b.registry.Register(t.Context(), space, bl, testutil.RandomCID(t)))
+
+			// One change, so one diff row and one count against the provider.
+			page, err := b.spaceDiffs.List(t.Context(), provider, space, time.Time{})
+			require.NoError(t, err)
+			require.Len(t, page.Results, 1)
+
+			spaceM, err := b.spaceMetrics.Get(t.Context(), provider, space)
+			require.NoError(t, err)
+			require.Equal(t, uint64(1), spaceM[metrics.BlobAddTotalMetric])
+			require.Equal(t, uint64(2048), spaceM[metrics.BlobAddSizeTotalMetric])
+		})
+	}
+}
