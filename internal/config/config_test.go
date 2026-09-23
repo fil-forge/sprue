@@ -90,3 +90,9 @@ func TestLoadEmptyEnvOverridesDefault(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "", cfg.Indexer.Endpoint)
 }
+
+func TestLoadPostgresMaxConnsDefaultsTo20(t *testing.T) {
+	cfg, err := Load(emptyConfigFile(t))
+	assert.NoError(t, err)
+	assert.Equal(t, int32(20), cfg.Storage.Postgres.MaxConns)
+}

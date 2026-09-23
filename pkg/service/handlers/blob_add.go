@@ -423,6 +423,11 @@ func maybeAccept(
 		}
 
 		err = blobRegistry.Register(ctx, space, blob, cause)
+		// A concurrent /blob/add of the same blob may have registered it first,
+		// possibly on another provider. Its receipt is not stored until its
+		// response is encoded, so this invocation cannot return the winner's
+		// site. Fail, and let the client retry into the already-registered
+		// path above.
 		if err != nil {
 			log.Error("failed to register blob", zap.Error(err))
 			return nil, nil, acceptExtras{}, err

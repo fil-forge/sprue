@@ -2,6 +2,7 @@ package handlers_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/fil-forge/libforge/attestation/didmailto"
@@ -21,7 +22,10 @@ import (
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 type providerAddDeps struct {
@@ -246,5 +250,42 @@ func TestProviderAddHandler(t *testing.T) {
 
 		_, err = providercmds.Add.Unpack(res.Receipt())
 		require.ErrorIs(t, err, provisioning.ErrProviderNotAllowed)
+	})
+
+	t.Run("log fields do not leak between invocations", func(t *testing.T) {
+		serviceProvider := testutil.RandomIssuer(t)
+		deps := setupProviderAdd(t, serviceProvider.DID())
+		core, logs := observer.New(zapcore.DebugLevel)
+		handler := handlers.NewProviderAddHandler(
+			config.DeploymentConfig{AllowProvisionWithoutPaymentPlan: true},
+			deps.provisioningSvc, deps.billingSvc, zap.New(core),
+		)
+
+		account := testutil.Must(didmailto.New("alice@example.com"))(t)
+		agent := testutil.RandomIssuer(t)
+		var wantSpaces [][]string
+		for range 2 {
+			space := testutil.RandomIssuer(t)
+			req, res := invokeProviderAdd(t, ctx, agent, uploadService, account,
+				&providercmds.AddArguments{
+					Provider: serviceProvider.DID(),
+					Consumer: space.DID(),
+				},
+			)
+			require.NoError(t, handler.Handler(req, res))
+			wantSpaces = append(wantSpaces, []string{space.DID().String()})
+		}
+
+		var gotSpaces [][]string
+		for _, entry := range logs.FilterMessage("provisioning service for account").All() {
+			var spaces []string
+			for _, field := range entry.Context {
+				if field.Key == "space" {
+					spaces = append(spaces, field.Interface.(fmt.Stringer).String())
+				}
+			}
+			gotSpaces = append(gotSpaces, spaces)
+		}
+		require.Equal(t, wantSpaces, gotSpaces)
 	})
 }

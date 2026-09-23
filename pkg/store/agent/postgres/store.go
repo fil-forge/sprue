@@ -8,6 +8,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -328,8 +330,16 @@ func (s *Store) Write(ctx context.Context, message ucan.Container, index []agent
 
 	placeholders := make([]string, 0, len(rows))
 	args := make([]any, 0, 4*len(rows))
-	i := 0
-	for k, entry := range rows {
+	// Insert in a stable order: concurrent writes with overlapping keys that
+	// lock rows in Go's randomized map order can deadlock (SQLSTATE 40P01).
+	keys := slices.SortedFunc(maps.Keys(rows), func(a, b indexKey) int {
+		if c := bytes.Compare(a.task.Bytes(), b.task.Bytes()); c != 0 {
+			return c
+		}
+		return strings.Compare(a.kind, b.kind)
+	})
+	for i, k := range keys {
+		entry := rows[k]
 		placeholders = append(placeholders, fmt.Sprintf("($%d, $%d, $%d, $%d)", 4*i+1, 4*i+2, 4*i+3, 4*i+4))
 		var token cid.Cid
 		if k.kind == "in" {
@@ -338,7 +348,6 @@ func (s *Store) Write(ctx context.Context, message ucan.Container, index []agent
 			token = entry.Receipt.Receipt.Link()
 		}
 		args = append(args, k.task, k.kind, token, msgRoot)
-		i++
 	}
 	query := "INSERT INTO agent_index (task, kind, token, message) VALUES " +
 		strings.Join(placeholders, ", ") +
