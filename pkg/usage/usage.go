@@ -195,6 +195,9 @@ func (s *Service) Sample(ctx context.Context, providers []did.DID, space did.DID
 		return Series{}, errTooManySamples(n)
 	}
 
+	// TODO: one read per provider, run one after another, so a space with many
+	// providers costs a query each. A single query covering every provider
+	// would collapse them. Not worth it while a space has one provider.
 	runs := make(map[did.DID][]Sample, len(providers))
 	for _, provider := range providers {
 		samples, err := s.run(ctx, provider, space, from, to, window, n)
@@ -224,9 +227,9 @@ func (s *Service) run(ctx context.Context, provider, space did.DID, from, to tim
 		return nil, err
 	}
 
-	// Bucket k covers [from+(k-1)*window, from+k*window) and is indexed from 1.
-	deltas := make([]int64, n+1)
-	ingested := make([]uint64, n+1)
+	// Bucket k covers [from+k*window, from+(k+1)*window).
+	deltas := make([]int64, n)
+	ingested := make([]uint64, n)
 
 	// Changes at or after `to` are what separates the counters, which describe
 	// now, from the stored bytes at `to`.
@@ -241,10 +244,9 @@ func (s *Service) run(ctx context.Context, provider, space did.DID, from, to tim
 		case !r.ReceiptAt.Before(to):
 			tail += r.Delta
 		default:
-			k := int(r.ReceiptAt.Sub(from)/window) + 1
-			if k > n {
-				k = n
-			}
+			// Within the range, so before `to`, and n buckets of window cover
+			// everything up to it: the index lands inside them.
+			k := int(r.ReceiptAt.Sub(from) / window)
 			deltas[k] += r.Delta
 			if r.Delta > 0 {
 				ingested[k] += uint64(r.Delta)
@@ -268,8 +270,8 @@ func (s *Service) run(ctx context.Context, provider, space did.DID, from, to tim
 
 	samples := make([]Sample, n)
 	cur := stored - tail
-	for k := n; k >= 1; k-- {
-		end := ends[k-1]
+	for k := n - 1; k >= 0; k-- {
+		end := ends[k]
 		held := cur
 		if held < 0 {
 			// The counters and the diff log disagree. Report nothing held
@@ -281,7 +283,7 @@ func (s *Service) run(ctx context.Context, provider, space did.DID, from, to tim
 				zap.Int64("bytes", held))
 			held = 0
 		}
-		samples[k-1] = Sample{End: end, BytesStored: uint64(held), BytesIngested: ingested[k]}
+		samples[k] = Sample{End: end, BytesStored: uint64(held), BytesIngested: ingested[k]}
 		cur -= deltas[k]
 	}
 

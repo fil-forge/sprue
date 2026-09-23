@@ -64,10 +64,10 @@ func (s *Store) Deregister(ctx context.Context, space did.DID, digest multihash.
 				metrics.BlobRemoveTotalMetric:     1,
 				metrics.BlobRemoveSizeTotalMetric: ent.Blob.Size,
 			}
-			// There should only be one subscription per provider, but in theory you
-			// could have multiple providers for the same consumer (space). Each one
-			// gets the diff row and the counter movement together, so its counters
-			// always balance its own rows.
+			// There should only be one subscription per provider, but you can
+			// have multiple providers for the same consumer (space). Each one
+			// gets the diff row and the counter movement together, so its
+			// counters always balance its own rows.
 			for _, c := range consumers {
 				s.spaceDiffStore.Put(ctx, c.Provider, space, c.Subscription, cause, -int64(ent.Blob.Size), time.Now())
 				if err := s.spaceMetrics.IncrementTotals(ctx, c.Provider, space, inc); err != nil {
@@ -164,10 +164,10 @@ func (s *Store) Register(ctx context.Context, space did.DID, blob blob.Blob, cau
 		metrics.BlobAddTotalMetric:     1,
 		metrics.BlobAddSizeTotalMetric: blob.Size,
 	}
-	// There should only be one subscription per provider, but in theory you
-	// could have multiple providers for the same consumer (space). Each one gets
-	// the diff row and the counter movement together, so its counters always
-	// balance its own rows.
+	// There should only be one subscription per provider, but you can have
+	// multiple providers for the same consumer (space). Each one gets the diff
+	// row and the counter movement together, so its counters always balance its
+	// own rows.
 	for _, c := range consumers {
 		s.spaceDiffStore.Put(ctx, c.Provider, space, c.Subscription, cause, int64(blob.Size), time.Now())
 		if err := s.spaceMetrics.IncrementTotals(ctx, c.Provider, space, inc); err != nil {

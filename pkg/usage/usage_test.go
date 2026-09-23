@@ -2,6 +2,7 @@ package usage_test
 
 import (
 	"context"
+	"fmt"
 	"runtime"
 	"testing"
 	"time"
@@ -133,255 +134,306 @@ func ingested(samples []usage.Sample) []uint64 {
 
 // requireDense asserts the series covers every window end in order with no
 // gaps, which is what consumers averaging the series depend on.
-func requireDense(t *testing.T, series usage.Series, samples []usage.Sample) {
+func requireDense(t *testing.T, series usage.Series, samples []usage.Sample, context ...any) {
 	t.Helper()
+	prefix := ""
+	if len(context) > 0 {
+		prefix = fmt.Sprintf(context[0].(string), context[1:]...) + ": "
+	}
 	for i, s := range samples {
 		want := series.From.Add(time.Duration(i+1) * series.Window)
 		if want.After(series.To) {
 			want = series.To
 		}
-		require.True(t, s.End.Equal(want), "sample %d ends at %s, want %s", i, s.End, want)
+		require.True(t, s.End.Equal(want), "%ssample %d ends at %s, want %s", prefix, i, s.End, want)
 	}
 }
 
 func TestSample(t *testing.T) {
 	for _, k := range storeKinds {
-		t.Run(string(k), func(t *testing.T) {
-			t.Run("returns zeros for a space it has never seen", func(t *testing.T) {
-				s := makeStores(t, k)
-				to := base.Add(6 * window)
-				svc := newService(t, s, to)
+		t.Run(string(k), testSampleWithStoreKind(k))
+	}
+}
 
-				series, err := svc.Sample(t.Context(), providers(), testutil.RandomDID(t), base, to, window)
-				require.NoError(t, err)
-				require.Len(t, run(t, series), 6)
-				require.Equal(t, []uint64{0, 0, 0, 0, 0, 0}, stored(run(t, series)))
-				require.Equal(t, []uint64{0, 0, 0, 0, 0, 0}, ingested(run(t, series)))
-				requireDense(t, series, run(t, series))
-			})
+func testSampleWithStoreKind(k StoreKind) func(*testing.T) {
+	return func(t *testing.T) {
+		t.Run("returns zeros for a space it has never seen", func(t *testing.T) {
+			s := makeStores(t, k)
+			to := base.Add(6 * window)
+			svc := newService(t, s, to)
 
-			t.Run("carries bytes stored before the range through all of it", func(t *testing.T) {
-				s := makeStores(t, k)
-				space := testutil.RandomDID(t)
-				seedAdd(t, s, space, 1024, base.Add(-48*time.Hour))
+			series, err := svc.Sample(t.Context(), providers(), testutil.RandomDID(t), base, to, window)
+			require.NoError(t, err)
+			require.Len(t, run(t, series), 6)
+			require.Equal(t, []uint64{0, 0, 0, 0, 0, 0}, stored(run(t, series)))
+			require.Equal(t, []uint64{0, 0, 0, 0, 0, 0}, ingested(run(t, series)))
+			requireDense(t, series, run(t, series))
+		})
 
-				to := base.Add(3 * window)
-				series, err := newService(t, s, to).Sample(t.Context(), providers(), space, base, to, window)
-				require.NoError(t, err)
-				require.Equal(t, []uint64{1024, 1024, 1024}, stored(run(t, series)))
-				// Ingest happened before the range, so no bucket claims it.
-				require.Equal(t, []uint64{0, 0, 0}, ingested(run(t, series)))
-			})
+		t.Run("carries bytes stored before the range through all of it", func(t *testing.T) {
+			s := makeStores(t, k)
+			space := testutil.RandomDID(t)
+			seedAdd(t, s, space, 1024, base.Add(-48*time.Hour))
 
-			t.Run("steps up on a store and down on a removal", func(t *testing.T) {
-				s := makeStores(t, k)
-				space := testutil.RandomDID(t)
-				seedAdd(t, s, space, 1024, base.Add(2*window+30*time.Minute))
-				seedRemove(t, s, space, 1024, base.Add(5*window+30*time.Minute))
+			to := base.Add(3 * window)
+			series, err := newService(t, s, to).Sample(t.Context(), providers(), space, base, to, window)
+			require.NoError(t, err)
+			require.Equal(t, []uint64{1024, 1024, 1024}, stored(run(t, series)))
+			// Ingest happened before the range, so no bucket claims it.
+			require.Equal(t, []uint64{0, 0, 0}, ingested(run(t, series)))
+		})
 
-				to := base.Add(6 * window)
-				series, err := newService(t, s, to).Sample(t.Context(), providers(), space, base, to, window)
-				require.NoError(t, err)
-				require.Equal(t, []uint64{0, 0, 1024, 1024, 1024, 0}, stored(run(t, series)))
-				// A removal is not negative ingest: it leaves the flow alone.
-				require.Equal(t, []uint64{0, 0, 1024, 0, 0, 0}, ingested(run(t, series)))
-			})
+		t.Run("steps up on a store and down on a removal", func(t *testing.T) {
+			s := makeStores(t, k)
+			space := testutil.RandomDID(t)
+			seedAdd(t, s, space, 1024, base.Add(2*window+30*time.Minute))
+			seedRemove(t, s, space, 1024, base.Add(5*window+30*time.Minute))
 
-			t.Run("sums several changes in one bucket", func(t *testing.T) {
-				s := makeStores(t, k)
-				space := testutil.RandomDID(t)
-				for _, m := range []int{10, 20, 30} {
-					seedAdd(t, s, space, 100, base.Add(window+time.Duration(m)*time.Minute))
-				}
+			to := base.Add(6 * window)
+			series, err := newService(t, s, to).Sample(t.Context(), providers(), space, base, to, window)
+			require.NoError(t, err)
+			require.Equal(t, []uint64{0, 0, 1024, 1024, 1024, 0}, stored(run(t, series)))
+			// A removal is not negative ingest: it leaves the flow alone.
+			require.Equal(t, []uint64{0, 0, 1024, 0, 0, 0}, ingested(run(t, series)))
+		})
 
-				to := base.Add(3 * window)
-				series, err := newService(t, s, to).Sample(t.Context(), providers(), space, base, to, window)
-				require.NoError(t, err)
-				require.Equal(t, []uint64{0, 300, 300}, stored(run(t, series)))
-				require.Equal(t, []uint64{0, 300, 0}, ingested(run(t, series)))
-			})
+		t.Run("sums several changes in one bucket", func(t *testing.T) {
+			s := makeStores(t, k)
+			space := testutil.RandomDID(t)
+			for _, m := range []int{10, 20, 30} {
+				seedAdd(t, s, space, 100, base.Add(window+time.Duration(m)*time.Minute))
+			}
 
-			t.Run("excludes changes made after the range", func(t *testing.T) {
-				s := makeStores(t, k)
-				space := testutil.RandomDID(t)
-				seedAdd(t, s, space, 1024, base.Add(2*window+30*time.Minute))
-				// Committed after the range but before now, so it is in the
-				// counters and must be shed before the walk back begins.
-				seedAdd(t, s, space, 4096, base.Add(7*window))
+			to := base.Add(3 * window)
+			series, err := newService(t, s, to).Sample(t.Context(), providers(), space, base, to, window)
+			require.NoError(t, err)
+			require.Equal(t, []uint64{0, 300, 300}, stored(run(t, series)))
+			require.Equal(t, []uint64{0, 300, 0}, ingested(run(t, series)))
+		})
 
-				to := base.Add(6 * window)
-				series, err := newService(t, s, to).Sample(t.Context(), providers(), space, base, to, window+0)
-				require.NoError(t, err)
-				require.Equal(t, []uint64{0, 0, 1024, 1024, 1024, 1024}, stored(run(t, series)))
-				require.Equal(t, []uint64{0, 0, 1024, 0, 0, 0}, ingested(run(t, series)))
-			})
+		t.Run("excludes changes made after the range", func(t *testing.T) {
+			s := makeStores(t, k)
+			space := testutil.RandomDID(t)
+			seedAdd(t, s, space, 1024, base.Add(2*window+30*time.Minute))
+			// Committed after the range but before now, so it is in the
+			// counters and must be shed before the walk back begins.
+			seedAdd(t, s, space, 4096, base.Add(7*window))
 
-			t.Run("clamps a range that runs past now", func(t *testing.T) {
-				s := makeStores(t, k)
-				space := testutil.RandomDID(t)
-				seedAdd(t, s, space, 512, base.Add(30*time.Minute))
+			to := base.Add(6 * window)
+			series, err := newService(t, s, to).Sample(t.Context(), providers(), space, base, to, window)
+			require.NoError(t, err)
+			require.Equal(t, []uint64{0, 0, 1024, 1024, 1024, 1024}, stored(run(t, series)))
+			require.Equal(t, []uint64{0, 0, 1024, 0, 0, 0}, ingested(run(t, series)))
+		})
 
-				now := base.Add(3*window + 30*time.Minute)
-				series, err := newService(t, s, now).Sample(t.Context(), providers(), space, base, base.Add(6*window), window)
-				require.NoError(t, err)
-				require.True(t, series.To.Equal(now), "series ends at %s, want %s", series.To, now)
-				require.Len(t, run(t, series), 4)
-				require.True(t, run(t, series)[3].End.Equal(now))
-				require.Equal(t, []uint64{512, 512, 512, 512}, stored(run(t, series)))
-				requireDense(t, series, run(t, series))
-			})
+		t.Run("clamps a range that runs past now", func(t *testing.T) {
+			s := makeStores(t, k)
+			space := testutil.RandomDID(t)
+			seedAdd(t, s, space, 512, base.Add(30*time.Minute))
 
-			t.Run("returns no samples for a range entirely in the future", func(t *testing.T) {
-				s := makeStores(t, k)
-				now := base
-				from := base.Add(window)
-				series, err := newService(t, s, now).Sample(
-					t.Context(), providers(), testutil.RandomDID(t), from, base.Add(2*window), window)
-				require.NoError(t, err)
-				require.Empty(t, run(t, series))
-				// The range covers nothing, but it still has to read as a range:
-				// an end before its start describes no interval at all.
-				require.True(t, series.From.Equal(from), "series starts at %s, want %s", series.From, from)
-				require.True(t, series.To.Equal(from), "series ends at %s, want %s", series.To, from)
-			})
+			now := base.Add(3*window + 30*time.Minute)
+			series, err := newService(t, s, now).Sample(t.Context(), providers(), space, base, base.Add(6*window), window)
+			require.NoError(t, err)
+			require.True(t, series.To.Equal(now), "series ends at %s, want %s", series.To, now)
+			require.Len(t, run(t, series), 4)
+			require.True(t, run(t, series)[3].End.Equal(now))
+			require.Equal(t, []uint64{512, 512, 512, 512}, stored(run(t, series)))
+			requireDense(t, series, run(t, series))
+		})
 
-			t.Run("shortens the last bucket to the present", func(t *testing.T) {
-				s := makeStores(t, k)
-				space := testutil.RandomDID(t)
-				seedAdd(t, s, space, 300, base.Add(20*time.Minute))
-				seedAdd(t, s, space, 700, base.Add(window+10*time.Minute))
+		t.Run("returns no samples for a range entirely in the future", func(t *testing.T) {
+			s := makeStores(t, k)
+			now := base
+			from := base.Add(window)
+			series, err := newService(t, s, now).Sample(
+				t.Context(), providers(), testutil.RandomDID(t), from, base.Add(2*window), window)
+			require.NoError(t, err)
+			require.Empty(t, run(t, series))
+			// The range covers nothing, but it still has to read as a range:
+			// an end before its start describes no interval at all.
+			require.True(t, series.From.Equal(from), "series starts at %s, want %s", series.From, from)
+			require.True(t, series.To.Equal(from), "series ends at %s, want %s", series.To, from)
+		})
 
-				// Half way through the second bucket of a two bucket range.
-				now := base.Add(window + 30*time.Minute)
-				series, err := newService(t, s, now).Sample(
-					t.Context(), providers(), space, base, base.Add(2*window), window)
-				require.NoError(t, err)
+		t.Run("shortens the last bucket to the present", func(t *testing.T) {
+			s := makeStores(t, k)
+			space := testutil.RandomDID(t)
+			seedAdd(t, s, space, 300, base.Add(20*time.Minute))
+			seedAdd(t, s, space, 700, base.Add(window+10*time.Minute))
 
-				// Both buckets are returned; the second is short and ends now.
-				require.Len(t, run(t, series), 2)
-				require.True(t, run(t, series)[1].End.Equal(now))
-				// A short bucket's reading is exact, and its ingest counts only
-				// what has landed so far.
-				require.Equal(t, []uint64{300, 1000}, stored(run(t, series)))
-				require.Equal(t, []uint64{300, 700}, ingested(run(t, series)))
-				requireDense(t, series, run(t, series))
-			})
+			// Half way through the second bucket of a two bucket range.
+			now := base.Add(window + 30*time.Minute)
+			series, err := newService(t, s, now).Sample(
+				t.Context(), providers(), space, base, base.Add(2*window), window)
+			require.NoError(t, err)
 
-			t.Run("ends a short final bucket at the range end", func(t *testing.T) {
-				s := makeStores(t, k)
-				space := testutil.RandomDID(t)
-				seedAdd(t, s, space, 64, base.Add(10*time.Minute))
+			// Both buckets are returned; the second is short and ends now.
+			require.Len(t, run(t, series), 2)
+			require.True(t, run(t, series)[1].End.Equal(now))
+			// A short bucket's reading is exact, and its ingest counts only
+			// what has landed so far.
+			require.Equal(t, []uint64{300, 1000}, stored(run(t, series)))
+			require.Equal(t, []uint64{300, 700}, ingested(run(t, series)))
+			requireDense(t, series, run(t, series))
+		})
 
-				to := base.Add(2*window + 30*time.Minute)
-				series, err := newService(t, s, to).Sample(t.Context(), providers(), space, base, to, window)
-				require.NoError(t, err)
-				require.Len(t, run(t, series), 3)
-				require.True(t, run(t, series)[2].End.Equal(to))
-				require.Equal(t, []uint64{64, 64, 64}, stored(run(t, series)))
-				requireDense(t, series, run(t, series))
-			})
+		t.Run("ends a short final bucket at the range end", func(t *testing.T) {
+			s := makeStores(t, k)
+			space := testutil.RandomDID(t)
+			seedAdd(t, s, space, 64, base.Add(10*time.Minute))
 
-			t.Run("counts a change on a bucket boundary in the bucket it opens", func(t *testing.T) {
-				s := makeStores(t, k)
-				space := testutil.RandomDID(t)
-				seedAdd(t, s, space, 2048, base.Add(2*window))
+			to := base.Add(2*window + 30*time.Minute)
+			series, err := newService(t, s, to).Sample(t.Context(), providers(), space, base, to, window)
+			require.NoError(t, err)
+			require.Len(t, run(t, series), 3)
+			require.True(t, run(t, series)[2].End.Equal(to))
+			require.Equal(t, []uint64{64, 64, 64}, stored(run(t, series)))
+			requireDense(t, series, run(t, series))
+		})
 
-				to := base.Add(4 * window)
-				series, err := newService(t, s, to).Sample(t.Context(), providers(), space, base, to, window)
-				require.NoError(t, err)
-				// The bucket ending at 2h closed before the change, so it does
-				// not hold it; the bucket that opens there does.
-				require.Equal(t, []uint64{0, 0, 2048, 2048}, stored(run(t, series)))
-				require.Equal(t, []uint64{0, 0, 2048, 0}, ingested(run(t, series)))
-			})
+		t.Run("counts a change on a bucket boundary in the bucket it opens", func(t *testing.T) {
+			s := makeStores(t, k)
+			space := testutil.RandomDID(t)
+			seedAdd(t, s, space, 2048, base.Add(2*window))
 
-			t.Run("counts a change at the range start in the first bucket", func(t *testing.T) {
-				s := makeStores(t, k)
-				space := testutil.RandomDID(t)
-				seedAdd(t, s, space, 777, base)
+			to := base.Add(4 * window)
+			series, err := newService(t, s, to).Sample(t.Context(), providers(), space, base, to, window)
+			require.NoError(t, err)
+			// The bucket ending at 2h closed before the change, so it does
+			// not hold it; the bucket that opens there does.
+			require.Equal(t, []uint64{0, 0, 2048, 2048}, stored(run(t, series)))
+			require.Equal(t, []uint64{0, 0, 2048, 0}, ingested(run(t, series)))
+		})
 
-				to := base.Add(2 * window)
-				series, err := newService(t, s, to).Sample(t.Context(), providers(), space, base, to, window)
-				require.NoError(t, err)
-				require.Equal(t, []uint64{777, 777}, stored(run(t, series)))
-				require.Equal(t, []uint64{777, 0}, ingested(run(t, series)))
-			})
+		t.Run("counts a change at the range start in the first bucket", func(t *testing.T) {
+			s := makeStores(t, k)
+			space := testutil.RandomDID(t)
+			seedAdd(t, s, space, 777, base)
 
-			t.Run("ignores what another provider recorded", func(t *testing.T) {
-				s := makeStores(t, k)
-				space := testutil.RandomDID(t)
-				other := testutil.RandomDID(t)
-				at := base.Add(window + 30*time.Minute)
-				seedAdd(t, s, space, 1024, at)
-				// A change only the other provider saw. Its rows and its
-				// counters both sit under its own key, so neither reaches here.
-				seedAdd(t, s, space, 9999, at, other)
+			to := base.Add(2 * window)
+			series, err := newService(t, s, to).Sample(t.Context(), providers(), space, base, to, window)
+			require.NoError(t, err)
+			require.Equal(t, []uint64{777, 777}, stored(run(t, series)))
+			require.Equal(t, []uint64{777, 0}, ingested(run(t, series)))
+		})
 
-				to := base.Add(3 * window)
-				series, err := newService(t, s, to).Sample(t.Context(), providers(), space, base, to, window)
-				require.NoError(t, err)
-				require.Equal(t, []uint64{0, 1024, 1024}, stored(run(t, series)))
-				require.Equal(t, []uint64{0, 1024, 0}, ingested(run(t, series)))
-			})
+		t.Run("ignores what another provider recorded", func(t *testing.T) {
+			s := makeStores(t, k)
+			space := testutil.RandomDID(t)
+			other := testutil.RandomDID(t)
+			at := base.Add(window + 30*time.Minute)
+			seedAdd(t, s, space, 1024, at)
+			// A change only the other provider saw. Its rows and its
+			// counters both sit under its own key, so neither reaches here.
+			seedAdd(t, s, space, 9999, at, other)
 
-			t.Run("reads a provider added after the space held blobs", func(t *testing.T) {
-				s := makeStores(t, k)
-				space := testutil.RandomDID(t)
-				late := testutil.RandomDID(t)
+			to := base.Add(3 * window)
+			series, err := newService(t, s, to).Sample(t.Context(), providers(), space, base, to, window)
+			require.NoError(t, err)
+			require.Equal(t, []uint64{0, 1024, 1024}, stored(run(t, series)))
+			require.Equal(t, []uint64{0, 1024, 0}, ingested(run(t, series)))
+		})
 
-				// The original provider saw a change before the late one existed.
-				seedAdd(t, s, space, 1024, base.Add(30*time.Minute))
-				// The late provider only ever saw this one.
-				seedAdd(t, s, space, 512, base.Add(window+30*time.Minute), late)
+		t.Run("reads a provider added after the space held blobs", func(t *testing.T) {
+			s := makeStores(t, k)
+			space := testutil.RandomDID(t)
+			late := testutil.RandomDID(t)
 
-				to := base.Add(3 * window)
-				series, err := newService(t, s, to).Sample(
-					t.Context(), []did.DID{provider(), late}, space, base, to, window)
-				require.NoError(t, err)
+			// The original provider saw a change before the late one existed.
+			seedAdd(t, s, space, 1024, base.Add(30*time.Minute), provider())
+			// The late provider is the only one that saw this one; the
+			// original provider was not serving the blob.
+			seedAdd(t, s, space, 512, base.Add(window+30*time.Minute), late)
 
-				// Each provider reports what it holds, and the late one reports
-				// nothing before it arrived rather than a baseline it never stored.
-				require.Equal(t, []uint64{1024, 1024, 1024}, stored(series.Samples[provider()]))
-				require.Equal(t, []uint64{0, 512, 512}, stored(series.Samples[late]))
-			})
+			to := base.Add(3 * window)
+			series, err := newService(t, s, to).Sample(
+				t.Context(), []did.DID{provider(), late}, space, base, to, window)
+			require.NoError(t, err)
 
-			t.Run("returns a run per provider on one shared grid", func(t *testing.T) {
-				s := makeStores(t, k)
-				space := testutil.RandomDID(t)
-				second := testutil.RandomDID(t)
-				at := base.Add(window + 30*time.Minute)
+			// Each provider reports what it holds, and the late one reports
+			// nothing before it arrived rather than a baseline it never stored.
+			require.Equal(t, []uint64{1024, 1024, 1024}, stored(series.Samples[provider()]))
+			require.Equal(t, []uint64{0, 512, 512}, stored(series.Samples[late]))
+		})
 
-				// Both providers served the space from the start, so each one's
-				// rows balance its own counters.
-				seedAdd(t, s, space, 1024, at, provider(), second)
+		t.Run("includes a change just before the range ends", func(t *testing.T) {
+			s := makeStores(t, k)
+			space := testutil.RandomDID(t)
+			to := base.Add(3 * window)
 
-				to := base.Add(3 * window)
-				series, err := newService(t, s, to).Sample(
-					t.Context(), []did.DID{provider(), second}, space, base, to, window)
-				require.NoError(t, err)
+			// A second before the range closes, so it belongs to the last
+			// bucket and the final reading has to hold it.
+			seedAdd(t, s, space, 256, to.Add(-time.Second), provider())
 
-				require.Len(t, series.Samples, 2)
-				for _, p := range []did.DID{provider(), second} {
-					require.Equal(t, []uint64{0, 1024, 1024}, stored(series.Samples[p]), "provider %s", p)
-					require.Equal(t, []uint64{0, 1024, 0}, ingested(series.Samples[p]), "provider %s", p)
-					requireDense(t, series, series.Samples[p])
-				}
-			})
+			series, err := newService(t, s, to).Sample(t.Context(), providers(), space, base, to, window)
+			require.NoError(t, err)
+			require.Equal(t, []uint64{0, 0, 256}, stored(run(t, series)))
+			require.Equal(t, []uint64{0, 0, 256}, ingested(run(t, series)))
+		})
 
-			t.Run("returns 768 samples for 32 days of hourly buckets", func(t *testing.T) {
-				s := makeStores(t, k)
-				space := testutil.RandomDID(t)
-				now := base
-				from := base.Add(-32 * 24 * time.Hour)
-				seedAdd(t, s, space, 4096, from.Add(90*time.Minute))
+		t.Run("excludes a change at or after the range end", func(t *testing.T) {
+			for _, tc := range []struct {
+				name string
+				at   time.Duration
+			}{
+				// The range is half open, so the instant it ends is already out.
+				{"at the range end", 0},
+				{"after the range end", time.Second},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					s := makeStores(t, k)
+					space := testutil.RandomDID(t)
+					to := base.Add(3 * window)
 
-				series, err := newService(t, s, now).Sample(t.Context(), providers(), space, from, now, window)
-				require.NoError(t, err)
-				require.Len(t, run(t, series), 768)
-				requireDense(t, series, run(t, series))
-				require.Equal(t, uint64(0), run(t, series)[0].BytesStored)
-				require.Equal(t, uint64(4096), run(t, series)[767].BytesStored)
-			})
+					seedAdd(t, s, space, 256, to.Add(tc.at), provider())
+
+					// Sampled from later still, so the change is recorded and
+					// counted, just not inside the range asked for.
+					series, err := newService(t, s, to.Add(time.Hour)).Sample(
+						t.Context(), providers(), space, base, to, window)
+					require.NoError(t, err)
+					require.Equal(t, []uint64{0, 0, 0}, stored(run(t, series)))
+					require.Equal(t, []uint64{0, 0, 0}, ingested(run(t, series)))
+				})
+			}
+		})
+
+		t.Run("returns a run per provider on one shared grid", func(t *testing.T) {
+			s := makeStores(t, k)
+			space := testutil.RandomDID(t)
+			second := testutil.RandomDID(t)
+			at := base.Add(window + 30*time.Minute)
+
+			// Both providers served the space from the start, so each one's
+			// rows balance its own counters.
+			seedAdd(t, s, space, 1024, at, provider(), second)
+
+			to := base.Add(3 * window)
+			series, err := newService(t, s, to).Sample(
+				t.Context(), []did.DID{provider(), second}, space, base, to, window)
+			require.NoError(t, err)
+
+			require.Len(t, series.Samples, 2)
+			for _, p := range []did.DID{provider(), second} {
+				require.Equal(t, []uint64{0, 1024, 1024}, stored(series.Samples[p]), "provider %s", p)
+				require.Equal(t, []uint64{0, 1024, 0}, ingested(series.Samples[p]), "provider %s", p)
+				requireDense(t, series, series.Samples[p], "provider %s", p)
+			}
+		})
+
+		t.Run("returns 768 samples for 32 days of hourly buckets", func(t *testing.T) {
+			s := makeStores(t, k)
+			space := testutil.RandomDID(t)
+			now := base
+			from := base.Add(-32 * 24 * time.Hour)
+			seedAdd(t, s, space, 4096, from.Add(90*time.Minute))
+
+			series, err := newService(t, s, now).Sample(t.Context(), providers(), space, from, now, window)
+			require.NoError(t, err)
+			require.Len(t, run(t, series), 768)
+			requireDense(t, series, run(t, series))
+			require.Equal(t, uint64(0), run(t, series)[0].BytesStored)
+			require.Equal(t, uint64(4096), run(t, series)[767].BytesStored)
 		})
 	}
 }

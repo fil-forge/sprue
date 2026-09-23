@@ -56,14 +56,24 @@ CREATE TABLE space_metrics_by_space (
     PRIMARY KEY (space, name)
 );
 
--- Collapsing back keeps one value per space. A space's providers can hold
--- different totals, since each counts only what it served, and the old
--- space-wide counter moved once per change however many providers saw it, so
--- the fullest history is the space's total rather than their sum.
+-- The old counters moved once per change however many providers saw it, so
+-- collapsing back means counting changes rather than rows. A change is one
+-- cause, which the providers that saw it share, so the diff log gives the old
+-- values exactly the way it gives the new ones. Neither the sum across
+-- providers (counting a shared change once per provider) nor the largest of
+-- them (dropping what only a late provider saw) would.
 INSERT INTO space_metrics_by_space (space, name, value)
-SELECT space, name, MAX(value)
-FROM space_metrics
-GROUP BY space, name;
+SELECT space, '/blob/add-total', COUNT(*)
+FROM (SELECT DISTINCT space, cause FROM space_diff WHERE delta >= 0) c GROUP BY space
+UNION ALL
+SELECT space, '/blob/add-size-total', COALESCE(SUM(delta), 0)
+FROM (SELECT DISTINCT space, cause, delta FROM space_diff WHERE delta >= 0) c GROUP BY space
+UNION ALL
+SELECT space, '/blob/remove-total', COUNT(*)
+FROM (SELECT DISTINCT space, cause FROM space_diff WHERE delta < 0) c GROUP BY space
+UNION ALL
+SELECT space, '/blob/remove-size-total', -COALESCE(SUM(delta), 0)
+FROM (SELECT DISTINCT space, cause, delta FROM space_diff WHERE delta < 0) c GROUP BY space;
 
 DROP TABLE space_metrics;
 ALTER TABLE space_metrics_by_space RENAME TO space_metrics;
