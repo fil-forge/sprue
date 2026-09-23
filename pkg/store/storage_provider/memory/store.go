@@ -111,37 +111,3 @@ func (s *Store) Put(ctx context.Context, id did.DID, endpoint url.URL, weight in
 	}
 	return nil
 }
-
-func (s *Store) Add(ctx context.Context, id did.DID, endpoint url.URL, weight int, replicationWeight *int, proofs ucan.Container) error {
-	if proofs == nil {
-		return fmt.Errorf("missing proofs")
-	}
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	if _, ok := s.providers[id]; ok {
-		return storageprovider.ErrStorageProviderExists
-	}
-	s.providers[id] = storageprovider.Record{
-		Provider:          id,
-		Endpoint:          endpoint,
-		Weight:            weight,
-		ReplicationWeight: replicationWeight,
-		Proofs:            proofs,
-		InsertedAt:        time.Now(),
-	}
-	return nil
-}
-
-func (s *Store) SetWeights(ctx context.Context, id did.DID, weight int, replicationWeight *int) error {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	sp, ok := s.providers[id]
-	if !ok {
-		return storageprovider.ErrStorageProviderNotFound
-	}
-	sp.Weight = weight
-	sp.ReplicationWeight = replicationWeight
-	sp.UpdatedAt = time.Now()
-	s.providers[id] = sp
-	return nil
-}

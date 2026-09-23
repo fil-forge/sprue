@@ -55,43 +55,6 @@ func (s *Store) Put(ctx context.Context, id did.DID, endpoint url.URL, weight in
 	return nil
 }
 
-func (s *Store) Add(ctx context.Context, id did.DID, endpoint url.URL, weight int, replicationWeight *int, proofs ucan.Container) error {
-	if proofs == nil {
-		return fmt.Errorf("missing proofs")
-	}
-	proofBytes, err := container.Encode(container.Raw, proofs)
-	if err != nil {
-		return fmt.Errorf("encoding proofs: %w", err)
-	}
-	tag, err := s.pool.Exec(ctx, `
-		INSERT INTO storage_provider (provider, endpoint, weight, replication_weight, proofs)
-		VALUES ($1, $2, $3, $4, $5)
-		ON CONFLICT (provider) DO NOTHING
-	`, id.String(), endpoint.String(), weight, replicationWeight, proofBytes)
-	if err != nil {
-		return fmt.Errorf("adding storage provider: %w", err)
-	}
-	if tag.RowsAffected() == 0 {
-		return storageprovider.ErrStorageProviderExists
-	}
-	return nil
-}
-
-func (s *Store) SetWeights(ctx context.Context, id did.DID, weight int, replicationWeight *int) error {
-	tag, err := s.pool.Exec(ctx, `
-		UPDATE storage_provider
-		SET weight = $2, replication_weight = $3, updated_at = NOW()
-		WHERE provider = $1
-	`, id.String(), weight, replicationWeight)
-	if err != nil {
-		return fmt.Errorf("setting storage provider weights: %w", err)
-	}
-	if tag.RowsAffected() == 0 {
-		return storageprovider.ErrStorageProviderNotFound
-	}
-	return nil
-}
-
 func (s *Store) Get(ctx context.Context, providerID did.DID) (storageprovider.Record, error) {
 	row := s.pool.QueryRow(ctx, `
 		SELECT provider, endpoint, weight, replication_weight, proofs, inserted_at, updated_at

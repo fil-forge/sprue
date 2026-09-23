@@ -15,14 +15,10 @@ const (
 	// StorageProviderNotFoundErrorName is the name given to an error where the
 	// storage provider is not found in the store.
 	StorageProviderNotFoundErrorName = "StorageProviderNotFound"
-	// StorageProviderExistsErrorName is the name given to an error where a
-	// storage provider with the same DID is already in the store.
-	StorageProviderExistsErrorName = "StorageProviderExists"
 )
 
 var (
 	ErrStorageProviderNotFound = errors.New(StorageProviderNotFoundErrorName, "storage provider not found")
-	ErrStorageProviderExists   = errors.New(StorageProviderExistsErrorName, "storage provider already exists")
 )
 
 type (
@@ -63,15 +59,7 @@ type Record struct {
 }
 
 type Store interface {
-	// Put creates a storage provider record, or replaces the existing one.
 	Put(ctx context.Context, providerID did.DID, endpoint url.URL, weight int, replicationWeight *int, proofs ucan.Container) error
-	// Add creates a storage provider record. Returns [ErrStorageProviderExists]
-	// if a record with this DID already exists.
-	Add(ctx context.Context, providerID did.DID, endpoint url.URL, weight int, replicationWeight *int, proofs ucan.Container) error
-	// SetWeights updates the weights of an existing storage provider and leaves
-	// the rest of the record unchanged. Returns [ErrStorageProviderNotFound] if
-	// the record does not exist.
-	SetWeights(ctx context.Context, providerID did.DID, weight int, replicationWeight *int) error
 	// Get a storage provider record by provider DID. May return
 	// [ErrStorageProviderNotFound].
 	Get(ctx context.Context, providerID did.DID) (Record, error)

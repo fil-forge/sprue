@@ -69,12 +69,19 @@ func NewAdminProviderRegisterHandler(id identity.Identity, providerStore storage
 				}
 			}
 
-			err = providerStore.Add(req.Context(), args.Provider, *endpoint, initialWeight, &initialReplicationWeight, proofs)
+			_, err = providerStore.Get(req.Context(), args.Provider)
 			if err != nil {
-				if errors.Is(err, storageprovider.ErrStorageProviderExists) {
-					log.Warn("Provider already registered", zap.Stringer("provider", args.Provider))
-					return res.SetFailure(errors.New("ProviderAlreadyRegistered", "a provider with this DID is already registered"))
+				if !errors.Is(err, storageprovider.ErrStorageProviderNotFound) {
+					log.Error("Failed to get existing provider", zap.Error(err))
+					return err
 				}
+			} else {
+				log.Warn("Provider already registered", zap.Stringer("provider", args.Provider))
+				return res.SetFailure(errors.New("ProviderAlreadyRegistered", "a provider with this DID is already registered"))
+			}
+
+			err = providerStore.Put(req.Context(), args.Provider, *endpoint, initialWeight, &initialReplicationWeight, proofs)
+			if err != nil {
 				log.Error("Failed to register provider", zap.Error(err))
 				return err
 			}
