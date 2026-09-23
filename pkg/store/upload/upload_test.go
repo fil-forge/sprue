@@ -68,8 +68,8 @@ func listAllShards(t *testing.T, uploadStore upload.Store, space did.DID, root c
 	return shards
 }
 
-// descendingCIDs returns n random CIDs sorted in reverse of the order stores
-// list shards in.
+// descendingCIDs returns n random CIDs in descending byte order, so a store
+// that sorts them in place by bytes changes the slice.
 func descendingCIDs(t *testing.T, n int) []cid.Cid {
 	t.Helper()
 	cids := make([]cid.Cid, n)
