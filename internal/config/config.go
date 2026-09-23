@@ -193,7 +193,15 @@ func SetDefaults(v *viper.Viper) {
 
 	// Postgres defaults
 	v.SetDefault("storage.postgres.dsn", "postgres://sprue:sprue@postgres:5432/sprue?sslmode=disable")
-	v.SetDefault("storage.postgres.max_conns", 100)
+	// ucantone executes up to 100 invocations of one request at the same time
+	// (server.DefaultMaxConcurrency), and invocations beyond the pool size wait
+	// for a connection. A pool of 100 would avoid that wait, but deployments
+	// share one RDS instance between sprue, hilt, swarf and OpenBao, and its
+	// max_connections is about 112 on a db.t4g.micro and 225 on a db.t4g.small.
+	// Rolling deploys briefly run two sprue tasks, doubling sprue's share. 20
+	// fits every stage with room for that overlap. Deployments with a
+	// dedicated or larger database should set storage.postgres.max_conns.
+	v.SetDefault("storage.postgres.max_conns", 20)
 	v.SetDefault("storage.postgres.min_conns", 0)
 
 	// S3 defaults (used by the postgres backend for blob payloads)
