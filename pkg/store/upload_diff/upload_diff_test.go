@@ -3,6 +3,7 @@ package uploaddiff_test
 import (
 	"context"
 	"runtime"
+	"sync"
 	"testing"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	uploaddiff "github.com/fil-forge/sprue/pkg/store/upload_diff"
 	uploaddiffmemory "github.com/fil-forge/sprue/pkg/store/upload_diff/memory"
 	uploaddiffpostgres "github.com/fil-forge/sprue/pkg/store/upload_diff/postgres"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -239,6 +241,77 @@ func TestUploadDiffStore(t *testing.T) {
 				require.NoError(t, err)
 				require.Len(t, page.Results, 1)
 				require.Equal(t, int64(-1), page.Results[0].Delta)
+			})
+
+			t.Run("a non-positive limit falls back to the default", func(t *testing.T) {
+				s := makeStore(t, k)
+				provider := testutil.RandomDID(t)
+				space := testutil.RandomDID(t)
+				base := time.Now().UTC().Truncate(time.Millisecond)
+				for i := range 3 {
+					require.NoError(t, s.Put(t.Context(), provider, space, "sub1",
+						testutil.RandomCID(t), 1, base.Add(time.Duration(i)*time.Millisecond)))
+				}
+
+				// Zero means "unset", as it does in Postgres. Slicing a page to
+				// [:0] and then reading its last element would panic.
+				page, err := s.List(t.Context(), provider, space, time.Time{}, uploaddiff.WithListLimit(0))
+				require.NoError(t, err)
+				require.Len(t, page.Results, 3)
+				require.Nil(t, page.Cursor)
+			})
+
+			t.Run("paginates through diffs sharing a timestamp", func(t *testing.T) {
+				s := makeStore(t, k)
+				provider := testutil.RandomDID(t)
+				space := testutil.RandomDID(t)
+				// One recorded change writes a row per consumer at the same
+				// instant, so a page boundary landing inside such a group is
+				// ordinary. A cursor carrying only the timestamp would skip the
+				// rest of the group.
+				at := time.Now().UTC().Truncate(time.Millisecond)
+				const total = 5
+				for range total {
+					require.NoError(t, s.Put(t.Context(), provider, space, "sub1", testutil.RandomCID(t), 1, at))
+				}
+
+				seen := map[string]bool{}
+				var cursor *string
+				for {
+					opts := []uploaddiff.ListOption{uploaddiff.WithListLimit(2)}
+					if cursor != nil {
+						opts = append(opts, uploaddiff.WithListCursor(*cursor))
+					}
+					page, err := s.List(t.Context(), provider, space, time.Time{}, opts...)
+					require.NoError(t, err)
+					for _, r := range page.Results {
+						require.False(t, seen[r.Cause.String()], "row listed twice")
+						seen[r.Cause.String()] = true
+					}
+					if page.Cursor == nil {
+						break
+					}
+					cursor = page.Cursor
+				}
+				require.Len(t, seen, total, "every row must be listed exactly once")
+			})
+
+			t.Run("concurrent reads of an unwritten space are safe", func(t *testing.T) {
+				// Regression guard: reads must not create the provider/space
+				// entries, which under a read lock would race.
+				s := makeStore(t, k)
+				provider := testutil.RandomDID(t)
+
+				var wg sync.WaitGroup
+				for range 8 {
+					wg.Add(1)
+					go func() {
+						defer wg.Done()
+						_, err := s.List(context.Background(), provider, testutil.RandomDID(t), time.Time{})
+						assert.NoError(t, err)
+					}()
+				}
+				wg.Wait()
 			})
 		})
 	}

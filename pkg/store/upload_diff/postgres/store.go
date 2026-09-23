@@ -44,9 +44,15 @@ func (s *Store) Put(ctx context.Context, provider did.DID, space did.DID, subscr
 // write to participate in an external transaction. It exists so the upload
 // store can batch upload-diff writes with its own updates in one atomic unit.
 func PutWith(ctx context.Context, q pgxExec, provider did.DID, space did.DID, subscription string, cause cid.Cid, delta int64, receiptAt time.Time) error {
+	// ON CONFLICT DO NOTHING is what makes a replayed cause the no-op the schema
+	// describes. Without it a repeat of the same (provider, space, receipt_at,
+	// cause) raises a unique violation, and because this write shares the
+	// caller's transaction that error would abort the whole accounting update —
+	// failing a change that has already been applied to the upload table.
 	_, err := q.Exec(ctx, `
 		INSERT INTO upload_diff (provider, space, receipt_at, cause, subscription, delta)
 		VALUES ($1, $2, $3, $4, $5, $6)
+		ON CONFLICT (provider, space, receipt_at, cause) DO NOTHING
 	`, provider.String(), space.String(), receiptAt.UTC(), cause.String(), subscription, delta)
 	if err != nil {
 		return fmt.Errorf("putting upload diff: %w", err)

@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
-	"github.com/fil-forge/sprue/pkg/internal/timeutil"
 	"github.com/fil-forge/sprue/pkg/store"
 	uploaddiff "github.com/fil-forge/sprue/pkg/store/upload_diff"
 	"github.com/fil-forge/ucantone/did"
@@ -28,6 +28,9 @@ func New() *Store {
 	}
 }
 
+// defaultListLimit matches the Postgres implementation's page size.
+const defaultListLimit = 1000
+
 func (s *Store) List(ctx context.Context, provider did.DID, space did.DID, after time.Time, options ...uploaddiff.ListOption) (store.Page[uploaddiff.DifferenceRecord], error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
@@ -36,39 +39,57 @@ func (s *Store) List(ctx context.Context, provider did.DID, space did.DID, after
 	for _, opt := range options {
 		opt(&cfg)
 	}
-
-	limit := 1000
-	if cfg.Limit != nil {
+	// A non-positive limit means "unset", as it does in Postgres. Honouring a
+	// zero would slice the page to [:0] and then index its last element.
+	limit := defaultListLimit
+	if cfg.Limit != nil && *cfg.Limit > 0 {
 		limit = *cfg.Limit
 	}
 
-	if _, ok := s.diffs[provider]; !ok {
-		s.diffs[provider] = map[did.DID][]uploaddiff.DifferenceRecord{}
-	}
-	if _, ok := s.diffs[provider][space]; !ok {
-		s.diffs[provider][space] = []uploaddiff.DifferenceRecord{}
-	}
+	// Read-only: a missing provider or space reads as an absent map and ranges
+	// as empty. Creating the entries here would write under the read lock, and
+	// two concurrent readers would race on the same map.
+	rows := s.diffs[provider][space]
 
+	var (
+		cursorAt    time.Time
+		cursorCause string
+		haveCursor  bool
+	)
 	if cfg.Cursor != nil {
-		cursorTime, err := time.Parse(timeutil.SimplifiedISO8601, *cfg.Cursor)
+		var err error
+		cursorAt, cursorCause, err = decodeCursor(*cfg.Cursor)
 		if err != nil {
 			return store.Page[uploaddiff.DifferenceRecord]{}, fmt.Errorf("invalid cursor: %w", err)
 		}
-		after = cursorTime
+		haveCursor = true
 	}
 
 	diffs := []uploaddiff.DifferenceRecord{}
-	for _, d := range s.diffs[provider][space] {
-		if d.ReceiptAt.After(after) {
-			diffs = append(diffs, d)
+	for _, d := range rows {
+		// The cursor compares on (receipt_at, cause), the order rows are
+		// listed in. Comparing the timestamp alone would skip every row that
+		// shares the last row's timestamp — and one recorded change writes a
+		// row per consumer, all at the same instant.
+		if haveCursor {
+			if d.ReceiptAt.Before(cursorAt) {
+				continue
+			}
+			if d.ReceiptAt.Equal(cursorAt) && d.Cause.String() <= cursorCause {
+				continue
+			}
+		} else if !d.ReceiptAt.After(after) {
+			continue
 		}
+		diffs = append(diffs, d)
 	}
 
 	var cursor *string
 	if len(diffs) > limit {
 		diffs = diffs[:limit]
-		cursorStr := diffs[len(diffs)-1].ReceiptAt.Format(timeutil.SimplifiedISO8601)
-		cursor = &cursorStr
+		last := diffs[len(diffs)-1]
+		c := encodeCursor(last.ReceiptAt, last.Cause.String())
+		cursor = &c
 	}
 
 	return store.Page[uploaddiff.DifferenceRecord]{
@@ -84,9 +105,6 @@ func (s *Store) Put(ctx context.Context, provider did.DID, space did.DID, subscr
 	if _, ok := s.diffs[provider]; !ok {
 		s.diffs[provider] = map[did.DID][]uploaddiff.DifferenceRecord{}
 	}
-	if _, ok := s.diffs[provider][space]; !ok {
-		s.diffs[provider][space] = []uploaddiff.DifferenceRecord{}
-	}
 	s.diffs[provider][space] = append(s.diffs[provider][space], uploaddiff.DifferenceRecord{
 		Provider:     provider,
 		Space:        space,
@@ -96,8 +114,31 @@ func (s *Store) Put(ctx context.Context, provider did.DID, space did.DID, subscr
 		ReceiptAt:    receiptAt.UTC().Truncate(time.Millisecond),
 		InsertedAt:   time.Now(),
 	})
+	// Sorted the way Postgres lists them, receipt_at then cause, so a cursor
+	// means the same thing in both backends.
 	slices.SortFunc(s.diffs[provider][space], func(a, b uploaddiff.DifferenceRecord) int {
-		return a.ReceiptAt.Compare(b.ReceiptAt)
+		if c := a.ReceiptAt.Compare(b.ReceiptAt); c != 0 {
+			return c
+		}
+		return strings.Compare(a.Cause.String(), b.Cause.String())
 	})
 	return nil
+}
+
+// The cursor carries the last row's (receipt_at, cause), the pair the listing
+// is ordered by.
+func encodeCursor(receiptAt time.Time, cause string) string {
+	return receiptAt.UTC().Format(time.RFC3339Nano) + "\x00" + cause
+}
+
+func decodeCursor(cursor string) (time.Time, string, error) {
+	at, cause, ok := strings.Cut(cursor, "\x00")
+	if !ok {
+		return time.Time{}, "", fmt.Errorf("malformed cursor")
+	}
+	receiptAt, err := time.Parse(time.RFC3339Nano, at)
+	if err != nil {
+		return time.Time{}, "", err
+	}
+	return receiptAt, cause, nil
 }

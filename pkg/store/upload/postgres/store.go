@@ -209,27 +209,30 @@ func (s *Store) ListShards(ctx context.Context, space did.DID, root cid.Cid, opt
 }
 
 func (s *Store) Remove(ctx context.Context, space did.DID, root cid.Cid, cause cid.Cid) error {
-	consumers, err := s.collectConsumers(ctx, space)
-	if err != nil {
-		return err
-	}
-
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("beginning transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	// The delete comes before the consumer lookup so a missing root reports
+	// ErrUploadNotFound whatever else is true of the space. The handler turns
+	// that one error into idempotent success; reporting a space's lack of
+	// consumers instead would fail a remove of something that was never there.
 	tag, err := tx.Exec(ctx, `DELETE FROM upload WHERE space = $1 AND root = $2`, space.String(), root.String())
 	if err != nil {
 		return fmt.Errorf("removing upload: %w", err)
 	}
-	// Nothing was removed, so nothing is counted. The handler reports a missing
-	// root as idempotent success; the count must not move for it.
+	// Nothing was removed, so nothing is counted. The count must not move for
+	// an idempotent remove.
 	if tag.RowsAffected() == 0 {
 		return upload.ErrUploadNotFound
 	}
 
+	consumers, err := s.collectConsumers(ctx, space)
+	if err != nil {
+		return err
+	}
 	if err := s.recordDelta(ctx, tx, space, consumers, cause, -1, metrics.UploadRemoveTotalMetric); err != nil {
 		return err
 	}

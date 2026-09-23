@@ -150,19 +150,37 @@ func (m *Store) Remove(ctx context.Context, space did.DID, root cid.Cid, cause c
 	idx := slices.IndexFunc(uploads, func(r upload.UploadRecord) bool {
 		return r.Root.String() == root.String()
 	})
-	// Nothing was removed, so nothing is counted. The handler reports a missing
-	// root as idempotent success; the count must not move for it.
+	// Nothing was removed, so nothing is counted, and the missing root is
+	// reported ahead of anything else that may be wrong with the space: the
+	// handler turns this one error into idempotent success.
 	if idx == -1 {
 		return upload.ErrUploadNotFound
 	}
+	// Consumers are collected before the maps change. Postgres does this work
+	// in a transaction that rolls back; here a failure after the mutation would
+	// leave the upload gone with no delta recorded, and the retry would find
+	// nothing to remove and never record one.
+	consumers, err := m.collectConsumers(ctx, space)
+	if err != nil {
+		return err
+	}
 	m.uploads[space] = append(uploads[:idx], uploads[idx+1:]...)
 	delete(m.shards[space], root)
-	return m.recordDelta(ctx, space, cause, -1, metrics.UploadRemoveTotalMetric)
+	return m.recordDelta(ctx, space, consumers, cause, -1, metrics.UploadRemoveTotalMetric)
 }
 
 func (m *Store) Upsert(ctx context.Context, space did.DID, root cid.Cid, index *cid.Cid, shards []cid.Cid, cause cid.Cid) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
+
+	// Consumers are collected before the maps change. Postgres does this work
+	// in a transaction that rolls back; here a failure after the mutation would
+	// leave the upload recorded with no delta, and the retry would read the
+	// root as already present and never record one.
+	consumers, err := m.collectConsumers(ctx, space)
+	if err != nil {
+		return err
+	}
 
 	uploads, ok := m.uploads[space]
 	if !ok {
@@ -210,7 +228,7 @@ func (m *Store) Upsert(ctx context.Context, space did.DID, root cid.Cid, index *
 	if !inserted {
 		return nil
 	}
-	return m.recordDelta(ctx, space, cause, 1, metrics.UploadAddTotalMetric)
+	return m.recordDelta(ctx, space, consumers, cause, 1, metrics.UploadAddTotalMetric)
 }
 
 // recordDelta writes one object-count change: an upload_diff row per the
@@ -218,11 +236,14 @@ func (m *Store) Upsert(ctx context.Context, space did.DID, root cid.Cid, index *
 // admin scope. metric is the counter to bump (adds and removes have their own,
 // each monotonically increasing); delta is the signed change the diff log
 // carries, so the count at a time is the cumulative sum up to it.
-func (m *Store) recordDelta(ctx context.Context, space did.DID, cause cid.Cid, delta int64, metric string) error {
-	consumers, err := m.collectConsumers(ctx, space)
-	if err != nil {
-		return err
-	}
+//
+// Callers have already changed the upload maps by the time this runs, and this
+// store has no transaction to undo that with. It is safe because the consumer
+// lookup, the one dependency that can fail, happens before the mutation, and
+// the in-memory diff and metric stores cannot: they only ever append to a map
+// under their own lock. A fallible store wired in here would reintroduce the
+// torn write, so it would have to come with rollback.
+func (m *Store) recordDelta(ctx context.Context, space did.DID, consumers []consumer.Record, cause cid.Cid, delta int64, metric string) error {
 	receiptAt := time.Now()
 	for _, c := range consumers {
 		if err := m.uploadDiffStore.Put(ctx, c.Provider, space, c.Subscription, cause, delta, receiptAt); err != nil {

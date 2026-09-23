@@ -5,7 +5,8 @@
 -- sum of deltas up to it. delta is +1 for an upload added and -1 for one
 -- removed; space_diff's delta is bytes, which is why these are separate tables.
 -- The primary key orders the log the way it is read (provider + space, then
--- receipt_at) and makes a replayed cause a no-op rather than a double count.
+-- receipt_at) and lets a replayed cause be skipped rather than double counted;
+-- the writer asks for that with ON CONFLICT DO NOTHING.
 CREATE TABLE upload_diff (
     provider     TEXT        NOT NULL,
     space        TEXT        NOT NULL,

@@ -418,6 +418,16 @@ func TestUploadStore(t *testing.T) {
 				require.NoError(t, err)
 				require.Empty(t, diffs.Results)
 			})
+
+			t.Run("removing an unknown root reports the missing upload, not the missing consumer", func(t *testing.T) {
+				// An unprovisioned space still has to answer "not found" here:
+				// the handler turns that one error into idempotent success, and
+				// any other error fails a remove of something never there.
+				space := testutil.RandomDID(t)
+
+				err := store.Remove(t.Context(), space, testutil.RandomCID(t), testutil.RandomCID(t))
+				require.ErrorIs(t, err, upload.ErrUploadNotFound)
+			})
 		})
 	}
 }
