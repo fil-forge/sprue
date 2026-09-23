@@ -21,18 +21,12 @@ func NewAdminProviderWeightSetHandler(id identity.Identity, providerStore storag
 				return res.SetFailure(errors.New("Unauthorized", "only the service identity can set provider weights"))
 			}
 
-			p, err := providerStore.Get(req.Context(), args.Provider)
-			if err != nil {
-				log.Error("Failed to get existing provider", zap.Error(err))
-				return res.SetFailure(errors.New("Failed to get existing provider", err.Error()))
-			}
-
 			replicationWeight := int(args.ReplicationWeight)
-			err = providerStore.Put(req.Context(), p.Provider, p.Endpoint, int(args.Weight), &replicationWeight, p.Proofs)
+			err := providerStore.SetWeights(req.Context(), args.Provider, int(args.Weight), &replicationWeight)
 			if err != nil {
 				if errors.Is(err, storageprovider.ErrStorageProviderNotFound) {
 					log.Warn("Provider not found", zap.Stringer("provider", args.Provider))
-					return res.SetFailure(err)
+					return res.SetFailure(errors.New("Failed to get existing provider", err.Error()))
 				}
 				log.Error("Failed to update provider weights", zap.Error(err))
 				return err
