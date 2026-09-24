@@ -15,7 +15,7 @@ import (
 	"github.com/fil-forge/ucantone/execution"
 	"github.com/fil-forge/ucantone/server"
 	"github.com/fil-forge/ucantone/ucan"
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -45,13 +45,23 @@ func Transport(base http.RoundTripper) http.RoundTripper {
 
 // Middleware starts the server span for each request, continuing a trace
 // context the caller sent. The span is named for the method and the matched
-// route ("GET /tenants/:id"), so IDs in the path do not each get a name of
-// their own; SpanNamer then renames a UCAN request for the commands it
-// carries. Health checks are not traced: an orchestrator polls them every few
-// seconds.
+// route ("GET /receipt/:cid"), so IDs in the path do not each get a name of
+// their own, or for the commands a UCAN request carries (see SpanNamer).
+// Health checks are not traced: an orchestrator polls them every few seconds.
+//
+// otelhttp names the span again as the request ends whenever the request has
+// a route pattern, which Echo's router always sets, so the final name has to
+// come from the name formatter. Middleware gives each request a name slot in
+// its context for SpanNamer to fill, and the formatter reads it.
 func Middleware() echo.MiddlewareFunc {
 	start := echo.WrapMiddleware(otelhttp.NewMiddleware("sprue",
 		otelhttp.WithSpanNameFormatter(func(_ string, r *http.Request) string {
+			if name, ok := r.Context().Value(spanNameKey{}).(*string); ok && *name != "" {
+				return *name
+			}
+			if r.Pattern != "" {
+				return r.Method + " " + r.Pattern
+			}
 			return r.Method
 		}),
 		otelhttp.WithFilter(func(r *http.Request) bool {
@@ -59,14 +69,17 @@ func Middleware() echo.MiddlewareFunc {
 		}),
 	))
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return start(func(c echo.Context) error {
-			if route := c.Path(); route != "" {
-				trace.SpanFromContext(c.Request().Context()).SetName(c.Request().Method + " " + route)
-			}
-			return next(c)
-		})
+		traced := start(next)
+		return func(c *echo.Context) error {
+			req := c.Request()
+			c.SetRequest(req.WithContext(context.WithValue(req.Context(), spanNameKey{}, new(string))))
+			return traced(c)
+		}
 	}
 }
+
+// spanNameKey is the context key of a request's span name slot.
+type spanNameKey struct{}
 
 // SpanNamer is a UCAN server event listener that names the request's server
 // span for the commands it invokes ("/space/blob/add" rather than "POST /"). A
@@ -84,10 +97,15 @@ func (SpanNamer) OnRequestDecode(ctx context.Context, ct ucan.Container) error {
 			cmds = append(cmds, cmd)
 		}
 	}
-	if len(cmds) > 0 {
-		slices.Sort(cmds)
-		trace.SpanFromContext(ctx).SetName(strings.Join(cmds, ", "))
+	if len(cmds) == 0 {
+		return nil
 	}
+	slices.Sort(cmds)
+	name := strings.Join(cmds, ", ")
+	if slot, ok := ctx.Value(spanNameKey{}).(*string); ok {
+		*slot = name
+	}
+	trace.SpanFromContext(ctx).SetName(name)
 	return nil
 }
 

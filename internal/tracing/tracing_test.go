@@ -15,7 +15,7 @@ import (
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/container"
 	"github.com/fil-forge/ucantone/ucan/invocation"
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -51,12 +51,12 @@ func newServer(t *testing.T, service ucan.Issuer, routes map[ucan.Command]execut
 	}
 	e := echo.New()
 	e.Use(Middleware())
-	e.POST("/", func(c echo.Context) error {
+	e.POST("/", func(c *echo.Context) error {
 		srv.ServeHTTP(c.Response(), c.Request())
 		return nil
 	})
-	e.GET("/health", func(c echo.Context) error { return c.NoContent(http.StatusOK) })
-	e.GET("/things/:id", func(c echo.Context) error { return c.NoContent(http.StatusOK) })
+	e.GET("/health", func(c *echo.Context) error { return c.NoContent(http.StatusOK) })
+	e.GET("/things/:id", func(c *echo.Context) error { return c.NoContent(http.StatusOK) })
 	return e
 }
 

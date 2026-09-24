@@ -31,7 +31,7 @@ import (
 	"github.com/fil-forge/ucantone/ucan/container"
 	"github.com/fil-forge/ucantone/validator"
 	"github.com/ipfs/go-cid"
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 	"go.uber.org/zap"
 )
 
@@ -167,12 +167,12 @@ func createUCANServer(id multikey.Issuer, agentStore agent.Store, handlers []ser
 }
 
 // HandleUCANRequest handles incoming UCAN RPC requests.
-func (s *Service) HandleUCANRequest(c echo.Context) error {
+func (s *Service) HandleUCANRequest(c *echo.Context) error {
 	s.ucanServer.ServeHTTP(c.Response(), c.Request())
 	return nil
 }
 
-func (s *Service) HandleValidateEmailRequest(c echo.Context) error {
+func (s *Service) HandleValidateEmailRequest(c *echo.Context) error {
 	if c.QueryParam("ucan") == "" {
 		r, err := ui.ErrorPage("missing ucan query parameter")
 		if err != nil {
@@ -209,7 +209,7 @@ func (s *Service) HandleValidateEmailRequest(c echo.Context) error {
 }
 
 // HandleReceiptRequest handles receipt retrieval requests.
-func (s *Service) HandleReceiptRequest(c echo.Context) error {
+func (s *Service) HandleReceiptRequest(c *echo.Context) error {
 	task, err := cid.Parse(c.Param("cid"))
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{

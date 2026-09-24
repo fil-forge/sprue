@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
+	"github.com/labstack/echo/v5"
+	"github.com/labstack/echo/v5/middleware"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 
@@ -32,8 +32,6 @@ func NewEchoServer(
 	logger *zap.Logger,
 ) *echo.Echo {
 	e := echo.New()
-	e.HideBanner = true
-	e.HidePort = true
 
 	// Middleware. The server span goes first, so it times the whole request.
 	e.Use(tracing.Middleware())
@@ -66,12 +64,11 @@ func requestLogger(logger *zap.Logger) echo.MiddlewareFunc {
 		LogRequestID:     true,
 		LogUserAgent:     true,
 		LogStatus:        true,
-		LogError:         true,
 		LogContentLength: true,
 		LogResponseSize:  true,
 		LogHeaders:       []string{"X-Agent-Message"},
 		HandleError:      true, // forwards error to the global error handler, so it can decide appropriate status code
-		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
+		LogValuesFunc: func(c *echo.Context, v middleware.RequestLoggerValues) error {
 			fields := []zap.Field{
 				zap.Int("status", v.Status),
 				zap.String("method", v.Method),
@@ -109,6 +106,10 @@ func RegisterServerLifecycle(
 	logger *zap.Logger,
 	id identity.Identity,
 ) {
+	// The server runs until serveCtx is cancelled, then drains in-flight
+	// requests for up to GracefulTimeout before Start returns.
+	serveCtx, stop := context.WithCancel(context.Background())
+	stopped := make(chan struct{})
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
 			addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
@@ -117,8 +118,15 @@ func RegisterServerLifecycle(
 				zap.String("did", id.DID().String()),
 			)
 
+			sc := echo.StartConfig{
+				Address:         addr,
+				HideBanner:      true,
+				HidePort:        true,
+				GracefulTimeout: 10 * time.Second,
+			}
 			go func() {
-				if err := e.Start(addr); err != nil && err != http.ErrServerClosed {
+				defer close(stopped)
+				if err := sc.Start(serveCtx, e); err != nil {
 					logger.Fatal("server error", zap.Error(err))
 				}
 			}()
@@ -127,9 +135,13 @@ func RegisterServerLifecycle(
 		},
 		OnStop: func(ctx context.Context) error {
 			logger.Info("shutting down server")
-			shutdownCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-			defer cancel()
-			return e.Shutdown(shutdownCtx)
+			stop()
+			select {
+			case <-stopped:
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
 		},
 	})
 }
@@ -156,7 +168,7 @@ func serverInfoHandler(id identity.Identity) echo.HandlerFunc {
 			Repo:    "https://github.com/fil-forge/sprue",
 		},
 	}
-	return func(c echo.Context) error {
+	return func(c *echo.Context) error {
 		// Media type tokens are case-insensitive.
 		if strings.Contains(strings.ToLower(c.Request().Header.Get("Accept")), "application/json") {
 			return c.JSON(http.StatusOK, info)
@@ -167,7 +179,7 @@ func serverInfoHandler(id identity.Identity) echo.HandlerFunc {
 }
 
 // healthHandler returns health status.
-func healthHandler(c echo.Context) error {
+func healthHandler(c *echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{
 		"status": "healthy",
 	})
@@ -175,7 +187,7 @@ func healthHandler(c echo.Context) error {
 
 // didDocumentHandler returns the DID document for did:web resolution.
 func didDocumentHandler(id identity.Identity) echo.HandlerFunc {
-	return func(c echo.Context) error {
+	return func(c *echo.Context) error {
 		doc, err := id.DIDDocument()
 		if err != nil {
 			return c.JSON(http.StatusInternalServerError, map[string]string{

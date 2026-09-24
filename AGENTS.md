@@ -85,7 +85,7 @@ Configuration via YAML file or environment variables with `SPRUE_` prefix:
 
 - **ucantone**: UCAN RPC framework for capability-based authorization
 - **libforge**: Forge Network UCAN command definitions (blob, space, upload, etc.)
-- **echo/v4**: HTTP server framework
+- **echo/v5**: HTTP server framework
 - **aws-sdk-go-v2**: S3 client (blob payloads for the postgres backend)
 - **jackc/pgx/v5**: PostgreSQL driver
 - **pressly/goose/v3**: SQL schema migrations
