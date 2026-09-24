@@ -70,8 +70,6 @@ func newService(t *testing.T, s stores, now time.Time) *usage.Service {
 	)
 }
 
-func provider() did.DID { return testutil.WebService.DID() }
-
 // run returns a series' samples.
 func run(t *testing.T, series usage.Series) []usage.Sample {
 	t.Helper()
