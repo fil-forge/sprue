@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/exaring/otelpgx"
 	"github.com/fil-forge/sprue/internal/config"
 	"github.com/fil-forge/sprue/internal/migrations"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -44,6 +45,7 @@ import (
 	uploaddiff "github.com/fil-forge/sprue/pkg/store/upload_diff"
 	pguploaddiff "github.com/fil-forge/sprue/pkg/store/upload_diff/postgres"
 
+	"go.opentelemetry.io/contrib/instrumentation/github.com/aws/aws-sdk-go-v2/otelaws"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 )
@@ -100,6 +102,8 @@ func NewPostgresPool(cfg config.PostgresConfig, lc fx.Lifecycle, logger *zap.Log
 	if cfg.MinConns > 0 {
 		poolCfg.MinConns = cfg.MinConns
 	}
+	// Every query is a span on the caller's trace.
+	poolCfg.ConnConfig.Tracer = otelpgx.NewTracer()
 
 	pool, err := pgxpool.NewWithConfig(context.Background(), poolCfg)
 	if err != nil {
@@ -147,6 +151,9 @@ func NewS3Client(cfg config.S3Config, logger *zap.Logger) (*s3.Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("loading AWS config: %w", err)
 	}
+
+	// Every S3 call is a span on the caller's trace.
+	otelaws.AppendMiddlewares(&awsCfg.APIOptions)
 
 	client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
 		o.UsePathStyle = cfg.UsePathStyle

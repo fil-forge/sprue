@@ -9,6 +9,7 @@ import (
 
 	"github.com/fil-forge/libforge/identity"
 	"github.com/fil-forge/sprue/internal/config"
+	"github.com/fil-forge/sprue/internal/tracing"
 	"github.com/fil-forge/sprue/pkg/billing"
 	"github.com/fil-forge/sprue/pkg/mailer"
 	"github.com/fil-forge/sprue/pkg/mailer/nop"
@@ -54,7 +55,10 @@ func NewMailingService(deploymentCfg config.DeploymentConfig, mailerCfg config.M
 		if mailerCfg.PostmarkToken == "" {
 			return nil, fmt.Errorf("postmark mail configured but token not set")
 		}
-		postmarkOpts := []postmark.Option{postmark.WithEnvironment(deploymentCfg.Environment)}
+		postmarkOpts := []postmark.Option{
+			postmark.WithEnvironment(deploymentCfg.Environment),
+			postmark.WithHTTPClient(tracing.NewHTTPClient()),
+		}
 		if mailerCfg.Sender != "" {
 			postmarkOpts = append(postmarkOpts, postmark.WithSender(mailerCfg.Sender))
 		}

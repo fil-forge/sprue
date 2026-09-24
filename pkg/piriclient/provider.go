@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/fil-forge/sprue/internal/tracing"
 	"github.com/fil-forge/ucantone/client"
 	"github.com/fil-forge/ucantone/did"
 	"github.com/fil-forge/ucantone/ucan"
@@ -46,7 +47,7 @@ func NewProvider(issuer ucan.Issuer, logger *zap.Logger) *PiriProvider {
 	return &PiriProvider{
 		issuer: issuer,
 		logger: logger,
-		http:   &http.Client{Transport: pooledTransport(), Timeout: piriRequestTimeout},
+		http:   &http.Client{Transport: tracing.Transport(pooledTransport()), Timeout: piriRequestTimeout},
 	}
 }
 

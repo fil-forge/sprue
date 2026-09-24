@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/spf13/cobra"
 	"go.uber.org/fx"
@@ -13,6 +15,7 @@ import (
 	"github.com/fil-forge/sprue/cmd/identity"
 	"github.com/fil-forge/sprue/internal/config"
 	appfx "github.com/fil-forge/sprue/internal/fx"
+	"github.com/fil-forge/sprue/internal/tracing"
 )
 
 var cfgFile string
@@ -47,6 +50,22 @@ Routes blob allocations to Piri nodes and tracks upload state in PostgreSQL.`,
 func runServe(cmd *cobra.Command, args []string) error {
 	cfg, err := config.Load(cfgFile)
 	cobra.CheckErr(err)
+
+	logger, err := appfx.NewLogger(cfg)
+	if err != nil {
+		return err
+	}
+	shutdownTracing, err := tracing.Setup(cmd.Context(), logger)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := shutdownTracing(ctx); err != nil {
+			logger.Warn("flushing traces", zap.Error(err))
+		}
+	}()
 
 	app := fx.New(
 		appfx.AppModule(cfg),
