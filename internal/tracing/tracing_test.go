@@ -56,6 +56,7 @@ func newServer(t *testing.T, service ucan.Issuer, routes map[ucan.Command]execut
 		return nil
 	})
 	e.GET("/health", func(c echo.Context) error { return c.NoContent(http.StatusOK) })
+	e.GET("/things/:id", func(c echo.Context) error { return c.NoContent(http.StatusOK) })
 	return e
 }
 
@@ -180,4 +181,14 @@ func TestHealthNotTraced(t *testing.T) {
 	e.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/health", nil))
 	require.Equal(t, http.StatusOK, rr.Code)
 	require.Empty(t, rec.Ended())
+}
+
+func TestRESTSpanNamedForRoute(t *testing.T) {
+	rec := installRecorder(t)
+	e := newServer(t, testutil.RandomIssuer(t), nil)
+
+	e.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/things/abc123", nil))
+	spans := rec.Ended()
+	require.Len(t, spans, 1)
+	require.Equal(t, "GET /things/:id", spans[0].Name())
 }

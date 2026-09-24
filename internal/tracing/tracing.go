@@ -44,18 +44,28 @@ func Transport(base http.RoundTripper) http.RoundTripper {
 }
 
 // Middleware starts the server span for each request, continuing a trace
-// context the caller sent. The span is named for the method and route until
-// SpanNamer renames a UCAN request for the commands it carries. Health checks
-// are not traced: an orchestrator polls them every few seconds.
+// context the caller sent. The span is named for the method and the matched
+// route ("GET /tenants/:id"), so IDs in the path do not each get a name of
+// their own; SpanNamer then renames a UCAN request for the commands it
+// carries. Health checks are not traced: an orchestrator polls them every few
+// seconds.
 func Middleware() echo.MiddlewareFunc {
-	return echo.WrapMiddleware(otelhttp.NewMiddleware("sprue",
+	start := echo.WrapMiddleware(otelhttp.NewMiddleware("sprue",
 		otelhttp.WithSpanNameFormatter(func(_ string, r *http.Request) string {
-			return r.Method + " " + r.URL.Path
+			return r.Method
 		}),
 		otelhttp.WithFilter(func(r *http.Request) bool {
 			return r.URL.Path != "/health"
 		}),
 	))
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return start(func(c echo.Context) error {
+			if route := c.Path(); route != "" {
+				trace.SpanFromContext(c.Request().Context()).SetName(c.Request().Method + " " + route)
+			}
+			return next(c)
+		})
+	}
 }
 
 // SpanNamer is a UCAN server event listener that names the request's server
