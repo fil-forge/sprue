@@ -316,3 +316,37 @@ func TestPutReportsARepeatedChange(t *testing.T) {
 		})
 	}
 }
+
+// TestChangesWithinAMillisecondStayDistinct: two changes less than a
+// millisecond apart are two changes, in both backends. The log keeps times to
+// the microsecond, so nothing coarser may decide whether a change is new —
+// the caller gates its running total on that answer, and a backend that
+// collapsed the pair would drop a real change on one deployment and not the
+// other.
+func TestChangesWithinAMillisecondStayDistinct(t *testing.T) {
+	for _, k := range storeKinds {
+		t.Run(string(k), func(t *testing.T) {
+			s := makeStore(t, k)
+			space := testutil.RandomDID(t)
+			cause := testutil.RandomCID(t)
+			first := time.Now().UTC().Truncate(time.Microsecond)
+			second := first.Add(100 * time.Microsecond)
+
+			recorded, err := s.Put(t.Context(), space, cause, 1, first)
+			require.NoError(t, err)
+			require.True(t, recorded)
+
+			recorded, err = s.Put(t.Context(), space, cause, 1, second)
+			require.NoError(t, err)
+			require.True(t, recorded, "100µs later is a different instant, not a repeat")
+
+			page, err := s.List(t.Context(), space, time.Time{})
+			require.NoError(t, err)
+			require.Len(t, page.Results, 2)
+			// Stored at the precision the caller gave, so a cursor built from
+			// one row addresses exactly that row in either backend.
+			require.Equal(t, first, page.Results[0].ReceiptAt.UTC())
+			require.Equal(t, second, page.Results[1].ReceiptAt.UTC())
+		})
+	}
+}

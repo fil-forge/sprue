@@ -53,7 +53,7 @@ func PutWith(ctx context.Context, q pgxExec, space did.DID, cause cid.Cid, delta
 		INSERT INTO upload_diff (space, receipt_at, cause, delta)
 		VALUES ($1, $2, $3, $4)
 		ON CONFLICT (space, receipt_at, cause) DO NOTHING
-	`, space.String(), receiptAt.UTC(), cause.String(), delta)
+	`, space.String(), uploaddiff.Instant(receiptAt), cause.String(), delta)
 	if err != nil {
 		return false, fmt.Errorf("putting upload diff: %w", err)
 	}

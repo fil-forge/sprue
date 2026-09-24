@@ -102,7 +102,7 @@ func (s *Store) Put(ctx context.Context, space did.DID, cause cid.Cid, delta int
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	at := receiptAt.UTC().Truncate(time.Millisecond)
+	at := uploaddiff.Instant(receiptAt)
 	// The same (space, receipt_at, cause) is one change recorded twice, which
 	// Postgres suppresses with ON CONFLICT DO NOTHING. Both backends have to
 	// answer the same way, since the caller gates its counters on it.

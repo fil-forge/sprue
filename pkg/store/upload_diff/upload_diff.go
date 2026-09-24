@@ -22,6 +22,17 @@ import (
 	"github.com/ipfs/go-cid"
 )
 
+// Instant normalizes a receipt time to the precision the log keeps it at.
+//
+// Both backends run it before storing or comparing, so they agree on when a
+// change happened and on whether two are the same one. Postgres holds a
+// TIMESTAMPTZ to the microsecond, so that is the precision: normalizing before
+// the write also leaves the database nothing to round, which would otherwise
+// put a different value on disk from the one the caller compared against.
+func Instant(t time.Time) time.Time {
+	return t.UTC().Truncate(time.Microsecond)
+}
+
 type (
 	ListConfig = store.PaginationConfig
 	ListOption func(cfg *ListConfig)
@@ -53,7 +64,7 @@ type Store interface {
 type DifferenceRecord struct {
 	// Space DID (did:key:...).
 	Space did.DID
-	// Invocation CID that changed the object count (bafy...).
+	// `/upload/add` or `/upload/remove` task CID that changed the object count.
 	Cause cid.Cid
 	// Objects added to (+1) or removed from (-1) the space.
 	Delta int64
