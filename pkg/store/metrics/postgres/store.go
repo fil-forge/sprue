@@ -91,10 +91,9 @@ func NewSpaceStore(pool *pgxpool.Pool) *SpaceStore {
 
 func (s *SpaceStore) Initialize(ctx context.Context) error { return nil }
 
-func (s *SpaceStore) Get(ctx context.Context, provider did.DID, space did.DID) (map[string]uint64, error) {
+func (s *SpaceStore) Get(ctx context.Context, space did.DID) (map[string]uint64, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT name, value FROM space_metrics WHERE provider = $1 AND space = $2`,
-		provider.String(), space.String())
+		`SELECT name, value FROM space_metrics WHERE space = $1`, space.String())
 	if err != nil {
 		return nil, fmt.Errorf("querying space metrics: %w", err)
 	}
@@ -114,25 +113,25 @@ func (s *SpaceStore) Get(ctx context.Context, provider did.DID, space did.DID) (
 	return result, nil
 }
 
-func (s *SpaceStore) IncrementTotals(ctx context.Context, provider did.DID, space did.DID, inc map[string]uint64) error {
+func (s *SpaceStore) IncrementTotals(ctx context.Context, space did.DID, inc map[string]uint64) error {
 	if len(inc) == 0 {
 		return nil
 	}
-	return IncrementSpaceWith(ctx, s.pool, provider, space, inc)
+	return IncrementSpaceWith(ctx, s.pool, space, inc)
 }
 
 // IncrementSpaceWith increments per-space metrics via the provided querier,
 // enabling inclusion in an external transaction.
-func IncrementSpaceWith(ctx context.Context, q pgxExec, provider did.DID, space did.DID, inc map[string]uint64) error {
+func IncrementSpaceWith(ctx context.Context, q pgxExec, space did.DID, inc map[string]uint64) error {
 	// Upsert in a deterministic key order so concurrent transactions acquire the
 	// metric row locks in the same order — ranging the map directly would use
 	// Go's randomized iteration order and can deadlock (SQLSTATE 40P01).
 	for _, metric := range slices.Sorted(maps.Keys(inc)) {
 		if _, err := q.Exec(ctx, `
-			INSERT INTO space_metrics (provider, space, name, value)
-			VALUES ($1, $2, $3, $4)
-			ON CONFLICT (provider, space, name) DO UPDATE SET value = space_metrics.value + EXCLUDED.value
-		`, provider.String(), space.String(), metric, int64(inc[metric])); err != nil {
+			INSERT INTO space_metrics (space, name, value)
+			VALUES ($1, $2, $3)
+			ON CONFLICT (space, name) DO UPDATE SET value = space_metrics.value + EXCLUDED.value
+		`, space.String(), metric, int64(inc[metric])); err != nil {
 			return fmt.Errorf("incrementing space metric %q: %w", metric, err)
 		}
 	}

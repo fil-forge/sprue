@@ -61,7 +61,6 @@ func newBlobRemoveTestDeps(t *testing.T, uploadService multikey.Issuer, logger *
 	consumerStore := consumer_store.New()
 	blobReg := blob_registry.New(
 		spacediff_store.New(),
-		consumerStore,
 		metrics_store.NewSpaceStore(),
 		metrics_store.New(),
 	)

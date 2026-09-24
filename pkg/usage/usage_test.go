@@ -72,48 +72,37 @@ func newService(t *testing.T, s stores, now time.Time) *usage.Service {
 
 func provider() did.DID { return testutil.WebService.DID() }
 
-func providers() []did.DID { return []did.DID{provider()} }
-
-// run returns the one provider's samples from a series, asserting that is all
-// the series holds.
+// run returns a series' samples.
 func run(t *testing.T, series usage.Series) []usage.Sample {
 	t.Helper()
-	require.Len(t, series.Samples, 1)
-	return series.Samples[provider()]
+	return series.Samples
 }
 
 // seedAdd records a stored blob the way blob_registry.Register commits it: for
 // each provider, a diff row and the matching counters together.
-func seedAdd(t *testing.T, s stores, space did.DID, size uint64, at time.Time, providers ...did.DID) {
+func seedAdd(t *testing.T, s stores, space did.DID, size uint64, at time.Time) {
 	t.Helper()
 	seedChange(t, s, space, int64(size), at, map[string]uint64{
 		metrics.BlobAddTotalMetric:     1,
 		metrics.BlobAddSizeTotalMetric: size,
-	}, providers...)
+	})
 }
 
 // seedRemove mirrors blob_registry.Deregister: a negative diff, and the remove
 // counters rather than a decrement of the add counters.
-func seedRemove(t *testing.T, s stores, space did.DID, size uint64, at time.Time, providers ...did.DID) {
+func seedRemove(t *testing.T, s stores, space did.DID, size uint64, at time.Time) {
 	t.Helper()
 	seedChange(t, s, space, -int64(size), at, map[string]uint64{
 		metrics.BlobRemoveTotalMetric:     1,
 		metrics.BlobRemoveSizeTotalMetric: size,
-	}, providers...)
+	})
 }
 
-// seedChange applies one change to every provider given, defaulting to the one
-// provider most cases use.
-func seedChange(t *testing.T, s stores, space did.DID, delta int64, at time.Time, inc map[string]uint64, providers ...did.DID) {
+// seedChange applies one change: a diff row and the matching counters.
+func seedChange(t *testing.T, s stores, space did.DID, delta int64, at time.Time, inc map[string]uint64) {
 	t.Helper()
-	if len(providers) == 0 {
-		providers = []did.DID{provider()}
-	}
-	cause := testutil.RandomCID(t)
-	for _, p := range providers {
-		require.NoError(t, s.diffs.Put(t.Context(), p, space, "sub", cause, delta, at))
-		require.NoError(t, s.metrics.IncrementTotals(t.Context(), p, space, inc))
-	}
+	require.NoError(t, s.diffs.Put(t.Context(), space, testutil.RandomCID(t), delta, at))
+	require.NoError(t, s.metrics.IncrementTotals(t.Context(), space, inc))
 }
 
 func stored(samples []usage.Sample) []uint64 {
@@ -162,7 +151,7 @@ func testSampleWithStoreKind(k StoreKind) func(*testing.T) {
 			to := base.Add(6 * window)
 			svc := newService(t, s, to)
 
-			series, err := svc.Sample(t.Context(), providers(), testutil.RandomDID(t), base, to, window)
+			series, err := svc.Sample(t.Context(), testutil.RandomDID(t), base, to, window)
 			require.NoError(t, err)
 			require.Len(t, run(t, series), 6)
 			require.Equal(t, []uint64{0, 0, 0, 0, 0, 0}, stored(run(t, series)))
@@ -176,7 +165,7 @@ func testSampleWithStoreKind(k StoreKind) func(*testing.T) {
 			seedAdd(t, s, space, 1024, base.Add(-48*time.Hour))
 
 			to := base.Add(3 * window)
-			series, err := newService(t, s, to).Sample(t.Context(), providers(), space, base, to, window)
+			series, err := newService(t, s, to).Sample(t.Context(), space, base, to, window)
 			require.NoError(t, err)
 			require.Equal(t, []uint64{1024, 1024, 1024}, stored(run(t, series)))
 			// Ingest happened before the range, so no bucket claims it.
@@ -190,7 +179,7 @@ func testSampleWithStoreKind(k StoreKind) func(*testing.T) {
 			seedRemove(t, s, space, 1024, base.Add(5*window+30*time.Minute))
 
 			to := base.Add(6 * window)
-			series, err := newService(t, s, to).Sample(t.Context(), providers(), space, base, to, window)
+			series, err := newService(t, s, to).Sample(t.Context(), space, base, to, window)
 			require.NoError(t, err)
 			require.Equal(t, []uint64{0, 0, 1024, 1024, 1024, 0}, stored(run(t, series)))
 			// A removal is not negative ingest: it leaves the flow alone.
@@ -205,7 +194,7 @@ func testSampleWithStoreKind(k StoreKind) func(*testing.T) {
 			}
 
 			to := base.Add(3 * window)
-			series, err := newService(t, s, to).Sample(t.Context(), providers(), space, base, to, window)
+			series, err := newService(t, s, to).Sample(t.Context(), space, base, to, window)
 			require.NoError(t, err)
 			require.Equal(t, []uint64{0, 300, 300}, stored(run(t, series)))
 			require.Equal(t, []uint64{0, 300, 0}, ingested(run(t, series)))
@@ -220,7 +209,7 @@ func testSampleWithStoreKind(k StoreKind) func(*testing.T) {
 			seedAdd(t, s, space, 4096, base.Add(7*window))
 
 			to := base.Add(6 * window)
-			series, err := newService(t, s, to).Sample(t.Context(), providers(), space, base, to, window)
+			series, err := newService(t, s, to).Sample(t.Context(), space, base, to, window)
 			require.NoError(t, err)
 			require.Equal(t, []uint64{0, 0, 1024, 1024, 1024, 1024}, stored(run(t, series)))
 			require.Equal(t, []uint64{0, 0, 1024, 0, 0, 0}, ingested(run(t, series)))
@@ -232,7 +221,7 @@ func testSampleWithStoreKind(k StoreKind) func(*testing.T) {
 			seedAdd(t, s, space, 512, base.Add(30*time.Minute))
 
 			now := base.Add(3*window + 30*time.Minute)
-			series, err := newService(t, s, now).Sample(t.Context(), providers(), space, base, base.Add(6*window), window)
+			series, err := newService(t, s, now).Sample(t.Context(), space, base, base.Add(6*window), window)
 			require.NoError(t, err)
 			require.True(t, series.To.Equal(now), "series ends at %s, want %s", series.To, now)
 			require.Len(t, run(t, series), 4)
@@ -246,7 +235,7 @@ func testSampleWithStoreKind(k StoreKind) func(*testing.T) {
 			now := base
 			from := base.Add(window)
 			series, err := newService(t, s, now).Sample(
-				t.Context(), providers(), testutil.RandomDID(t), from, base.Add(2*window), window)
+				t.Context(), testutil.RandomDID(t), from, base.Add(2*window), window)
 			require.NoError(t, err)
 			require.Empty(t, run(t, series))
 			// The range covers nothing, but it still has to read as a range:
@@ -264,7 +253,7 @@ func testSampleWithStoreKind(k StoreKind) func(*testing.T) {
 			// Half way through the second bucket of a two bucket range.
 			now := base.Add(window + 30*time.Minute)
 			series, err := newService(t, s, now).Sample(
-				t.Context(), providers(), space, base, base.Add(2*window), window)
+				t.Context(), space, base, base.Add(2*window), window)
 			require.NoError(t, err)
 
 			// Both buckets are returned; the second is short and ends now.
@@ -283,7 +272,7 @@ func testSampleWithStoreKind(k StoreKind) func(*testing.T) {
 			seedAdd(t, s, space, 64, base.Add(10*time.Minute))
 
 			to := base.Add(2*window + 30*time.Minute)
-			series, err := newService(t, s, to).Sample(t.Context(), providers(), space, base, to, window)
+			series, err := newService(t, s, to).Sample(t.Context(), space, base, to, window)
 			require.NoError(t, err)
 			require.Len(t, run(t, series), 3)
 			require.True(t, run(t, series)[2].End.Equal(to))
@@ -297,7 +286,7 @@ func testSampleWithStoreKind(k StoreKind) func(*testing.T) {
 			seedAdd(t, s, space, 2048, base.Add(2*window))
 
 			to := base.Add(4 * window)
-			series, err := newService(t, s, to).Sample(t.Context(), providers(), space, base, to, window)
+			series, err := newService(t, s, to).Sample(t.Context(), space, base, to, window)
 			require.NoError(t, err)
 			// The bucket ending at 2h closed before the change, so it does
 			// not hold it; the bucket that opens there does.
@@ -311,49 +300,10 @@ func testSampleWithStoreKind(k StoreKind) func(*testing.T) {
 			seedAdd(t, s, space, 777, base)
 
 			to := base.Add(2 * window)
-			series, err := newService(t, s, to).Sample(t.Context(), providers(), space, base, to, window)
+			series, err := newService(t, s, to).Sample(t.Context(), space, base, to, window)
 			require.NoError(t, err)
 			require.Equal(t, []uint64{777, 777}, stored(run(t, series)))
 			require.Equal(t, []uint64{777, 0}, ingested(run(t, series)))
-		})
-
-		t.Run("ignores what another provider recorded", func(t *testing.T) {
-			s := makeStores(t, k)
-			space := testutil.RandomDID(t)
-			other := testutil.RandomDID(t)
-			at := base.Add(window + 30*time.Minute)
-			seedAdd(t, s, space, 1024, at)
-			// A change only the other provider saw. Its rows and its
-			// counters both sit under its own key, so neither reaches here.
-			seedAdd(t, s, space, 9999, at, other)
-
-			to := base.Add(3 * window)
-			series, err := newService(t, s, to).Sample(t.Context(), providers(), space, base, to, window)
-			require.NoError(t, err)
-			require.Equal(t, []uint64{0, 1024, 1024}, stored(run(t, series)))
-			require.Equal(t, []uint64{0, 1024, 0}, ingested(run(t, series)))
-		})
-
-		t.Run("reads a provider added after the space held blobs", func(t *testing.T) {
-			s := makeStores(t, k)
-			space := testutil.RandomDID(t)
-			late := testutil.RandomDID(t)
-
-			// The original provider saw a change before the late one existed.
-			seedAdd(t, s, space, 1024, base.Add(30*time.Minute), provider())
-			// The late provider is the only one that saw this one; the
-			// original provider was not serving the blob.
-			seedAdd(t, s, space, 512, base.Add(window+30*time.Minute), late)
-
-			to := base.Add(3 * window)
-			series, err := newService(t, s, to).Sample(
-				t.Context(), []did.DID{provider(), late}, space, base, to, window)
-			require.NoError(t, err)
-
-			// Each provider reports what it holds, and the late one reports
-			// nothing before it arrived rather than a baseline it never stored.
-			require.Equal(t, []uint64{1024, 1024, 1024}, stored(series.Samples[provider()]))
-			require.Equal(t, []uint64{0, 512, 512}, stored(series.Samples[late]))
 		})
 
 		t.Run("includes a change just before the range ends", func(t *testing.T) {
@@ -363,9 +313,9 @@ func testSampleWithStoreKind(k StoreKind) func(*testing.T) {
 
 			// A second before the range closes, so it belongs to the last
 			// bucket and the final reading has to hold it.
-			seedAdd(t, s, space, 256, to.Add(-time.Second), provider())
+			seedAdd(t, s, space, 256, to.Add(-time.Second))
 
-			series, err := newService(t, s, to).Sample(t.Context(), providers(), space, base, to, window)
+			series, err := newService(t, s, to).Sample(t.Context(), space, base, to, window)
 			require.NoError(t, err)
 			require.Equal(t, []uint64{0, 0, 256}, stored(run(t, series)))
 			require.Equal(t, []uint64{0, 0, 256}, ingested(run(t, series)))
@@ -385,39 +335,16 @@ func testSampleWithStoreKind(k StoreKind) func(*testing.T) {
 					space := testutil.RandomDID(t)
 					to := base.Add(3 * window)
 
-					seedAdd(t, s, space, 256, to.Add(tc.at), provider())
+					seedAdd(t, s, space, 256, to.Add(tc.at))
 
 					// Sampled from later still, so the change is recorded and
 					// counted, just not inside the range asked for.
 					series, err := newService(t, s, to.Add(time.Hour)).Sample(
-						t.Context(), providers(), space, base, to, window)
+						t.Context(), space, base, to, window)
 					require.NoError(t, err)
 					require.Equal(t, []uint64{0, 0, 0}, stored(run(t, series)))
 					require.Equal(t, []uint64{0, 0, 0}, ingested(run(t, series)))
 				})
-			}
-		})
-
-		t.Run("returns a run per provider on one shared grid", func(t *testing.T) {
-			s := makeStores(t, k)
-			space := testutil.RandomDID(t)
-			second := testutil.RandomDID(t)
-			at := base.Add(window + 30*time.Minute)
-
-			// Both providers served the space from the start, so each one's
-			// rows balance its own counters.
-			seedAdd(t, s, space, 1024, at, provider(), second)
-
-			to := base.Add(3 * window)
-			series, err := newService(t, s, to).Sample(
-				t.Context(), []did.DID{provider(), second}, space, base, to, window)
-			require.NoError(t, err)
-
-			require.Len(t, series.Samples, 2)
-			for _, p := range []did.DID{provider(), second} {
-				require.Equal(t, []uint64{0, 1024, 1024}, stored(series.Samples[p]), "provider %s", p)
-				require.Equal(t, []uint64{0, 1024, 0}, ingested(series.Samples[p]), "provider %s", p)
-				requireDense(t, series, series.Samples[p], "provider %s", p)
 			}
 		})
 
@@ -428,7 +355,7 @@ func testSampleWithStoreKind(k StoreKind) func(*testing.T) {
 			from := base.Add(-32 * 24 * time.Hour)
 			seedAdd(t, s, space, 4096, from.Add(90*time.Minute))
 
-			series, err := newService(t, s, now).Sample(t.Context(), providers(), space, from, now, window)
+			series, err := newService(t, s, now).Sample(t.Context(), space, from, now, window)
 			require.NoError(t, err)
 			require.Len(t, run(t, series), 768)
 			requireDense(t, series, run(t, series))
@@ -456,7 +383,7 @@ func TestSampleRejectsBadArguments(t *testing.T) {
 		{"window beyond a year", base, base.Add(window), 400 * 24 * time.Hour, "InvalidWindow"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := svc.Sample(t.Context(), providers(), space, tc.from, tc.to, tc.window)
+			_, err := svc.Sample(t.Context(), space, tc.from, tc.to, tc.window)
 			var named errors.Named
 			require.ErrorAs(t, err, &named)
 			require.Equal(t, tc.wantFailed, named.Name())
@@ -471,13 +398,13 @@ func TestSampleRejectsMoreBucketsThanTheLimit(t *testing.T) {
 	// be past the end for the whole range to count.
 	svc := newService(t, s, to)
 
-	_, err := svc.Sample(t.Context(), providers(), testutil.RandomDID(t), base, to, window)
+	_, err := svc.Sample(t.Context(), testutil.RandomDID(t), base, to, window)
 	var named errors.Named
 	require.ErrorAs(t, err, &named)
 	require.Equal(t, "TooManySamples", named.Name())
 
 	// One fewer bucket is served.
-	series, err := svc.Sample(t.Context(), providers(), testutil.RandomDID(t), base, to.Add(-window), window)
+	series, err := svc.Sample(t.Context(), testutil.RandomDID(t), base, to.Add(-window), window)
 	require.NoError(t, err)
 	require.Len(t, run(t, series), usage.MaxSamples)
 }
@@ -493,14 +420,14 @@ func TestSampleRejectsASpanThatSaturatesADuration(t *testing.T) {
 	from := time.Unix(-1<<62, 0).UTC()
 
 	// A window small enough that the bucket count alone would give it away.
-	_, err := svc.Sample(t.Context(), providers(), space, from, now, time.Second)
+	_, err := svc.Sample(t.Context(), space, from, now, time.Second)
 	var named errors.Named
 	require.ErrorAs(t, err, &named)
 	require.Equal(t, "InvalidRange", named.Name())
 
 	// And one wide enough that the saturated span still counts under the sample
 	// limit, where only the saturation itself gives it away.
-	_, err = svc.Sample(t.Context(), providers(), space, from, now, 366*24*time.Hour)
+	_, err = svc.Sample(t.Context(), space, from, now, 366*24*time.Hour)
 	require.ErrorAs(t, err, &named)
 	require.Equal(t, "InvalidRange", named.Name())
 }
@@ -513,7 +440,7 @@ func TestSampleCoversAWideButExpressibleRange(t *testing.T) {
 	now := time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC)
 	svc := newService(t, s, now)
 
-	series, err := svc.Sample(t.Context(), providers(), testutil.RandomDID(t), from, now, 366*24*time.Hour)
+	series, err := svc.Sample(t.Context(), testutil.RandomDID(t), from, now, 366*24*time.Hour)
 	require.NoError(t, err)
 
 	samples := run(t, series)
@@ -562,17 +489,17 @@ type movingSpaceStore struct {
 	settleAfter int
 }
 
-func (m *movingSpaceStore) Get(ctx context.Context, provider did.DID, space did.DID) (map[string]uint64, error) {
+func (m *movingSpaceStore) Get(ctx context.Context, space did.DID) (map[string]uint64, error) {
 	m.reads++
 	if m.reads <= m.settleAfter {
-		if err := m.SpaceStore.IncrementTotals(ctx, provider, space, map[string]uint64{
+		if err := m.SpaceStore.IncrementTotals(ctx, space, map[string]uint64{
 			metrics.BlobAddTotalMetric:     1,
 			metrics.BlobAddSizeTotalMetric: 512,
 		}); err != nil {
 			return nil, err
 		}
 	}
-	return m.SpaceStore.Get(ctx, provider, space)
+	return m.SpaceStore.Get(ctx, space)
 }
 
 func TestSampleRefusesAnInconsistentRead(t *testing.T) {
@@ -584,7 +511,7 @@ func TestSampleRefusesAnInconsistentRead(t *testing.T) {
 			diffs:   spacediffmemory.New(),
 			metrics: &movingSpaceStore{SpaceStore: metricsmemory.NewSpaceStore(), settleAfter: 100},
 		}
-		_, err := newService(t, s, to).Sample(t.Context(), providers(), space, base, to, window)
+		_, err := newService(t, s, to).Sample(t.Context(), space, base, to, window)
 		var named errors.Named
 		require.ErrorAs(t, err, &named)
 		require.Equal(t, "UsageUnstable", named.Name())
@@ -595,7 +522,7 @@ func TestSampleRefusesAnInconsistentRead(t *testing.T) {
 			diffs:   spacediffmemory.New(),
 			metrics: &movingSpaceStore{SpaceStore: metricsmemory.NewSpaceStore(), settleAfter: 1},
 		}
-		series, err := newService(t, s, to).Sample(t.Context(), providers(), space, base, to, window)
+		series, err := newService(t, s, to).Sample(t.Context(), space, base, to, window)
 		require.NoError(t, err)
 		require.Len(t, run(t, series), 2)
 	})

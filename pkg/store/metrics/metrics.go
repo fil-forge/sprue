@@ -24,13 +24,10 @@ type Store interface {
 	IncrementTotals(ctx context.Context, inc map[string]uint64) error
 }
 
-// SpaceStore holds the running totals for a space as recorded by one of its
-// storage providers. A change to a space moves the counters of every provider
-// serving it, matching the space diff log, which records a row per provider.
+// SpaceStore holds the running totals for a space.
 type SpaceStore interface {
-	// Get all metrics a provider has recorded for a space.
-	Get(ctx context.Context, provider did.DID, space did.DID) (map[string]uint64, error)
-	// Increment total values of the given metrics for a space, as recorded by
-	// the given provider.
-	IncrementTotals(ctx context.Context, provider did.DID, space did.DID, inc map[string]uint64) error
+	// Get all metrics for a space from storage.
+	Get(ctx context.Context, space did.DID) (map[string]uint64, error)
+	// Increment total values of the given metrics for a space.
+	IncrementTotals(ctx context.Context, space did.DID, inc map[string]uint64) error
 }

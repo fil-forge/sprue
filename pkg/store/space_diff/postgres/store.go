@@ -34,25 +34,25 @@ func New(pool *pgxpool.Pool) *Store {
 
 func (s *Store) Initialize(ctx context.Context) error { return nil }
 
-func (s *Store) Put(ctx context.Context, provider did.DID, space did.DID, subscription string, cause cid.Cid, delta int64, receiptAt time.Time) error {
-	return PutWith(ctx, s.pool, provider, space, subscription, cause, delta, receiptAt)
+func (s *Store) Put(ctx context.Context, space did.DID, cause cid.Cid, delta int64, receiptAt time.Time) error {
+	return PutWith(ctx, s.pool, space, cause, delta, receiptAt)
 }
 
 // PutWith inserts a space diff row using the provided querier, allowing the
 // write to participate in an external transaction. It exists so blob_registry
 // can batch space-diff writes with its own updates in one atomic unit.
-func PutWith(ctx context.Context, q pgxExec, provider did.DID, space did.DID, subscription string, cause cid.Cid, delta int64, receiptAt time.Time) error {
+func PutWith(ctx context.Context, q pgxExec, space did.DID, cause cid.Cid, delta int64, receiptAt time.Time) error {
 	_, err := q.Exec(ctx, `
-		INSERT INTO space_diff (provider, space, receipt_at, cause, subscription, delta)
-		VALUES ($1, $2, $3, $4, $5, $6)
-	`, provider.String(), space.String(), receiptAt.UTC(), cause.String(), subscription, delta)
+		INSERT INTO space_diff (space, receipt_at, cause, delta)
+		VALUES ($1, $2, $3, $4)
+	`, space.String(), receiptAt.UTC(), cause.String(), delta)
 	if err != nil {
 		return fmt.Errorf("putting space diff: %w", err)
 	}
 	return nil
 }
 
-func (s *Store) List(ctx context.Context, provider did.DID, space did.DID, after time.Time, options ...spacediff.ListOption) (store.Page[spacediff.DifferenceRecord], error) {
+func (s *Store) List(ctx context.Context, space did.DID, after time.Time, options ...spacediff.ListOption) (store.Page[spacediff.DifferenceRecord], error) {
 	cfg := spacediff.ListConfig{}
 	for _, opt := range options {
 		opt(&cfg)
@@ -66,11 +66,11 @@ func (s *Store) List(ctx context.Context, provider did.DID, space did.DID, after
 		conds []string
 		args  []any
 	)
-	args = append(args, provider.String(), space.String())
-	conds = append(conds, "provider = $1", "space = $2")
+	args = append(args, space.String())
+	conds = append(conds, "space = $1")
 
 	if cfg.Cursor != nil {
-		receiptAt, cause, err := spacediff.DecodeCursor(*cfg.Cursor)
+		receiptAt, cause, err := store.DecodeCursor(*cfg.Cursor)
 		if err != nil {
 			return store.Page[spacediff.DifferenceRecord]{}, fmt.Errorf("invalid cursor: %w", err)
 		}
@@ -83,7 +83,7 @@ func (s *Store) List(ctx context.Context, provider did.DID, space did.DID, after
 
 	args = append(args, limit+1)
 	query := fmt.Sprintf(`
-		SELECT provider, space, subscription, cause, delta, receipt_at, inserted_at
+		SELECT space, cause, delta, receipt_at, inserted_at
 		FROM space_diff
 		WHERE %s
 		ORDER BY receipt_at ASC, cause ASC
@@ -99,20 +99,14 @@ func (s *Store) List(ctx context.Context, provider did.DID, space did.DID, after
 	records := make([]spacediff.DifferenceRecord, 0, limit)
 	for rows.Next() {
 		var (
-			providerStr  string
-			spaceStr     string
-			subscription string
-			causeStr     string
-			delta        int64
-			receiptAt    time.Time
-			insertedAt   time.Time
+			spaceStr   string
+			causeStr   string
+			delta      int64
+			receiptAt  time.Time
+			insertedAt time.Time
 		)
-		if err := rows.Scan(&providerStr, &spaceStr, &subscription, &causeStr, &delta, &receiptAt, &insertedAt); err != nil {
+		if err := rows.Scan(&spaceStr, &causeStr, &delta, &receiptAt, &insertedAt); err != nil {
 			return store.Page[spacediff.DifferenceRecord]{}, fmt.Errorf("scanning space diff: %w", err)
-		}
-		providerDID, err := did.Parse(providerStr)
-		if err != nil {
-			return store.Page[spacediff.DifferenceRecord]{}, fmt.Errorf("parsing provider DID: %w", err)
 		}
 		spaceDID, err := did.Parse(spaceStr)
 		if err != nil {
@@ -123,13 +117,11 @@ func (s *Store) List(ctx context.Context, provider did.DID, space did.DID, after
 			return store.Page[spacediff.DifferenceRecord]{}, fmt.Errorf("parsing cause CID: %w", err)
 		}
 		records = append(records, spacediff.DifferenceRecord{
-			Provider:     providerDID,
-			Space:        spaceDID,
-			Subscription: subscription,
-			Cause:        cause,
-			Delta:        delta,
-			ReceiptAt:    receiptAt,
-			InsertedAt:   insertedAt,
+			Space:      spaceDID,
+			Cause:      cause,
+			Delta:      delta,
+			ReceiptAt:  receiptAt,
+			InsertedAt: insertedAt,
 		})
 	}
 	if err := rows.Err(); err != nil {
@@ -139,7 +131,7 @@ func (s *Store) List(ctx context.Context, provider did.DID, space did.DID, after
 	var cursor *string
 	if len(records) > limit {
 		last := records[limit-1]
-		c := spacediff.EncodeCursor(last.ReceiptAt, last.Cause.String())
+		c := store.EncodeCursor(last.ReceiptAt, last.Cause.String())
 		cursor = &c
 		records = records[:limit]
 	}

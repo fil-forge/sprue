@@ -12,7 +12,6 @@ import (
 	"github.com/fil-forge/libforge/digestutil"
 	"github.com/fil-forge/sprue/pkg/store"
 	blobregistry "github.com/fil-forge/sprue/pkg/store/blob_registry"
-	"github.com/fil-forge/sprue/pkg/store/consumer"
 	"github.com/fil-forge/sprue/pkg/store/metrics"
 	pgmetrics "github.com/fil-forge/sprue/pkg/store/metrics/postgres"
 	pgspacediff "github.com/fil-forge/sprue/pkg/store/space_diff/postgres"
@@ -30,18 +29,16 @@ const (
 )
 
 type Store struct {
-	pool          *pgxpool.Pool
-	consumerStore consumer.Store
+	pool *pgxpool.Pool
 }
 
 var _ blobregistry.Store = (*Store)(nil)
 
-// New returns a Postgres-backed blob registry store. The consumerStore is used
-// to fetch subscriptions for space_diff writes; the metrics and space_diff
+// New returns a Postgres-backed blob registry store; the metrics and space_diff
 // writes flow through package-level helpers from the metrics/postgres and
 // space_diff/postgres packages.
-func New(pool *pgxpool.Pool, consumerStore consumer.Store) *Store {
-	return &Store{pool: pool, consumerStore: consumerStore}
+func New(pool *pgxpool.Pool) *Store {
+	return &Store{pool: pool}
 }
 
 func (s *Store) Initialize(ctx context.Context) error { return nil }
@@ -63,11 +60,6 @@ func (s *Store) Get(ctx context.Context, space did.DID, digest multihash.Multiha
 }
 
 func (s *Store) Register(ctx context.Context, space did.DID, blob blobregistry.Blob, cause cid.Cid) error {
-	consumers, err := s.collectConsumers(ctx, space)
-	if err != nil {
-		return err
-	}
-
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("beginning transaction: %w", err)
@@ -90,16 +82,13 @@ func (s *Store) Register(ctx context.Context, space did.DID, blob blobregistry.B
 		metrics.BlobAddSizeTotalMetric: blob.Size,
 	}
 
-	// Each provider gets the diff row and the counter movement together, so its
-	// counters always balance its own rows.
+	// One change is one diff row and one counter movement, committed together.
 	receiptAt := time.Now()
-	for _, c := range consumers {
-		if err := pgspacediff.PutWith(ctx, tx, c.Provider, space, c.Subscription, cause, int64(blob.Size), receiptAt); err != nil {
-			return err
-		}
-		if err := pgmetrics.IncrementSpaceWith(ctx, tx, c.Provider, space, inc); err != nil {
-			return err
-		}
+	if err := pgspacediff.PutWith(ctx, tx, space, cause, int64(blob.Size), receiptAt); err != nil {
+		return err
+	}
+	if err := pgmetrics.IncrementSpaceWith(ctx, tx, space, inc); err != nil {
+		return err
 	}
 
 	if err := pgmetrics.IncrementAdminWith(ctx, tx, inc); err != nil {
@@ -114,11 +103,6 @@ func (s *Store) Register(ctx context.Context, space did.DID, blob blobregistry.B
 
 func (s *Store) Deregister(ctx context.Context, space did.DID, digest multihash.Multihash, cause cid.Cid) error {
 	existing, err := s.Get(ctx, space, digest)
-	if err != nil {
-		return err
-	}
-
-	consumers, err := s.collectConsumers(ctx, space)
 	if err != nil {
 		return err
 	}
@@ -145,13 +129,11 @@ func (s *Store) Deregister(ctx context.Context, space did.DID, digest multihash.
 	}
 
 	receiptAt := time.Now()
-	for _, c := range consumers {
-		if err := pgspacediff.PutWith(ctx, tx, c.Provider, space, c.Subscription, cause, -int64(existing.Blob.Size), receiptAt); err != nil {
-			return err
-		}
-		if err := pgmetrics.IncrementSpaceWith(ctx, tx, c.Provider, space, inc); err != nil {
-			return err
-		}
+	if err := pgspacediff.PutWith(ctx, tx, space, cause, -int64(existing.Blob.Size), receiptAt); err != nil {
+		return err
+	}
+	if err := pgmetrics.IncrementSpaceWith(ctx, tx, space, inc); err != nil {
+		return err
 	}
 
 	if err := pgmetrics.IncrementAdminWith(ctx, tx, inc); err != nil {
@@ -211,38 +193,6 @@ func (s *Store) List(ctx context.Context, space did.DID, options ...blobregistry
 		records = records[:limit]
 	}
 	return store.Page[blobregistry.Record]{Results: records, Cursor: cursor}, nil
-}
-
-func (s *Store) collectConsumers(ctx context.Context, space did.DID) ([]consumer.Record, error) {
-	results, err := store.Collect(ctx, func(ctx context.Context, options store.PaginationConfig) (store.Page[consumer.Record], error) {
-		opts := []consumer.ListOption{}
-		if options.Cursor != nil {
-			opts = append(opts, consumer.WithListCursor(*options.Cursor))
-		}
-		return s.consumerStore.List(ctx, space, opts...)
-	})
-	if err != nil {
-		return nil, fmt.Errorf("listing consumers: %w", err)
-	}
-	if len(results) == 0 {
-		return nil, consumer.ErrConsumerNotFound
-	}
-
-	// One record per provider. A change writes that provider a diff row keyed by
-	// (provider, space, receipt_at, cause) and moves its counters, so a provider
-	// listed twice would collide on the key and count the change twice.
-	// Provisioning derives the subscription from the space, giving a provider
-	// one subscription per space, so this holds the schema to that.
-	seen := make(map[did.DID]struct{}, len(results))
-	providers := results[:0]
-	for _, r := range results {
-		if _, ok := seen[r.Provider]; ok {
-			continue
-		}
-		seen[r.Provider] = struct{}{}
-		providers = append(providers, r)
-	}
-	return providers, nil
 }
 
 type rowScanner interface {

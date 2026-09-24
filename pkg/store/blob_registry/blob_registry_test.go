@@ -4,7 +4,6 @@ import (
 	"context"
 	"runtime"
 	"testing"
-	"time"
 
 	"github.com/fil-forge/libforge/commands/blob"
 	"github.com/fil-forge/sprue/internal/testutil"
@@ -12,16 +11,10 @@ import (
 	blobregistry "github.com/fil-forge/sprue/pkg/store/blob_registry"
 	blobregistrymemory "github.com/fil-forge/sprue/pkg/store/blob_registry/memory"
 	blobregistrypostgres "github.com/fil-forge/sprue/pkg/store/blob_registry/postgres"
-	"github.com/fil-forge/sprue/pkg/store/consumer"
-	consumermemory "github.com/fil-forge/sprue/pkg/store/consumer/memory"
-	consumerpostgres "github.com/fil-forge/sprue/pkg/store/consumer/postgres"
 	"github.com/fil-forge/sprue/pkg/store/metrics"
 	metricsmemory "github.com/fil-forge/sprue/pkg/store/metrics/memory"
 	metricspostgres "github.com/fil-forge/sprue/pkg/store/metrics/postgres"
-	spacediff "github.com/fil-forge/sprue/pkg/store/space_diff"
 	spacediffmemory "github.com/fil-forge/sprue/pkg/store/space_diff/memory"
-	spacediffpostgres "github.com/fil-forge/sprue/pkg/store/space_diff/postgres"
-	"github.com/fil-forge/ucantone/did"
 	"github.com/stretchr/testify/require"
 )
 
@@ -35,11 +28,9 @@ const (
 var storeKinds = []StoreKind{Memory, Postgres}
 
 // storeBundle groups the blob registry with the dependency stores that tests
-// need to set up state (e.g. adding consumers before registering blobs).
+// need to reach past the registry (e.g. asserting the metrics it moved).
 type storeBundle struct {
 	registry     blobregistry.Store
-	consumers    consumer.Store
-	spaceDiffs   spacediff.Store
 	spaceMetrics metrics.SpaceStore
 	adminMetrics metrics.Store
 }
@@ -47,15 +38,12 @@ type storeBundle struct {
 func makeStores(t *testing.T, k StoreKind) storeBundle {
 	switch k {
 	case Memory:
-		consumerStore := consumermemory.New()
 		spaceDiffStore := spacediffmemory.New()
 		spaceMetrics := metricsmemory.NewSpaceStore()
 		adminMetrics := metricsmemory.New()
-		registry := blobregistrymemory.New(spaceDiffStore, consumerStore, spaceMetrics, adminMetrics)
+		registry := blobregistrymemory.New(spaceDiffStore, spaceMetrics, adminMetrics)
 		return storeBundle{
 			registry:     registry,
-			consumers:    consumerStore,
-			spaceDiffs:   spaceDiffStore,
 			spaceMetrics: spaceMetrics,
 			adminMetrics: adminMetrics,
 		}
@@ -75,14 +63,11 @@ func createPostgresStores(t *testing.T) storeBundle {
 		t.SkipNow()
 	}
 	pool := testutil.CreatePostgres(t)
-	consumerStore := consumerpostgres.New(pool)
 	spaceMetrics := metricspostgres.NewSpaceStore(pool)
 	adminMetrics := metricspostgres.New(pool)
-	registry := blobregistrypostgres.New(pool, consumerStore)
+	registry := blobregistrypostgres.New(pool)
 	return storeBundle{
 		registry:     registry,
-		consumers:    consumerStore,
-		spaceDiffs:   spacediffpostgres.New(pool),
 		spaceMetrics: spaceMetrics,
 		adminMetrics: adminMetrics,
 	}
@@ -100,10 +85,7 @@ func TestBlobRegistryStore(t *testing.T) {
 			t.Run("registers a blob", func(t *testing.T) {
 				b := makeStores(t, k)
 				space := testutil.RandomDID(t)
-				provider := testutil.RandomDID(t)
-				customer := testutil.RandomDID(t)
 				cause := testutil.RandomCID(t)
-				require.NoError(t, b.consumers.Add(t.Context(), provider, space, customer, "sub1", cause))
 
 				bl := randomBlob(t, 1024)
 				require.NoError(t, b.registry.Register(t.Context(), space, bl, cause))
@@ -120,10 +102,7 @@ func TestBlobRegistryStore(t *testing.T) {
 			t.Run("returns ErrEntryExists when registering a duplicate", func(t *testing.T) {
 				b := makeStores(t, k)
 				space := testutil.RandomDID(t)
-				provider := testutil.RandomDID(t)
-				customer := testutil.RandomDID(t)
 				cause := testutil.RandomCID(t)
-				require.NoError(t, b.consumers.Add(t.Context(), provider, space, customer, "sub1", cause))
 
 				bl := randomBlob(t, 512)
 				require.NoError(t, b.registry.Register(t.Context(), space, bl, cause))
@@ -135,10 +114,7 @@ func TestBlobRegistryStore(t *testing.T) {
 			t.Run("registers multiple blobs in the same space", func(t *testing.T) {
 				b := makeStores(t, k)
 				space := testutil.RandomDID(t)
-				provider := testutil.RandomDID(t)
-				customer := testutil.RandomDID(t)
 				cause := testutil.RandomCID(t)
-				require.NoError(t, b.consumers.Add(t.Context(), provider, space, customer, "sub1", cause))
 
 				bl1 := randomBlob(t, 512)
 				bl2 := randomBlob(t, 1024)
@@ -166,11 +142,7 @@ func TestBlobRegistryStore(t *testing.T) {
 				b := makeStores(t, k)
 				space1 := testutil.RandomDID(t)
 				space2 := testutil.RandomDID(t)
-				provider := testutil.RandomDID(t)
-				customer := testutil.RandomDID(t)
 				cause := testutil.RandomCID(t)
-				require.NoError(t, b.consumers.Add(t.Context(), provider, space1, customer, "sub1", cause))
-				require.NoError(t, b.consumers.Add(t.Context(), provider, space2, customer, "sub2", cause))
 
 				bl := randomBlob(t, 1024)
 				require.NoError(t, b.registry.Register(t.Context(), space1, bl, cause))
@@ -182,10 +154,7 @@ func TestBlobRegistryStore(t *testing.T) {
 			t.Run("deregisters a blob", func(t *testing.T) {
 				b := makeStores(t, k)
 				space := testutil.RandomDID(t)
-				provider := testutil.RandomDID(t)
-				customer := testutil.RandomDID(t)
 				cause := testutil.RandomCID(t)
-				require.NoError(t, b.consumers.Add(t.Context(), provider, space, customer, "sub1", cause))
 
 				bl := randomBlob(t, 2048)
 				require.NoError(t, b.registry.Register(t.Context(), space, bl, cause))
@@ -207,10 +176,7 @@ func TestBlobRegistryStore(t *testing.T) {
 			t.Run("lists blobs for a space", func(t *testing.T) {
 				b := makeStores(t, k)
 				space := testutil.RandomDID(t)
-				provider := testutil.RandomDID(t)
-				customer := testutil.RandomDID(t)
 				cause := testutil.RandomCID(t)
-				require.NoError(t, b.consumers.Add(t.Context(), provider, space, customer, "sub1", cause))
 
 				for range 3 {
 					require.NoError(t, b.registry.Register(t.Context(), space, randomBlob(t, 512), cause))
@@ -234,10 +200,7 @@ func TestBlobRegistryStore(t *testing.T) {
 			t.Run("List paginates results", func(t *testing.T) {
 				b := makeStores(t, k)
 				space := testutil.RandomDID(t)
-				provider := testutil.RandomDID(t)
-				customer := testutil.RandomDID(t)
 				cause := testutil.RandomCID(t)
-				require.NoError(t, b.consumers.Add(t.Context(), provider, space, customer, "sub1", cause))
 
 				for range 5 {
 					require.NoError(t, b.registry.Register(t.Context(), space, randomBlob(t, 512), cause))
@@ -256,13 +219,9 @@ func TestBlobRegistryStore(t *testing.T) {
 
 			t.Run("List isolates blobs between spaces", func(t *testing.T) {
 				b := makeStores(t, k)
-				provider := testutil.RandomDID(t)
-				customer := testutil.RandomDID(t)
 				cause := testutil.RandomCID(t)
 				space1 := testutil.RandomDID(t)
 				space2 := testutil.RandomDID(t)
-				require.NoError(t, b.consumers.Add(t.Context(), provider, space1, customer, "sub1", cause))
-				require.NoError(t, b.consumers.Add(t.Context(), provider, space2, customer, "sub2", cause))
 
 				require.NoError(t, b.registry.Register(t.Context(), space1, randomBlob(t, 512), cause))
 				require.NoError(t, b.registry.Register(t.Context(), space1, randomBlob(t, 512), cause))
@@ -280,15 +239,12 @@ func TestBlobRegistryStore(t *testing.T) {
 			t.Run("Register increments space and admin metrics", func(t *testing.T) {
 				b := makeStores(t, k)
 				space := testutil.RandomDID(t)
-				provider := testutil.RandomDID(t)
-				customer := testutil.RandomDID(t)
 				cause := testutil.RandomCID(t)
-				require.NoError(t, b.consumers.Add(t.Context(), provider, space, customer, "sub1", cause))
 
 				bl := randomBlob(t, 8192)
 				require.NoError(t, b.registry.Register(t.Context(), space, bl, cause))
 
-				spaceM, err := b.spaceMetrics.Get(t.Context(), provider, space)
+				spaceM, err := b.spaceMetrics.Get(t.Context(), space)
 				require.NoError(t, err)
 				require.Equal(t, uint64(1), spaceM[metrics.BlobAddTotalMetric])
 				require.Equal(t, uint64(8192), spaceM[metrics.BlobAddSizeTotalMetric])
@@ -302,16 +258,13 @@ func TestBlobRegistryStore(t *testing.T) {
 			t.Run("Deregister decrements space and admin metrics", func(t *testing.T) {
 				b := makeStores(t, k)
 				space := testutil.RandomDID(t)
-				provider := testutil.RandomDID(t)
-				customer := testutil.RandomDID(t)
 				cause := testutil.RandomCID(t)
-				require.NoError(t, b.consumers.Add(t.Context(), provider, space, customer, "sub1", cause))
 
 				bl := randomBlob(t, 4096)
 				require.NoError(t, b.registry.Register(t.Context(), space, bl, cause))
 				require.NoError(t, b.registry.Deregister(t.Context(), space, bl.Digest, cause))
 
-				spaceM, err := b.spaceMetrics.Get(t.Context(), provider, space)
+				spaceM, err := b.spaceMetrics.Get(t.Context(), space)
 				require.NoError(t, err)
 				require.Equal(t, uint64(1), spaceM[metrics.BlobRemoveTotalMetric])
 				require.Equal(t, uint64(4096), spaceM[metrics.BlobRemoveSizeTotalMetric])
@@ -321,70 +274,6 @@ func TestBlobRegistryStore(t *testing.T) {
 				require.Equal(t, uint64(1), adminM[metrics.BlobRemoveTotalMetric])
 				require.Equal(t, uint64(4096), adminM[metrics.BlobRemoveSizeTotalMetric])
 			})
-		})
-	}
-}
-
-// A change is one event however many providers record it, so every provider's
-// diff row must carry the same instant. Reading the clock per provider lets a
-// window boundary fall inside the loop, which would scatter one change across
-// different buckets in different providers' series.
-func TestRegisterRecordsOneTimestampAcrossProviders(t *testing.T) {
-	for _, k := range storeKinds {
-		t.Run(string(k), func(t *testing.T) {
-			b := makeStores(t, k)
-			space := testutil.RandomDID(t)
-			customer := testutil.RandomDID(t)
-			first := testutil.RandomDID(t)
-			second := testutil.RandomDID(t)
-
-			require.NoError(t, b.consumers.Add(t.Context(), first, space, customer, "sub1", testutil.RandomCID(t)))
-			require.NoError(t, b.consumers.Add(t.Context(), second, space, customer, "sub2", testutil.RandomCID(t)))
-
-			bl := randomBlob(t, 4096)
-			require.NoError(t, b.registry.Register(t.Context(), space, bl, testutil.RandomCID(t)))
-
-			at := map[did.DID]time.Time{}
-			for _, p := range []did.DID{first, second} {
-				page, err := b.spaceDiffs.List(t.Context(), p, space, time.Time{})
-				require.NoError(t, err)
-				require.Len(t, page.Results, 1, "provider %s", p)
-				at[p] = page.Results[0].ReceiptAt
-			}
-			require.True(t, at[first].Equal(at[second]),
-				"providers recorded the same change at %s and %s", at[first], at[second])
-		})
-	}
-}
-
-// The consumer schema keys on (subscription, provider), so it can hold a
-// provider twice for one space. Provisioning derives the subscription from the
-// space and so never does, but a change writes each provider one diff row keyed
-// by (provider, space, receipt_at, cause) and moves its counters once: a
-// provider listed twice would collide on that key and abort the registration.
-func TestRegisterToleratesAProviderListedTwice(t *testing.T) {
-	for _, k := range storeKinds {
-		t.Run(string(k), func(t *testing.T) {
-			b := makeStores(t, k)
-			space := testutil.RandomDID(t)
-			customer := testutil.RandomDID(t)
-			provider := testutil.RandomDID(t)
-
-			require.NoError(t, b.consumers.Add(t.Context(), provider, space, customer, "sub1", testutil.RandomCID(t)))
-			require.NoError(t, b.consumers.Add(t.Context(), provider, space, customer, "sub2", testutil.RandomCID(t)))
-
-			bl := randomBlob(t, 2048)
-			require.NoError(t, b.registry.Register(t.Context(), space, bl, testutil.RandomCID(t)))
-
-			// One change, so one diff row and one count against the provider.
-			page, err := b.spaceDiffs.List(t.Context(), provider, space, time.Time{})
-			require.NoError(t, err)
-			require.Len(t, page.Results, 1)
-
-			spaceM, err := b.spaceMetrics.Get(t.Context(), provider, space)
-			require.NoError(t, err)
-			require.Equal(t, uint64(1), spaceM[metrics.BlobAddTotalMetric])
-			require.Equal(t, uint64(2048), spaceM[metrics.BlobAddSizeTotalMetric])
 		})
 	}
 }
