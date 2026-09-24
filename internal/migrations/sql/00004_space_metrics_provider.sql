@@ -73,23 +73,27 @@ CREATE TABLE space_metrics_by_space (
 );
 
 -- The old counters moved once per change however many providers saw it, so
--- collapsing back means counting changes rather than rows. A change is one
--- cause, which the providers that saw it share, so the diff log gives the old
--- values exactly the way it gives the new ones. Neither the sum across
--- providers (counting a shared change once per provider) nor the largest of
--- them (dropping what only a late provider saw) would.
+-- collapsing back means counting changes rather than rows. Neither the sum
+-- across providers (counting a shared change once per provider) nor the largest
+-- of them (dropping what only one provider saw) would do that.
+--
+-- The providers that saw one change share its cause and its timestamp, so that
+-- pair identifies the change and deduplicates their copies of it. The cause
+-- alone does not: re-invoking a stored task reuses its link, so one cause can
+-- legitimately cover two changes made at different times, and collapsing those
+-- would undercount.
 INSERT INTO space_metrics_by_space (space, name, value)
 SELECT space, '/blob/add-total', COUNT(*)
-FROM (SELECT DISTINCT space, cause FROM space_diff WHERE delta >= 0) c GROUP BY space
+FROM (SELECT DISTINCT space, cause, receipt_at FROM space_diff WHERE delta >= 0) c GROUP BY space
 UNION ALL
 SELECT space, '/blob/add-size-total', COALESCE(SUM(delta), 0)
-FROM (SELECT DISTINCT space, cause, delta FROM space_diff WHERE delta >= 0) c GROUP BY space
+FROM (SELECT DISTINCT space, cause, receipt_at, delta FROM space_diff WHERE delta >= 0) c GROUP BY space
 UNION ALL
 SELECT space, '/blob/remove-total', COUNT(*)
-FROM (SELECT DISTINCT space, cause FROM space_diff WHERE delta < 0) c GROUP BY space
+FROM (SELECT DISTINCT space, cause, receipt_at FROM space_diff WHERE delta < 0) c GROUP BY space
 UNION ALL
 SELECT space, '/blob/remove-size-total', -COALESCE(SUM(delta), 0)
-FROM (SELECT DISTINCT space, cause, delta FROM space_diff WHERE delta < 0) c GROUP BY space;
+FROM (SELECT DISTINCT space, cause, receipt_at, delta FROM space_diff WHERE delta < 0) c GROUP BY space;
 
 -- And the same for metrics the log cannot describe, collapsing the providers
 -- of a space back to the one row the old schema held.
