@@ -21,11 +21,21 @@ CREATE TABLE space_metrics_by_provider (
 -- through a baseline of bytes it never served, which is the very thing keying
 -- these totals by provider is meant to stop.
 --
--- One diff row is one blob event, and the counters moved once per event, so the
--- log reconstructs them exactly. A zero-delta row counts as a store: nothing
--- distinguishes adding from removing an empty blob, and either way it
--- contributes no bytes. The metric names are the values of the constants in
--- pkg/store/metrics as of this migration.
+-- One diff row is one blob event and the counters moved once per event, so the
+-- byte totals come back exactly.
+--
+-- The event counts come back exactly except for empty blobs. A row carries a
+-- signed size and nothing else, so storing a zero byte blob and removing one
+-- are the same row, and the rule below reads both as stores. A space that
+-- removed an empty blob therefore carries that removal in its store count.
+-- The byte totals are untouched by this, since an empty blob contributes
+-- nothing either way, and they are what the usage service reads to say how
+-- much a space holds; nothing reads the counts. Runtime counting is unaffected,
+-- and telling the two apart here would need the log to record the kind of
+-- event, which it does not.
+--
+-- The metric names are the values of the constants in pkg/store/metrics as of
+-- this migration.
 INSERT INTO space_metrics_by_provider (provider, space, name, value)
 SELECT provider, space, '/blob/add-total', COUNT(*)
 FROM space_diff WHERE delta >= 0 GROUP BY provider, space
