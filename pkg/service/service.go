@@ -102,7 +102,7 @@ func createUCANServer(id multikey.Issuer, agentStore agent.Store, handlers []ser
 		opt(&cfg)
 	}
 
-	webResolverOpts := []web.Option{}
+	webResolverOpts := []web.Option{web.WithTransport(tracing.Transport(http.DefaultTransport))}
 	if cfg.insecureDIDResolution {
 		logger.Warn("insecure DID resolution enabled: did:web will be resolved over HTTP instead of HTTPS; this should only be used for development purposes")
 		webResolverOpts = append(webResolverOpts, web.WithInsecure(true))
