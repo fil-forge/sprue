@@ -50,5 +50,7 @@ ON CONFLICT (name) DO UPDATE SET value = admin_metrics.value + EXCLUDED.value;
 
 -- +goose Down
 -- +goose StatementBegin
+DELETE FROM space_metrics WHERE name = '/upload/add-total';
+DELETE FROM admin_metrics WHERE name = '/upload/add-total';
 DROP TABLE upload_diff;
 -- +goose StatementEnd
