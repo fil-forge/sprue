@@ -250,6 +250,6 @@ func NewSubscriptionStore(mdb *MigratedPool) subscription.Store {
 	return pgsubscription.New(mdb.Pool)
 }
 
-func NewUploadStore(mdb *MigratedPool, consumerStore consumer.Store) upload.Store {
-	return pgupload.New(mdb.Pool, consumerStore)
+func NewUploadStore(mdb *MigratedPool) upload.Store {
+	return pgupload.New(mdb.Pool)
 }

@@ -7,7 +7,8 @@
 // stores in a single transaction, mirroring blob_registry: the object count a
 // space reports is upload-add-total minus upload-remove-total, and the diff log
 // carries the same change with a timestamp so the count can be bucketed into
-// windows.
+// windows. Unlike blob_registry this needs no consumer lookup — an object count
+// belongs to the space rather than to the provider storing its bytes.
 package postgres
 
 import (
@@ -17,7 +18,6 @@ import (
 	"time"
 
 	"github.com/fil-forge/sprue/pkg/store"
-	"github.com/fil-forge/sprue/pkg/store/consumer"
 	"github.com/fil-forge/sprue/pkg/store/metrics"
 	pgmetrics "github.com/fil-forge/sprue/pkg/store/metrics/postgres"
 	"github.com/fil-forge/sprue/pkg/store/upload"
@@ -35,18 +35,16 @@ const (
 )
 
 type Store struct {
-	pool          *pgxpool.Pool
-	consumerStore consumer.Store
+	pool *pgxpool.Pool
 }
 
 var _ upload.Store = (*Store)(nil)
 
-// New returns a Postgres-backed upload store. The consumerStore is used to
-// fetch subscriptions for upload_diff writes; the metrics and upload_diff
+// New returns a Postgres-backed upload store. The metrics and upload_diff
 // writes flow through package-level helpers from the metrics/postgres and
-// upload_diff/postgres packages.
-func New(pool *pgxpool.Pool, consumerStore consumer.Store) *Store {
-	return &Store{pool: pool, consumerStore: consumerStore}
+// upload_diff/postgres packages, so they join this store's transaction.
+func New(pool *pgxpool.Pool) *Store {
+	return &Store{pool: pool}
 }
 
 func (s *Store) Initialize(ctx context.Context) error { return nil }
@@ -209,29 +207,6 @@ func (s *Store) ListShards(ctx context.Context, space did.DID, root cid.Cid, opt
 }
 
 func (s *Store) Remove(ctx context.Context, space did.DID, root cid.Cid, cause cid.Cid) error {
-	// Both reads happen before the transaction opens, as they do in
-	// blob_registry.Deregister. Collecting consumers from inside it would have
-	// this call hold one pooled connection while waiting for another, which
-	// deadlocks on a single-connection pool and under enough concurrent
-	// removes on any pool.
-	//
-	// The existence check comes first so a missing root reports
-	// ErrUploadNotFound whatever else is true of the space: the handler turns
-	// that one error into idempotent success, and reporting a space's lack of
-	// consumers instead would fail a remove of something that was never there.
-	exists, err := s.Exists(ctx, space, root)
-	if err != nil {
-		return err
-	}
-	if !exists {
-		return upload.ErrUploadNotFound
-	}
-
-	consumers, err := s.collectConsumers(ctx, space)
-	if err != nil {
-		return err
-	}
-
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("beginning transaction: %w", err)
@@ -242,13 +217,13 @@ func (s *Store) Remove(ctx context.Context, space did.DID, root cid.Cid, cause c
 	if err != nil {
 		return fmt.Errorf("removing upload: %w", err)
 	}
-	// Nothing was removed, so nothing is counted: another remove won the race
-	// between the check above and this delete. The count must not move for it.
+	// Nothing was removed, so nothing is counted. The handler reports a missing
+	// root as idempotent success; the count must not move for it.
 	if tag.RowsAffected() == 0 {
 		return upload.ErrUploadNotFound
 	}
 
-	if err := s.recordDelta(ctx, tx, space, consumers, cause, -1, metrics.UploadRemoveTotalMetric); err != nil {
+	if err := s.recordDelta(ctx, tx, space, cause, -1, metrics.UploadRemoveTotalMetric); err != nil {
 		return err
 	}
 
@@ -259,11 +234,6 @@ func (s *Store) Remove(ctx context.Context, space did.DID, root cid.Cid, cause c
 }
 
 func (s *Store) Upsert(ctx context.Context, space did.DID, root cid.Cid, index *cid.Cid, shards []cid.Cid, cause cid.Cid) error {
-	consumers, err := s.collectConsumers(ctx, space)
-	if err != nil {
-		return err
-	}
-
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("beginning transaction: %w", err)
@@ -302,7 +272,7 @@ func (s *Store) Upsert(ctx context.Context, space did.DID, root cid.Cid, index *
 	}
 
 	if inserted {
-		if err := s.recordDelta(ctx, tx, space, consumers, cause, 1, metrics.UploadAddTotalMetric); err != nil {
+		if err := s.recordDelta(ctx, tx, space, cause, 1, metrics.UploadAddTotalMetric); err != nil {
 			return err
 		}
 	}
@@ -313,17 +283,18 @@ func (s *Store) Upsert(ctx context.Context, space did.DID, root cid.Cid, index *
 	return nil
 }
 
-// recordDelta writes one object-count change inside tx: an upload_diff row per
-// the space's consumers and the matching metric increment at both the space and
-// admin scope. metric is the counter to bump (adds and removes have their own,
-// each monotonically increasing); delta is the signed change the diff log
-// carries, so the count at a time is the cumulative sum up to it.
-func (s *Store) recordDelta(ctx context.Context, tx pgx.Tx, space did.DID, consumers []consumer.Record, cause cid.Cid, delta int64, metric string) error {
-	receiptAt := time.Now()
-	for _, c := range consumers {
-		if err := pguploaddiff.PutWith(ctx, tx, c.Provider, space, c.Subscription, cause, delta, receiptAt); err != nil {
-			return err
-		}
+// recordDelta writes one object-count change inside tx: one upload_diff row and
+// the matching metric increment at both the space and admin scope. metric is
+// the counter to bump (adds and removes have their own, each monotonically
+// increasing); delta is the signed change the diff log carries, so the count at
+// a time is the cumulative sum up to it.
+//
+// One row per change, not one per the space's consumers: the count is a
+// property of the space, and a row per provider would multiply it by however
+// many serve that space.
+func (s *Store) recordDelta(ctx context.Context, tx pgx.Tx, space did.DID, cause cid.Cid, delta int64, metric string) error {
+	if err := pguploaddiff.PutWith(ctx, tx, space, cause, delta, time.Now()); err != nil {
+		return err
 	}
 
 	inc := map[string]uint64{metric: 1}
@@ -331,27 +302,6 @@ func (s *Store) recordDelta(ctx context.Context, tx pgx.Tx, space did.DID, consu
 		return err
 	}
 	return pgmetrics.IncrementAdminWith(ctx, tx, inc)
-}
-
-// collectConsumers returns the space's provider/subscription pairs, which the
-// upload_diff rows are keyed by. A space with none cannot be billed against, so
-// it is an error here — the upload/add handler rejects such a space with
-// InsufficientStorage before it ever reaches the store.
-func (s *Store) collectConsumers(ctx context.Context, space did.DID) ([]consumer.Record, error) {
-	results, err := store.Collect(ctx, func(ctx context.Context, options store.PaginationConfig) (store.Page[consumer.Record], error) {
-		opts := []consumer.ListOption{}
-		if options.Cursor != nil {
-			opts = append(opts, consumer.WithListCursor(*options.Cursor))
-		}
-		return s.consumerStore.List(ctx, space, opts...)
-	})
-	if err != nil {
-		return nil, fmt.Errorf("listing consumers: %w", err)
-	}
-	if len(results) == 0 {
-		return nil, consumer.ErrConsumerNotFound
-	}
-	return results, nil
 }
 
 type rowScanner interface {

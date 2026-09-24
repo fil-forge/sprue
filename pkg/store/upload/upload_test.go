@@ -9,9 +9,6 @@ import (
 
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/store"
-	"github.com/fil-forge/sprue/pkg/store/consumer"
-	consumermemory "github.com/fil-forge/sprue/pkg/store/consumer/memory"
-	consumerpostgres "github.com/fil-forge/sprue/pkg/store/consumer/postgres"
 	"github.com/fil-forge/sprue/pkg/store/metrics"
 	metricsmemory "github.com/fil-forge/sprue/pkg/store/metrics/memory"
 	metricspostgres "github.com/fil-forge/sprue/pkg/store/metrics/postgres"
@@ -40,26 +37,13 @@ var storeKinds = []StoreKind{Memory, Postgres}
 // "many shards" cases keep exercising the same scale.
 const manyShards = 5000
 
-// storeBundle groups the upload store with the dependency stores that tests
-// need to set up state (a space must be provisioned before an upload can be
-// recorded against it) and to assert on the object-count metrics.
+// storeBundle groups the upload store with the stores it records object counts
+// through, so a test can assert on them.
 type storeBundle struct {
 	uploads      upload.Store
-	consumers    consumer.Store
 	uploadDiffs  uploaddiff.Store
 	spaceMetrics metrics.SpaceStore
 	adminMetrics metrics.Store
-}
-
-// provision gives space a consumer, so the upload store has a
-// provider/subscription pair to key its diff rows by. Returns the provider,
-// which listing the diffs requires.
-func (b storeBundle) provision(t *testing.T, space did.DID) did.DID {
-	t.Helper()
-	provider := testutil.RandomDID(t)
-	customer := testutil.RandomDID(t)
-	require.NoError(t, b.consumers.Add(t.Context(), provider, space, customer, "sub1", testutil.RandomCID(t)))
-	return provider
 }
 
 // adminTotal reads one global counter. The bundle is shared across the
@@ -75,13 +59,11 @@ func (b storeBundle) adminTotal(t *testing.T, metric string) uint64 {
 func makeStores(t *testing.T, k StoreKind) storeBundle {
 	switch k {
 	case Memory:
-		consumerStore := consumermemory.New()
 		uploadDiffStore := uploaddiffmemory.New()
 		spaceMetrics := metricsmemory.NewSpaceStore()
 		adminMetrics := metricsmemory.New()
 		return storeBundle{
-			uploads:      uploadmemory.New(uploadDiffStore, consumerStore, spaceMetrics, adminMetrics),
-			consumers:    consumerStore,
+			uploads:      uploadmemory.New(uploadDiffStore, spaceMetrics, adminMetrics),
 			uploadDiffs:  uploadDiffStore,
 			spaceMetrics: spaceMetrics,
 			adminMetrics: adminMetrics,
@@ -102,10 +84,8 @@ func createPostgresStores(t *testing.T) storeBundle {
 		t.SkipNow()
 	}
 	pool := testutil.CreatePostgres(t)
-	consumerStore := consumerpostgres.New(pool)
 	return storeBundle{
-		uploads:      uploadpostgres.New(pool, consumerStore),
-		consumers:    consumerStore,
+		uploads:      uploadpostgres.New(pool),
 		uploadDiffs:  uploaddiffpostgres.New(pool),
 		spaceMetrics: metricspostgres.NewSpaceStore(pool),
 		adminMetrics: metricspostgres.New(pool),
@@ -133,7 +113,6 @@ func TestUploadStore(t *testing.T) {
 			store := b.uploads
 			t.Run("adds an upload", func(t *testing.T) {
 				space := testutil.RandomDID(t)
-				b.provision(t, space)
 				root := testutil.RandomCID(t)
 				index := testutil.RandomCID(t)
 				shards := []cid.Cid{testutil.RandomCID(t), testutil.RandomCID(t)}
@@ -155,7 +134,6 @@ func TestUploadStore(t *testing.T) {
 
 			t.Run("lists uploads", func(t *testing.T) {
 				space := testutil.RandomDID(t)
-				b.provision(t, space)
 				roots := []cid.Cid{testutil.RandomCID(t), testutil.RandomCID(t), testutil.RandomCID(t)}
 				indexes := []cid.Cid{testutil.RandomCID(t), testutil.RandomCID(t), testutil.RandomCID(t)}
 				cause := testutil.RandomCID(t)
@@ -185,7 +163,6 @@ func TestUploadStore(t *testing.T) {
 
 			t.Run("updates an upload", func(t *testing.T) {
 				space := testutil.RandomDID(t)
-				b.provision(t, space)
 				root := testutil.RandomCID(t)
 				index := testutil.RandomCID(t)
 				cause := testutil.RandomCID(t)
@@ -237,8 +214,6 @@ func TestUploadStore(t *testing.T) {
 				// upsert the root into two different spaces
 				space1 := testutil.RandomDID(t)
 				space2 := testutil.RandomDID(t)
-				b.provision(t, space1)
-				b.provision(t, space2)
 				require.NoError(t, store.Upsert(t.Context(), space1, root, &index, nil, cause))
 				require.NoError(t, store.Upsert(t.Context(), space2, root, &index, nil, cause))
 
@@ -259,8 +234,6 @@ func TestUploadStore(t *testing.T) {
 				for _, tc := range cases {
 					t.Run(tc.name, func(t *testing.T) {
 						space := testutil.RandomDID(t)
-						b.provision(t, space)
-						b.provision(t, space)
 						root := testutil.RandomCID(t)
 						index := testutil.RandomCID(t)
 						cause := testutil.RandomCID(t)
@@ -306,8 +279,6 @@ func TestUploadStore(t *testing.T) {
 				for _, tc := range cases {
 					t.Run(tc.name, func(t *testing.T) {
 						space := testutil.RandomDID(t)
-						b.provision(t, space)
-						b.provision(t, space)
 						root := testutil.RandomCID(t)
 						index := testutil.RandomCID(t)
 						cause := testutil.RandomCID(t)
@@ -335,7 +306,6 @@ func TestUploadStore(t *testing.T) {
 
 			t.Run("Upsert increments space and admin object counts", func(t *testing.T) {
 				space := testutil.RandomDID(t)
-				provider := b.provision(t, space)
 				root := testutil.RandomCID(t)
 				cause := testutil.RandomCID(t)
 				adminBefore := b.adminTotal(t, metrics.UploadAddTotalMetric)
@@ -347,7 +317,7 @@ func TestUploadStore(t *testing.T) {
 				require.Equal(t, uint64(1), spaceM[metrics.UploadAddTotalMetric])
 				require.Equal(t, adminBefore+1, b.adminTotal(t, metrics.UploadAddTotalMetric))
 
-				diffs, err := b.uploadDiffs.List(t.Context(), provider, space, time.Time{})
+				diffs, err := b.uploadDiffs.List(t.Context(), space, time.Time{})
 				require.NoError(t, err)
 				require.Len(t, diffs.Results, 1)
 				require.Equal(t, int64(1), diffs.Results[0].Delta)
@@ -356,7 +326,6 @@ func TestUploadStore(t *testing.T) {
 
 			t.Run("re-adding the same root does not count again", func(t *testing.T) {
 				space := testutil.RandomDID(t)
-				provider := b.provision(t, space)
 				root := testutil.RandomCID(t)
 				index := testutil.RandomCID(t)
 
@@ -369,14 +338,13 @@ func TestUploadStore(t *testing.T) {
 				require.NoError(t, err)
 				require.Equal(t, uint64(1), spaceM[metrics.UploadAddTotalMetric])
 
-				diffs, err := b.uploadDiffs.List(t.Context(), provider, space, time.Time{})
+				diffs, err := b.uploadDiffs.List(t.Context(), space, time.Time{})
 				require.NoError(t, err)
 				require.Len(t, diffs.Results, 1)
 			})
 
 			t.Run("Remove increments the remove counters", func(t *testing.T) {
 				space := testutil.RandomDID(t)
-				provider := b.provision(t, space)
 				root := testutil.RandomCID(t)
 				addCause := testutil.RandomCID(t)
 				removeCause := testutil.RandomCID(t)
@@ -392,7 +360,7 @@ func TestUploadStore(t *testing.T) {
 				require.Equal(t, adminBefore+1, b.adminTotal(t, metrics.UploadRemoveTotalMetric))
 
 				// The diff log nets to zero: one object added, one removed.
-				diffs, err := b.uploadDiffs.List(t.Context(), provider, space, time.Time{})
+				diffs, err := b.uploadDiffs.List(t.Context(), space, time.Time{})
 				require.NoError(t, err)
 				require.Len(t, diffs.Results, 2)
 				var net int64
@@ -404,7 +372,6 @@ func TestUploadStore(t *testing.T) {
 
 			t.Run("removing an unknown root counts nothing", func(t *testing.T) {
 				space := testutil.RandomDID(t)
-				provider := b.provision(t, space)
 				cause := testutil.RandomCID(t)
 
 				err := store.Remove(t.Context(), space, testutil.RandomCID(t), cause)
@@ -414,7 +381,7 @@ func TestUploadStore(t *testing.T) {
 				require.NoError(t, err)
 				require.Zero(t, spaceM[metrics.UploadRemoveTotalMetric])
 
-				diffs, err := b.uploadDiffs.List(t.Context(), provider, space, time.Time{})
+				diffs, err := b.uploadDiffs.List(t.Context(), space, time.Time{})
 				require.NoError(t, err)
 				require.Empty(t, diffs.Results)
 			})
@@ -427,6 +394,32 @@ func TestUploadStore(t *testing.T) {
 
 				err := store.Remove(t.Context(), space, testutil.RandomCID(t), testutil.RandomCID(t))
 				require.ErrorIs(t, err, upload.ErrUploadNotFound)
+			})
+
+			t.Run("an upload counts once however many providers serve the space", func(t *testing.T) {
+				// The diff log carries no provider: an object count belongs to
+				// the space, so a row per provider would report one object as
+				// several and the log would stop agreeing with the counter.
+				space := testutil.RandomDID(t)
+				root := testutil.RandomCID(t)
+				cause := testutil.RandomCID(t)
+
+				require.NoError(t, store.Upsert(t.Context(), space, root, nil, nil, cause))
+
+				diffs, err := b.uploadDiffs.List(t.Context(), space, time.Time{})
+				require.NoError(t, err)
+				require.Len(t, diffs.Results, 1)
+
+				spaceM, err := b.spaceMetrics.Get(t.Context(), space)
+				require.NoError(t, err)
+				require.Equal(t, uint64(1), spaceM[metrics.UploadAddTotalMetric])
+
+				// The two agree, which is what a reconstructed series depends on.
+				var sum int64
+				for _, d := range diffs.Results {
+					sum += d.Delta
+				}
+				require.EqualValues(t, spaceM[metrics.UploadAddTotalMetric], sum)
 			})
 		})
 	}

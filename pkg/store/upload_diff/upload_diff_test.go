@@ -53,22 +53,19 @@ func TestUploadDiffStore(t *testing.T) {
 		t.Run(string(k), func(t *testing.T) {
 			t.Run("puts a diff", func(t *testing.T) {
 				s := makeStore(t, k)
-				provider := testutil.RandomDID(t)
 				space := testutil.RandomDID(t)
 				cause := testutil.RandomCID(t)
 				receiptAt := time.Now().UTC().Truncate(time.Millisecond)
 
-				err := s.Put(t.Context(), provider, space, "sub1", cause, 1, receiptAt)
+				err := s.Put(t.Context(), space, cause, 1, receiptAt)
 				require.NoError(t, err)
 
-				page, err := s.List(t.Context(), provider, space, time.Time{})
+				page, err := s.List(t.Context(), space, time.Time{})
 				require.NoError(t, err)
 				require.Len(t, page.Results, 1)
 
 				rec := page.Results[0]
-				require.Equal(t, provider, rec.Provider)
 				require.Equal(t, space, rec.Space)
-				require.Equal(t, "sub1", rec.Subscription)
 				require.Equal(t, cause, rec.Cause)
 				require.Equal(t, int64(1), rec.Delta)
 				require.WithinDuration(t, receiptAt, rec.ReceiptAt, time.Second)
@@ -76,7 +73,6 @@ func TestUploadDiffStore(t *testing.T) {
 
 			t.Run("lists diffs after a given time", func(t *testing.T) {
 				s := makeStore(t, k)
-				provider := testutil.RandomDID(t)
 				space := testutil.RandomDID(t)
 				cause := testutil.RandomCID(t)
 
@@ -85,34 +81,33 @@ func TestUploadDiffStore(t *testing.T) {
 				t2 := base.Add(-2 * time.Hour)
 				t3 := base.Add(-1 * time.Hour)
 
-				require.NoError(t, s.Put(t.Context(), provider, space, "sub1", cause, 100, t1))
-				require.NoError(t, s.Put(t.Context(), provider, space, "sub1", cause, 200, t2))
-				require.NoError(t, s.Put(t.Context(), provider, space, "sub1", cause, 300, t3))
+				require.NoError(t, s.Put(t.Context(), space, cause, 100, t1))
+				require.NoError(t, s.Put(t.Context(), space, cause, 200, t2))
+				require.NoError(t, s.Put(t.Context(), space, cause, 300, t3))
 
 				// after epoch zero returns all
-				page, err := s.List(t.Context(), provider, space, time.Time{})
+				page, err := s.List(t.Context(), space, time.Time{})
 				require.NoError(t, err)
 				require.Len(t, page.Results, 3)
 
 				// after t1 excludes the first entry
-				page, err = s.List(t.Context(), provider, space, t1)
+				page, err = s.List(t.Context(), space, t1)
 				require.NoError(t, err)
 				require.Len(t, page.Results, 2)
 				require.Equal(t, int64(200), page.Results[0].Delta)
 				require.Equal(t, int64(300), page.Results[1].Delta)
 
 				// after t3 returns nothing
-				page, err = s.List(t.Context(), provider, space, t3)
+				page, err = s.List(t.Context(), space, t3)
 				require.NoError(t, err)
 				require.Empty(t, page.Results)
 			})
 
-			t.Run("returns empty list for unknown provider/space", func(t *testing.T) {
+			t.Run("returns empty list for an unknown space", func(t *testing.T) {
 				s := makeStore(t, k)
-				provider := testutil.RandomDID(t)
 				space := testutil.RandomDID(t)
 
-				page, err := s.List(t.Context(), provider, space, time.Time{})
+				page, err := s.List(t.Context(), space, time.Time{})
 				require.NoError(t, err)
 				require.Empty(t, page.Results)
 				require.Nil(t, page.Cursor)
@@ -120,17 +115,16 @@ func TestUploadDiffStore(t *testing.T) {
 
 			t.Run("results are ordered by receiptAt ascending", func(t *testing.T) {
 				s := makeStore(t, k)
-				provider := testutil.RandomDID(t)
 				space := testutil.RandomDID(t)
 				cause := testutil.RandomCID(t)
 
 				base := time.Now().UTC()
 				// insert out of order
-				require.NoError(t, s.Put(t.Context(), provider, space, "sub1", cause, 300, base.Add(-1*time.Hour)))
-				require.NoError(t, s.Put(t.Context(), provider, space, "sub1", cause, 100, base.Add(-3*time.Hour)))
-				require.NoError(t, s.Put(t.Context(), provider, space, "sub1", cause, 200, base.Add(-2*time.Hour)))
+				require.NoError(t, s.Put(t.Context(), space, cause, 300, base.Add(-1*time.Hour)))
+				require.NoError(t, s.Put(t.Context(), space, cause, 100, base.Add(-3*time.Hour)))
+				require.NoError(t, s.Put(t.Context(), space, cause, 200, base.Add(-2*time.Hour)))
 
-				page, err := s.List(t.Context(), provider, space, time.Time{})
+				page, err := s.List(t.Context(), space, time.Time{})
 				require.NoError(t, err)
 				require.Len(t, page.Results, 3)
 				require.Equal(t, int64(100), page.Results[0].Delta)
@@ -140,37 +134,35 @@ func TestUploadDiffStore(t *testing.T) {
 
 			t.Run("paginates results", func(t *testing.T) {
 				s := makeStore(t, k)
-				provider := testutil.RandomDID(t)
 				space := testutil.RandomDID(t)
 				cause := testutil.RandomCID(t)
 
 				base := time.Now().UTC()
 				for i := range 5 {
-					require.NoError(t, s.Put(t.Context(), provider, space, "sub1", cause, int64(i+1)*100, base.Add(time.Duration(i)*time.Hour)))
+					require.NoError(t, s.Put(t.Context(), space, cause, int64(i+1)*100, base.Add(time.Duration(i)*time.Hour)))
 				}
 
 				// first page of 2
-				page, err := s.List(t.Context(), provider, space, time.Time{}, uploaddiff.WithListLimit(2))
+				page, err := s.List(t.Context(), space, time.Time{}, uploaddiff.WithListLimit(2))
 				require.NoError(t, err)
 				require.Len(t, page.Results, 2)
 				require.NotNil(t, page.Cursor)
 
 				// second page using cursor
-				page, err = s.List(t.Context(), provider, space, time.Time{}, uploaddiff.WithListCursor(*page.Cursor))
+				page, err = s.List(t.Context(), space, time.Time{}, uploaddiff.WithListCursor(*page.Cursor))
 				require.NoError(t, err)
 				require.Len(t, page.Results, 3)
 			})
 
 			t.Run("collects all diffs via pagination", func(t *testing.T) {
 				s := makeStore(t, k)
-				provider := testutil.RandomDID(t)
 				space := testutil.RandomDID(t)
 				cause := testutil.RandomCID(t)
 				after := time.Time{}
 
 				base := time.Now().UTC()
 				for i := range 5 {
-					require.NoError(t, s.Put(t.Context(), provider, space, "sub1", cause, int64(i+1)*100, base.Add(time.Duration(i)*time.Hour)))
+					require.NoError(t, s.Put(t.Context(), space, cause, int64(i+1)*100, base.Add(time.Duration(i)*time.Hour)))
 				}
 
 				all, err := store.Collect(t.Context(), func(ctx context.Context, opts store.PaginationConfig) (store.Page[uploaddiff.DifferenceRecord], error) {
@@ -178,7 +170,7 @@ func TestUploadDiffStore(t *testing.T) {
 					if opts.Cursor != nil {
 						listOpts = append(listOpts, uploaddiff.WithListCursor(*opts.Cursor))
 					}
-					return s.List(ctx, provider, space, after, listOpts...)
+					return s.List(ctx, space, after, listOpts...)
 				})
 				require.NoError(t, err)
 				require.Len(t, all, 5)
@@ -186,43 +178,20 @@ func TestUploadDiffStore(t *testing.T) {
 
 			t.Run("isolates diffs between spaces", func(t *testing.T) {
 				s := makeStore(t, k)
-				provider := testutil.RandomDID(t)
 				space1 := testutil.RandomDID(t)
 				space2 := testutil.RandomDID(t)
 				cause := testutil.RandomCID(t)
 
 				base := time.Now().UTC()
-				require.NoError(t, s.Put(t.Context(), provider, space1, "sub1", cause, 100, base))
-				require.NoError(t, s.Put(t.Context(), provider, space2, "sub1", cause, 200, base))
+				require.NoError(t, s.Put(t.Context(), space1, cause, 100, base))
+				require.NoError(t, s.Put(t.Context(), space2, cause, 200, base))
 
-				page1, err := s.List(t.Context(), provider, space1, time.Time{})
+				page1, err := s.List(t.Context(), space1, time.Time{})
 				require.NoError(t, err)
 				require.Len(t, page1.Results, 1)
 				require.Equal(t, int64(100), page1.Results[0].Delta)
 
-				page2, err := s.List(t.Context(), provider, space2, time.Time{})
-				require.NoError(t, err)
-				require.Len(t, page2.Results, 1)
-				require.Equal(t, int64(200), page2.Results[0].Delta)
-			})
-
-			t.Run("isolates diffs between providers", func(t *testing.T) {
-				s := makeStore(t, k)
-				provider1 := testutil.RandomDID(t)
-				provider2 := testutil.RandomDID(t)
-				space := testutil.RandomDID(t)
-				cause := testutil.RandomCID(t)
-
-				base := time.Now().UTC()
-				require.NoError(t, s.Put(t.Context(), provider1, space, "sub1", cause, 100, base))
-				require.NoError(t, s.Put(t.Context(), provider2, space, "sub1", cause, 200, base))
-
-				page1, err := s.List(t.Context(), provider1, space, time.Time{})
-				require.NoError(t, err)
-				require.Len(t, page1.Results, 1)
-				require.Equal(t, int64(100), page1.Results[0].Delta)
-
-				page2, err := s.List(t.Context(), provider2, space, time.Time{})
+				page2, err := s.List(t.Context(), space2, time.Time{})
 				require.NoError(t, err)
 				require.Len(t, page2.Results, 1)
 				require.Equal(t, int64(200), page2.Results[0].Delta)
@@ -230,14 +199,13 @@ func TestUploadDiffStore(t *testing.T) {
 
 			t.Run("supports negative deltas", func(t *testing.T) {
 				s := makeStore(t, k)
-				provider := testutil.RandomDID(t)
 				space := testutil.RandomDID(t)
 				cause := testutil.RandomCID(t)
 
-				err := s.Put(t.Context(), provider, space, "sub1", cause, -1, time.Now().UTC())
+				err := s.Put(t.Context(), space, cause, -1, time.Now().UTC())
 				require.NoError(t, err)
 
-				page, err := s.List(t.Context(), provider, space, time.Time{})
+				page, err := s.List(t.Context(), space, time.Time{})
 				require.NoError(t, err)
 				require.Len(t, page.Results, 1)
 				require.Equal(t, int64(-1), page.Results[0].Delta)
@@ -245,17 +213,16 @@ func TestUploadDiffStore(t *testing.T) {
 
 			t.Run("a non-positive limit falls back to the default", func(t *testing.T) {
 				s := makeStore(t, k)
-				provider := testutil.RandomDID(t)
 				space := testutil.RandomDID(t)
 				base := time.Now().UTC().Truncate(time.Millisecond)
 				for i := range 3 {
-					require.NoError(t, s.Put(t.Context(), provider, space, "sub1",
+					require.NoError(t, s.Put(t.Context(), space,
 						testutil.RandomCID(t), 1, base.Add(time.Duration(i)*time.Millisecond)))
 				}
 
 				// Zero means "unset", as it does in Postgres. Slicing a page to
 				// [:0] and then reading its last element would panic.
-				page, err := s.List(t.Context(), provider, space, time.Time{}, uploaddiff.WithListLimit(0))
+				page, err := s.List(t.Context(), space, time.Time{}, uploaddiff.WithListLimit(0))
 				require.NoError(t, err)
 				require.Len(t, page.Results, 3)
 				require.Nil(t, page.Cursor)
@@ -263,7 +230,6 @@ func TestUploadDiffStore(t *testing.T) {
 
 			t.Run("paginates through diffs sharing a timestamp", func(t *testing.T) {
 				s := makeStore(t, k)
-				provider := testutil.RandomDID(t)
 				space := testutil.RandomDID(t)
 				// One recorded change writes a row per consumer at the same
 				// instant, so a page boundary landing inside such a group is
@@ -272,7 +238,7 @@ func TestUploadDiffStore(t *testing.T) {
 				at := time.Now().UTC().Truncate(time.Millisecond)
 				const total = 5
 				for range total {
-					require.NoError(t, s.Put(t.Context(), provider, space, "sub1", testutil.RandomCID(t), 1, at))
+					require.NoError(t, s.Put(t.Context(), space, testutil.RandomCID(t), 1, at))
 				}
 
 				seen := map[string]bool{}
@@ -282,7 +248,7 @@ func TestUploadDiffStore(t *testing.T) {
 					if cursor != nil {
 						opts = append(opts, uploaddiff.WithListCursor(*cursor))
 					}
-					page, err := s.List(t.Context(), provider, space, time.Time{}, opts...)
+					page, err := s.List(t.Context(), space, time.Time{}, opts...)
 					require.NoError(t, err)
 					for _, r := range page.Results {
 						require.False(t, seen[r.Cause.String()], "row listed twice")
@@ -297,17 +263,16 @@ func TestUploadDiffStore(t *testing.T) {
 			})
 
 			t.Run("concurrent reads of an unwritten space are safe", func(t *testing.T) {
-				// Regression guard: reads must not create the provider/space
-				// entries, which under a read lock would race.
+				// Regression guard: reads must not create the space entry,
+				// which under a read lock would race.
 				s := makeStore(t, k)
-				provider := testutil.RandomDID(t)
 
 				var wg sync.WaitGroup
 				for range 8 {
 					wg.Add(1)
 					go func() {
 						defer wg.Done()
-						_, err := s.List(context.Background(), provider, testutil.RandomDID(t), time.Time{})
+						_, err := s.List(context.Background(), testutil.RandomDID(t), time.Time{})
 						assert.NoError(t, err)
 					}()
 				}

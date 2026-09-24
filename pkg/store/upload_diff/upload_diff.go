@@ -6,6 +6,11 @@
 // bytes. The two are separate tables because their deltas are in different
 // units: summing space_diff gives bytes stored, summing upload_diff gives
 // objects stored, and mixing them would corrupt both.
+//
+// It also carries no provider or subscription, where space_diff does. Bytes are
+// billed by the provider storing them, so that log is per provider; an object
+// count is a property of the space, and counting one object once per provider
+// would simply multiply it.
 package uploaddiff
 
 import (
@@ -35,18 +40,14 @@ func WithListCursor(cursor string) ListOption {
 }
 
 type Store interface {
-	Put(ctx context.Context, provider did.DID, space did.DID, subscription string, cause cid.Cid, delta int64, receiptAt time.Time) error
+	Put(ctx context.Context, space did.DID, cause cid.Cid, delta int64, receiptAt time.Time) error
 	// List upload diffs whose receipt was issued after the given time.
-	List(ctx context.Context, provider did.DID, space did.DID, after time.Time, options ...ListOption) (store.Page[DifferenceRecord], error)
+	List(ctx context.Context, space did.DID, after time.Time, options ...ListOption) (store.Page[DifferenceRecord], error)
 }
 
 type DifferenceRecord struct {
-	// Storage provider for the space.
-	Provider did.DID
 	// Space DID (did:key:...).
 	Space did.DID
-	// Subscription in use when the object count changed.
-	Subscription string
 	// Invocation CID that changed the object count (bafy...).
 	Cause cid.Cid
 	// Objects added to (+1) or removed from (-1) the space.

@@ -33,15 +33,8 @@ func TestUploadDiffBackfillsExistingUploads(t *testing.T) {
 	ctx := t.Context()
 	pool := testutil.CreatePostgresAt(t, uploadDiffMigration)
 
-	// A provisioned space holding two uploads, as an older deployment left it.
+	// A space holding two uploads, as an older deployment left it.
 	space := testutil.RandomDID(t).String()
-	provider := testutil.RandomDID(t).String()
-	_, err := pool.Exec(ctx,
-		`INSERT INTO consumer (subscription, provider, consumer, customer, cause, inserted_at)
-		 VALUES ('sub1', $1, $2, $3, $4, NOW())`,
-		provider, space, testutil.RandomDID(t).String(), testutil.RandomCID(t).String())
-	require.NoError(t, err)
-
 	for range 2 {
 		_, err := pool.Exec(ctx,
 			`INSERT INTO upload (space, root, cause, inserted_at, updated_at)
@@ -68,11 +61,12 @@ func TestUploadDiffBackfillsExistingUploads(t *testing.T) {
 
 	// The diff log carries the same two, dated when the uploads arrived rather
 	// than at the upgrade, so a reconstructed series puts them in the right
-	// window.
+	// window. One row per upload, not one per the space's providers, or the
+	// sum would not agree with the counter above.
 	var diffs, sum int64
 	require.NoError(t, pool.QueryRow(ctx,
-		`SELECT count(*), COALESCE(SUM(delta), 0) FROM upload_diff WHERE space = $1 AND provider = $2`,
-		space, provider).Scan(&diffs, &sum))
+		`SELECT count(*), COALESCE(SUM(delta), 0) FROM upload_diff WHERE space = $1`,
+		space).Scan(&diffs, &sum))
 	require.EqualValues(t, 2, diffs)
 	require.EqualValues(t, 2, sum)
 

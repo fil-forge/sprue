@@ -16,22 +16,22 @@ import (
 
 type Store struct {
 	mutex sync.RWMutex
-	// provider -> space -> list of diffs (sorted by receiptAt)
-	diffs map[did.DID]map[did.DID][]uploaddiff.DifferenceRecord
+	// space -> list of diffs, ordered the way Postgres lists them
+	diffs map[did.DID][]uploaddiff.DifferenceRecord
 }
 
 var _ uploaddiff.Store = (*Store)(nil)
 
 func New() *Store {
 	return &Store{
-		diffs: map[did.DID]map[did.DID][]uploaddiff.DifferenceRecord{},
+		diffs: map[did.DID][]uploaddiff.DifferenceRecord{},
 	}
 }
 
 // defaultListLimit matches the Postgres implementation's page size.
 const defaultListLimit = 1000
 
-func (s *Store) List(ctx context.Context, provider did.DID, space did.DID, after time.Time, options ...uploaddiff.ListOption) (store.Page[uploaddiff.DifferenceRecord], error) {
+func (s *Store) List(ctx context.Context, space did.DID, after time.Time, options ...uploaddiff.ListOption) (store.Page[uploaddiff.DifferenceRecord], error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
@@ -46,10 +46,10 @@ func (s *Store) List(ctx context.Context, provider did.DID, space did.DID, after
 		limit = *cfg.Limit
 	}
 
-	// Read-only: a missing provider or space reads as an absent map and ranges
-	// as empty. Creating the entries here would write under the read lock, and
-	// two concurrent readers would race on the same map.
-	rows := s.diffs[provider][space]
+	// Read-only: a missing space reads as an absent entry and ranges as empty.
+	// Creating it here would write under the read lock, and two concurrent
+	// readers would race on the same map.
+	rows := s.diffs[space]
 
 	var (
 		cursorAt    time.Time
@@ -98,25 +98,20 @@ func (s *Store) List(ctx context.Context, provider did.DID, space did.DID, after
 	}, nil
 }
 
-func (s *Store) Put(ctx context.Context, provider did.DID, space did.DID, subscription string, cause cid.Cid, delta int64, receiptAt time.Time) error {
+func (s *Store) Put(ctx context.Context, space did.DID, cause cid.Cid, delta int64, receiptAt time.Time) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	if _, ok := s.diffs[provider]; !ok {
-		s.diffs[provider] = map[did.DID][]uploaddiff.DifferenceRecord{}
-	}
-	s.diffs[provider][space] = append(s.diffs[provider][space], uploaddiff.DifferenceRecord{
-		Provider:     provider,
-		Space:        space,
-		Subscription: subscription,
-		Cause:        cause,
-		Delta:        delta,
-		ReceiptAt:    receiptAt.UTC().Truncate(time.Millisecond),
-		InsertedAt:   time.Now(),
+	s.diffs[space] = append(s.diffs[space], uploaddiff.DifferenceRecord{
+		Space:      space,
+		Cause:      cause,
+		Delta:      delta,
+		ReceiptAt:  receiptAt.UTC().Truncate(time.Millisecond),
+		InsertedAt: time.Now(),
 	})
 	// Sorted the way Postgres lists them, receipt_at then cause, so a cursor
 	// means the same thing in both backends.
-	slices.SortFunc(s.diffs[provider][space], func(a, b uploaddiff.DifferenceRecord) int {
+	slices.SortFunc(s.diffs[space], func(a, b uploaddiff.DifferenceRecord) int {
 		if c := a.ReceiptAt.Compare(b.ReceiptAt); c != 0 {
 			return c
 		}

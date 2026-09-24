@@ -45,7 +45,7 @@ func newUploadAddDeps(t *testing.T, uploadService ucan.Principal, logger *zap.Lo
 		subscription_store.New(),
 	)
 	spaceMetrics := metrics_store.NewSpaceStore()
-	store := upload_store.New(uploaddiff_store.New(), consumerStore, spaceMetrics, metrics_store.New())
+	store := upload_store.New(uploaddiff_store.New(), spaceMetrics, metrics_store.New())
 	route := handlers.NewUploadAddHandler(provisioningSvc, store, logger)
 	return &uploadAddDeps{route: route, store: store, consumerStore: consumerStore, spaceMetrics: spaceMetrics}
 }

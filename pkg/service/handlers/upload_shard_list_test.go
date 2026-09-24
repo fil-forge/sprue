@@ -51,7 +51,6 @@ func TestUploadShardListHandler(t *testing.T) {
 		handler := handlers.NewUploadShardListHandler(store, logger)
 
 		space := testutil.RandomIssuer(t)
-		store.provision(t, space.DID())
 		root := testutil.RandomCID(t)
 
 		// Upload exists with no shards.
@@ -72,7 +71,6 @@ func TestUploadShardListHandler(t *testing.T) {
 		handler := handlers.NewUploadShardListHandler(store, logger)
 
 		space := testutil.RandomIssuer(t)
-		store.provision(t, space.DID())
 		root := testutil.RandomCID(t)
 		shard1 := testutil.RandomCID(t)
 		shard2 := testutil.RandomCID(t)
@@ -101,7 +99,6 @@ func TestUploadShardListHandler(t *testing.T) {
 		handler := handlers.NewUploadShardListHandler(store, logger)
 
 		space := testutil.RandomIssuer(t)
-		store.provision(t, space.DID())
 		root := testutil.RandomCID(t)
 		shard1 := testutil.RandomCID(t)
 		shard2 := testutil.RandomCID(t)
@@ -125,7 +122,6 @@ func TestUploadShardListHandler(t *testing.T) {
 		handler := handlers.NewUploadShardListHandler(store, logger)
 
 		space := testutil.RandomIssuer(t)
-		store.provision(t, space.DID())
 		root := testutil.RandomCID(t)
 		shard1 := testutil.RandomCID(t)
 		shard2 := testutil.RandomCID(t)

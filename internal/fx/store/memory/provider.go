@@ -108,6 +108,6 @@ func NewSubscriptionStore() subscription.Store {
 	return memsubscription.New()
 }
 
-func NewUploadStore(uploadDiffStore uploaddiff.Store, consumerStore consumer.Store, spaceMetrics metrics.SpaceStore, adminMetrics metrics.Store) upload.Store {
-	return memupload.New(uploadDiffStore, consumerStore, spaceMetrics, adminMetrics)
+func NewUploadStore(uploadDiffStore uploaddiff.Store, spaceMetrics metrics.SpaceStore, adminMetrics metrics.Store) upload.Store {
+	return memupload.New(uploadDiffStore, spaceMetrics, adminMetrics)
 }

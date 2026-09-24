@@ -51,7 +51,6 @@ func TestUploadListHandler(t *testing.T) {
 		handler := handlers.NewUploadListHandler(store, logger)
 
 		space := testutil.RandomIssuer(t)
-		store.provision(t, space.DID())
 		req, res := invokeUploadList(t, ctx, alice, uploadService, space, &uploadcmds.ListArguments{})
 
 		err := handler.Handler(req, res)
@@ -68,7 +67,6 @@ func TestUploadListHandler(t *testing.T) {
 		handler := handlers.NewUploadListHandler(store, logger)
 
 		space := testutil.RandomIssuer(t)
-		store.provision(t, space.DID())
 		root1 := testutil.RandomCID(t)
 		root2 := testutil.RandomCID(t)
 
@@ -97,7 +95,6 @@ func TestUploadListHandler(t *testing.T) {
 		handler := handlers.NewUploadListHandler(store, logger)
 
 		space := testutil.RandomIssuer(t)
-		store.provision(t, space.DID())
 		for range 3 {
 			require.NoError(t, store.Upsert(ctx, space.DID(), testutil.RandomCID(t), nil, nil, testutil.RandomCID(t)))
 		}
@@ -119,7 +116,6 @@ func TestUploadListHandler(t *testing.T) {
 		handler := handlers.NewUploadListHandler(store, logger)
 
 		space := testutil.RandomIssuer(t)
-		store.provision(t, space.DID())
 		for range 3 {
 			require.NoError(t, store.Upsert(ctx, space.DID(), testutil.RandomCID(t), nil, nil, testutil.RandomCID(t)))
 		}
@@ -149,9 +145,7 @@ func TestUploadListHandler(t *testing.T) {
 		handler := handlers.NewUploadListHandler(store, logger)
 
 		space1 := testutil.RandomIssuer(t)
-		store.provision(t, space1.DID())
 		space2 := testutil.RandomIssuer(t)
-		store.provision(t, space2.DID())
 
 		require.NoError(t, store.Upsert(ctx, space1.DID(), testutil.RandomCID(t), nil, nil, testutil.RandomCID(t)))
 
@@ -169,7 +163,6 @@ func TestUploadListHandler(t *testing.T) {
 		handler := handlers.NewUploadListHandler(store, logger)
 
 		space := testutil.RandomIssuer(t)
-		store.provision(t, space.DID())
 		root := testutil.RandomCID(t)
 		index := testutil.RandomCID(t)
 		require.NoError(t, store.Upsert(ctx, space.DID(), root, &index, nil, testutil.RandomCID(t)))

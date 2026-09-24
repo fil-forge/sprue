@@ -53,7 +53,6 @@ func TestUploadRemoveHandler(t *testing.T) {
 		route := handlers.NewUploadRemoveHandler(store, logger)
 
 		space := testutil.RandomIssuer(t)
-		store.provision(t, space.DID())
 		root := testutil.RandomCID(t)
 		require.NoError(t, store.Upsert(ctx, space.DID(), root, nil, nil, testutil.RandomCID(t)))
 
@@ -71,7 +70,6 @@ func TestUploadRemoveHandler(t *testing.T) {
 		route := handlers.NewUploadRemoveHandler(store, logger)
 
 		space := testutil.RandomIssuer(t)
-		store.provision(t, space.DID())
 		rcpt := invokeUploadRemove(t, ctx, route, alice, uploadService, space, testutil.RandomCID(t))
 		_, err := uploadcmds.Remove.Unpack(rcpt)
 		require.NoError(t, err)
@@ -88,9 +86,7 @@ func TestUploadRemoveHandler(t *testing.T) {
 		route := handlers.NewUploadRemoveHandler(store, logger)
 
 		spaceA := testutil.RandomIssuer(t)
-		store.provision(t, spaceA.DID())
 		spaceB := testutil.RandomIssuer(t)
-		store.provision(t, spaceB.DID())
 		root := testutil.RandomCID(t)
 		require.NoError(t, store.Upsert(ctx, spaceA.DID(), root, nil, nil, testutil.RandomCID(t)))
 		require.NoError(t, store.Upsert(ctx, spaceB.DID(), root, nil, nil, testutil.RandomCID(t)))
