@@ -54,6 +54,10 @@ Sprue is the upload coordination service for Storacha local development. It rout
 - `piriclient`: Communicates with Piri storage nodes for blob allocation/acceptance
 - `indexerclient`: Communicates with the indexing service
 
+**Tracing (internal/tracing/)**
+- OpenTelemetry: the Echo server-span middleware, the `SpanNamer` UCAN event listener that names a request's span for its commands, the `Handler` wrapper giving each invocation its own span, and the instrumented HTTP transport. `Setup` installs the OTLP exporter for `serve`.
+- A new outbound HTTP client should use `tracing.NewHTTPClient()`, or wrap its own transport with `tracing.Transport`. Handlers registered through `createUCANServer` are wrapped already.
+
 **External Clients (pkg/)**
 - `piriclient`: Communicates with Piri storage nodes for blob allocation/acceptance
 - `indexerclient`: Communicates with the indexing service
@@ -75,6 +79,7 @@ Configuration via YAML file or environment variables with `SPRUE_` prefix:
 - `SPRUE_INDEXER_ENDPOINT`
 - `SPRUE_STORAGE_POSTGRES_DSN`, `SPRUE_STORAGE_POSTGRES_MAX_CONNS`, `SPRUE_STORAGE_POSTGRES_SKIP_MIGRATIONS`
 - `SPRUE_STORAGE_S3_*` for S3/MinIO settings
+- Tracing uses the standard `OTEL_*` variables, not the `SPRUE_` prefix: `OTEL_EXPORTER_OTLP_ENDPOINT` turns it on (off when unset), `OTEL_TRACES_SAMPLER_ARG` sets the sampled fraction
 
 ### Key Dependencies
 
