@@ -192,8 +192,8 @@ func NewAgentStore(lc fx.Lifecycle, mdb *MigratedPool, s3Cfg config.S3Config, s3
 	return store
 }
 
-func NewBlobRegistryStore(mdb *MigratedPool, consumerStore consumer.Store) blobregistry.Store {
-	return pgblobregistry.New(mdb.Pool, consumerStore)
+func NewBlobRegistryStore(mdb *MigratedPool) blobregistry.Store {
+	return pgblobregistry.New(mdb.Pool)
 }
 
 func NewConsumerStore(mdb *MigratedPool) consumer.Store {

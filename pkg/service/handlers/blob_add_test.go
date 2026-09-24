@@ -61,7 +61,6 @@ func newBlobAddTestDeps(t *testing.T, uploadService multikey.Issuer, logger *zap
 	agentStore := agent_store.New()
 	blobReg := blob_registry.New(
 		spacediff_store.New(),
-		consumerStore,
 		metrics_store.NewSpaceStore(),
 		metrics_store.New(),
 	)

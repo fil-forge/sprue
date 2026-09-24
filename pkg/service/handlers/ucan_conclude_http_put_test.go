@@ -46,7 +46,6 @@ func newHTTPPutDeps(t *testing.T, nodeProvider piriclient.Provider, logger *zap.
 	consumerStore := consumer_store.New()
 	blobReg := blob_registry.New(
 		spacediff_store.New(),
-		consumerStore,
 		metrics_store.NewSpaceStore(),
 		metrics_store.New(),
 	)

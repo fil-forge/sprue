@@ -177,6 +177,21 @@ func TestListServiceProviders(t *testing.T) {
 		require.Len(t, providers, 1)
 		require.Equal(t, s.provider, providers[0])
 	})
+
+	// The consumer schema keys on (subscription, provider), so it can hold one
+	// provider twice for a space. Callers ask which services hold the space, and
+	// some of them do a scan per entry.
+	t.Run("returns a provider once however many subscriptions it holds", func(t *testing.T) {
+		s := setup(t)
+		space := testutil.RandomDID(t)
+
+		require.NoError(t, s.consumerStore.Add(ctx, s.provider, space, s.account, "sub1", testutil.RandomCID(t)))
+		require.NoError(t, s.consumerStore.Add(ctx, s.provider, space, s.account, "sub2", testutil.RandomCID(t)))
+
+		providers, err := s.service.ListServiceProviders(ctx, space)
+		require.NoError(t, err)
+		require.Equal(t, []did.DID{s.provider}, providers)
+	})
 }
 
 func TestNewSubscriptionID(t *testing.T) {

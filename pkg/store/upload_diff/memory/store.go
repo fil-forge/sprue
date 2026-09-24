@@ -58,7 +58,7 @@ func (s *Store) List(ctx context.Context, space did.DID, after time.Time, option
 	)
 	if cfg.Cursor != nil {
 		var err error
-		cursorAt, cursorCause, err = decodeCursor(*cfg.Cursor)
+		cursorAt, cursorCause, err = store.DecodeCursor(*cfg.Cursor)
 		if err != nil {
 			return store.Page[uploaddiff.DifferenceRecord]{}, fmt.Errorf("invalid cursor: %w", err)
 		}
@@ -88,7 +88,7 @@ func (s *Store) List(ctx context.Context, space did.DID, after time.Time, option
 	if len(diffs) > limit {
 		diffs = diffs[:limit]
 		last := diffs[len(diffs)-1]
-		c := encodeCursor(last.ReceiptAt, last.Cause.String())
+		c := store.EncodeCursor(last.ReceiptAt, last.Cause.String())
 		cursor = &c
 	}
 
@@ -132,18 +132,3 @@ func (s *Store) Put(ctx context.Context, space did.DID, cause cid.Cid, delta int
 
 // The cursor carries the last row's (receipt_at, cause), the pair the listing
 // is ordered by.
-func encodeCursor(receiptAt time.Time, cause string) string {
-	return receiptAt.UTC().Format(time.RFC3339Nano) + "\x00" + cause
-}
-
-func decodeCursor(cursor string) (time.Time, string, error) {
-	at, cause, ok := strings.Cut(cursor, "\x00")
-	if !ok {
-		return time.Time{}, "", fmt.Errorf("malformed cursor")
-	}
-	receiptAt, err := time.Parse(time.RFC3339Nano, at)
-	if err != nil {
-		return time.Time{}, "", err
-	}
-	return receiptAt, cause, nil
-}

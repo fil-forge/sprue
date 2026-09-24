@@ -69,6 +69,10 @@ var Module = fx.Module("service-handlers",
 			fx.ResultTags(`group:"ucan_handlers"`),
 		),
 		fx.Annotate(
+			handlers.NewMetricsSampleHandler,
+			fx.ResultTags(`group:"ucan_handlers"`),
+		),
+		fx.Annotate(
 			handlers.NewProviderAddHandler,
 			fx.ResultTags(`group:"ucan_handlers"`),
 		),
