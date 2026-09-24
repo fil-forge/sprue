@@ -12,8 +12,11 @@ import (
 	"github.com/fil-forge/sprue/pkg/provisioning"
 	"github.com/fil-forge/sprue/pkg/service/handlers"
 	consumer_store "github.com/fil-forge/sprue/pkg/store/consumer/memory"
+	"github.com/fil-forge/sprue/pkg/store/metrics"
+	metrics_store "github.com/fil-forge/sprue/pkg/store/metrics/memory"
 	subscription_store "github.com/fil-forge/sprue/pkg/store/subscription/memory"
 	upload_store "github.com/fil-forge/sprue/pkg/store/upload/memory"
+	uploaddiff_store "github.com/fil-forge/sprue/pkg/store/upload_diff/memory"
 	"github.com/fil-forge/ucantone/did"
 	"github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
@@ -30,6 +33,7 @@ type uploadAddDeps struct {
 	route         server.Route
 	store         *upload_store.Store
 	consumerStore *consumer_store.Store
+	spaceMetrics  metrics.SpaceStore
 }
 
 func newUploadAddDeps(t *testing.T, uploadService ucan.Principal, logger *zap.Logger) *uploadAddDeps {
@@ -40,9 +44,10 @@ func newUploadAddDeps(t *testing.T, uploadService ucan.Principal, logger *zap.Lo
 		consumerStore,
 		subscription_store.New(),
 	)
-	store := upload_store.New()
+	spaceMetrics := metrics_store.NewSpaceStore()
+	store := upload_store.New(uploaddiff_store.New(), spaceMetrics, metrics_store.New())
 	route := handlers.NewUploadAddHandler(provisioningSvc, store, logger)
-	return &uploadAddDeps{route: route, store: store, consumerStore: consumerStore}
+	return &uploadAddDeps{route: route, store: store, consumerStore: consumerStore, spaceMetrics: spaceMetrics}
 }
 
 // invokeUploadAdd builds an /upload/add invocation with the given args and a

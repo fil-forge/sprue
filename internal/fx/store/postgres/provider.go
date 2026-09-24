@@ -41,6 +41,8 @@ import (
 	pgsubscription "github.com/fil-forge/sprue/pkg/store/subscription/postgres"
 	"github.com/fil-forge/sprue/pkg/store/upload"
 	pgupload "github.com/fil-forge/sprue/pkg/store/upload/postgres"
+	uploaddiff "github.com/fil-forge/sprue/pkg/store/upload_diff"
+	pguploaddiff "github.com/fil-forge/sprue/pkg/store/upload_diff/postgres"
 
 	"go.uber.org/fx"
 	"go.uber.org/zap"
@@ -65,6 +67,7 @@ var Module = fx.Module("postgres-store",
 		fx.Annotate(NewRevocationStore, fx.As(new(revocation.Store))),
 		fx.Annotate(NewRoutingPolicyStore, fx.As(new(routingpolicy.Store))),
 		fx.Annotate(NewSpaceDiffStore, fx.As(fx.Self()), fx.As(new(spacediff.Store))),
+		fx.Annotate(NewUploadDiffStore, fx.As(fx.Self()), fx.As(new(uploaddiff.Store))),
 		fx.Annotate(NewStorageProviderStore, fx.As(new(storageprovider.Store))),
 		fx.Annotate(NewSubscriptionStore, fx.As(new(subscription.Store))),
 		fx.Annotate(NewUploadStore, fx.As(new(upload.Store))),
@@ -233,6 +236,10 @@ func NewRoutingPolicyStore(mdb *MigratedPool) routingpolicy.Store {
 
 func NewSpaceDiffStore(mdb *MigratedPool) *pgspacediff.Store {
 	return pgspacediff.New(mdb.Pool)
+}
+
+func NewUploadDiffStore(mdb *MigratedPool) *pguploaddiff.Store {
+	return pguploaddiff.New(mdb.Pool)
 }
 
 func NewStorageProviderStore(mdb *MigratedPool) storageprovider.Store {

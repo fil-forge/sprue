@@ -7,7 +7,6 @@ import (
 	uploadcmds "github.com/fil-forge/libforge/commands/upload"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/service/handlers"
-	upload_store "github.com/fil-forge/sprue/pkg/store/upload/memory"
 	"github.com/fil-forge/ucantone/execution"
 	"github.com/fil-forge/ucantone/ucan"
 	"github.com/fil-forge/ucantone/ucan/invocation"
@@ -48,7 +47,7 @@ func TestUploadListHandler(t *testing.T) {
 	alice := testutil.Alice
 
 	t.Run("empty list", func(t *testing.T) {
-		store := upload_store.New()
+		store := newUploadStoreFixture(t)
 		handler := handlers.NewUploadListHandler(store, logger)
 
 		space := testutil.RandomIssuer(t)
@@ -64,7 +63,7 @@ func TestUploadListHandler(t *testing.T) {
 	})
 
 	t.Run("lists uploads", func(t *testing.T) {
-		store := upload_store.New()
+		store := newUploadStoreFixture(t)
 		handler := handlers.NewUploadListHandler(store, logger)
 
 		space := testutil.RandomIssuer(t)
@@ -92,7 +91,7 @@ func TestUploadListHandler(t *testing.T) {
 	})
 
 	t.Run("with size limit", func(t *testing.T) {
-		store := upload_store.New()
+		store := newUploadStoreFixture(t)
 		handler := handlers.NewUploadListHandler(store, logger)
 
 		space := testutil.RandomIssuer(t)
@@ -113,7 +112,7 @@ func TestUploadListHandler(t *testing.T) {
 	})
 
 	t.Run("with cursor pagination", func(t *testing.T) {
-		store := upload_store.New()
+		store := newUploadStoreFixture(t)
 		handler := handlers.NewUploadListHandler(store, logger)
 
 		space := testutil.RandomIssuer(t)
@@ -142,7 +141,7 @@ func TestUploadListHandler(t *testing.T) {
 	})
 
 	t.Run("does not list uploads from other spaces", func(t *testing.T) {
-		store := upload_store.New()
+		store := newUploadStoreFixture(t)
 		handler := handlers.NewUploadListHandler(store, logger)
 
 		space1 := testutil.RandomIssuer(t)
@@ -160,7 +159,7 @@ func TestUploadListHandler(t *testing.T) {
 	})
 
 	t.Run("preserves optional index pointer", func(t *testing.T) {
-		store := upload_store.New()
+		store := newUploadStoreFixture(t)
 		handler := handlers.NewUploadListHandler(store, logger)
 
 		space := testutil.RandomIssuer(t)

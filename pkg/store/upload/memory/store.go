@@ -3,29 +3,38 @@ package memory
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"slices"
 	"sync"
 	"time"
 
 	"github.com/fil-forge/sprue/pkg/store"
+	"github.com/fil-forge/sprue/pkg/store/metrics"
 	"github.com/fil-forge/sprue/pkg/store/upload"
+	uploaddiff "github.com/fil-forge/sprue/pkg/store/upload_diff"
 	"github.com/fil-forge/ucantone/did"
 	"github.com/ipfs/go-cid"
 )
 
 type Store struct {
-	mutex   sync.RWMutex
-	uploads map[did.DID][]upload.UploadRecord
-	shards  map[did.DID]map[cid.Cid][]cid.Cid
+	mutex           sync.RWMutex
+	uploads         map[did.DID][]upload.UploadRecord
+	shards          map[did.DID]map[cid.Cid][]cid.Cid
+	uploadDiffStore uploaddiff.Store
+	spaceMetrics    metrics.SpaceStore
+	adminMetrics    metrics.Store
 }
 
 var _ upload.Store = (*Store)(nil)
 
-func New() *Store {
+func New(uploadDiffStore uploaddiff.Store, spaceMetrics metrics.SpaceStore, adminMetrics metrics.Store) *Store {
 	return &Store{
 		uploads: map[did.DID][]upload.UploadRecord{},
 		// space -> upload root -> shards
-		shards: map[did.DID]map[cid.Cid][]cid.Cid{},
+		shards:          map[did.DID]map[cid.Cid][]cid.Cid{},
+		uploadDiffStore: uploadDiffStore,
+		spaceMetrics:    spaceMetrics,
+		adminMetrics:    adminMetrics,
 	}
 }
 
@@ -127,7 +136,7 @@ func (m *Store) ListShards(ctx context.Context, space did.DID, root cid.Cid, opt
 	return store.Page[cid.Cid]{Results: shards, Cursor: cursor}, nil
 }
 
-func (m *Store) Remove(ctx context.Context, space did.DID, root cid.Cid) error {
+func (m *Store) Remove(ctx context.Context, space did.DID, root cid.Cid, cause cid.Cid) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
@@ -138,12 +147,15 @@ func (m *Store) Remove(ctx context.Context, space did.DID, root cid.Cid) error {
 	idx := slices.IndexFunc(uploads, func(r upload.UploadRecord) bool {
 		return r.Root.String() == root.String()
 	})
+	// Nothing was removed, so nothing is counted, and the missing root is
+	// reported ahead of anything else that may be wrong with the space: the
+	// handler turns this one error into idempotent success.
 	if idx == -1 {
 		return upload.ErrUploadNotFound
 	}
 	m.uploads[space] = append(uploads[:idx], uploads[idx+1:]...)
 	delete(m.shards[space], root)
-	return nil
+	return m.recordDelta(ctx, space, cause, -1, metrics.UploadRemoveTotalMetric)
 }
 
 func (m *Store) Upsert(ctx context.Context, space did.DID, root cid.Cid, index *cid.Cid, shards []cid.Cid, cause cid.Cid) error {
@@ -158,7 +170,8 @@ func (m *Store) Upsert(ctx context.Context, space did.DID, root cid.Cid, index *
 	idx := slices.IndexFunc(uploads, func(r upload.UploadRecord) bool {
 		return r.Root.String() == root.String()
 	})
-	if idx == -1 {
+	inserted := idx == -1
+	if inserted {
 		uploads = append(uploads, upload.UploadRecord{
 			Space:      space,
 			Root:       root,
@@ -189,5 +202,44 @@ func (m *Store) Upsert(ctx context.Context, space did.DID, root cid.Cid, index *
 	slices.SortFunc(shardsByUpload[root], func(a, b cid.Cid) int {
 		return bytes.Compare(a.Bytes(), b.Bytes())
 	})
+	// Only a new root counts. The capability is an upsert by spec — adding the
+	// same root again merges shards and replaces the index — so a client retry
+	// must leave the count where it was.
+	if !inserted {
+		return nil
+	}
+	return m.recordDelta(ctx, space, cause, 1, metrics.UploadAddTotalMetric)
+}
+
+// recordDelta writes one object-count change: one upload_diff row and the
+// matching metric increment at both the space and admin scope. metric is the
+// counter to bump (adds and removes have their own, each monotonically
+// increasing); delta is the signed change the diff log carries, so the count at
+// a time is the cumulative sum up to it.
+//
+// Callers have already changed the upload maps by the time this runs, and this
+// store has no transaction to undo that with. It is safe because none of the
+// stores it writes to can fail: they only ever append to a map under their own
+// lock. A fallible store wired in here would tear the two apart, so it would
+// have to come with rollback.
+func (m *Store) recordDelta(ctx context.Context, space did.DID, cause cid.Cid, delta int64, metric string) error {
+	recorded, err := m.uploadDiffStore.Put(ctx, space, cause, delta, time.Now())
+	if err != nil {
+		return fmt.Errorf("putting upload diff: %w", err)
+	}
+	// The log already held this change, so the counter must not move for it
+	// either: the counter is what the log is anchored on, and one advancing
+	// without the other leaves a reconstructed count permanently offset.
+	if !recorded {
+		return nil
+	}
+
+	inc := map[string]uint64{metric: 1}
+	if err := m.spaceMetrics.IncrementTotals(ctx, space, inc); err != nil {
+		return fmt.Errorf("incrementing space metrics: %w", err)
+	}
+	if err := m.adminMetrics.IncrementTotals(ctx, inc); err != nil {
+		return fmt.Errorf("incrementing admin metrics: %w", err)
+	}
 	return nil
 }

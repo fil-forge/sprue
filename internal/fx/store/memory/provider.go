@@ -27,6 +27,8 @@ import (
 	memsubscription "github.com/fil-forge/sprue/pkg/store/subscription/memory"
 	"github.com/fil-forge/sprue/pkg/store/upload"
 	memupload "github.com/fil-forge/sprue/pkg/store/upload/memory"
+	uploaddiff "github.com/fil-forge/sprue/pkg/store/upload_diff"
+	memuploaddiff "github.com/fil-forge/sprue/pkg/store/upload_diff/memory"
 	"go.uber.org/fx"
 )
 
@@ -43,6 +45,7 @@ var Module = fx.Module("memory-store",
 		NewRevocationStore,
 		NewRoutingPolicyStore,
 		NewSpaceDiffStore,
+		NewUploadDiffStore,
 		NewStorageProviderStore,
 		NewSubscriptionStore,
 		NewUploadStore,
@@ -93,6 +96,10 @@ func NewSpaceDiffStore() spacediff.Store {
 	return memspacediff.New()
 }
 
+func NewUploadDiffStore() uploaddiff.Store {
+	return memuploaddiff.New()
+}
+
 func NewStorageProviderStore() storageprovider.Store {
 	return memstorageprovider.New()
 }
@@ -101,6 +108,6 @@ func NewSubscriptionStore() subscription.Store {
 	return memsubscription.New()
 }
 
-func NewUploadStore() upload.Store {
-	return memupload.New()
+func NewUploadStore(uploadDiffStore uploaddiff.Store, spaceMetrics metrics.SpaceStore, adminMetrics metrics.Store) upload.Store {
+	return memupload.New(uploadDiffStore, spaceMetrics, adminMetrics)
 }
