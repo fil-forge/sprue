@@ -98,15 +98,25 @@ func (s *Store) List(ctx context.Context, space did.DID, after time.Time, option
 	}, nil
 }
 
-func (s *Store) Put(ctx context.Context, space did.DID, cause cid.Cid, delta int64, receiptAt time.Time) error {
+func (s *Store) Put(ctx context.Context, space did.DID, cause cid.Cid, delta int64, receiptAt time.Time) (bool, error) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
+
+	at := receiptAt.UTC().Truncate(time.Millisecond)
+	// The same (space, receipt_at, cause) is one change recorded twice, which
+	// Postgres suppresses with ON CONFLICT DO NOTHING. Both backends have to
+	// answer the same way, since the caller gates its counters on it.
+	for _, d := range s.diffs[space] {
+		if d.Cause.Equals(cause) && d.ReceiptAt.Equal(at) {
+			return false, nil
+		}
+	}
 
 	s.diffs[space] = append(s.diffs[space], uploaddiff.DifferenceRecord{
 		Space:      space,
 		Cause:      cause,
 		Delta:      delta,
-		ReceiptAt:  receiptAt.UTC().Truncate(time.Millisecond),
+		ReceiptAt:  at,
 		InsertedAt: time.Now(),
 	})
 	// Sorted the way Postgres lists them, receipt_at then cause, so a cursor
@@ -117,7 +127,7 @@ func (s *Store) Put(ctx context.Context, space did.DID, cause cid.Cid, delta int
 		}
 		return strings.Compare(a.Cause.String(), b.Cause.String())
 	})
-	return nil
+	return true, nil
 }
 
 // The cursor carries the last row's (receipt_at, cause), the pair the listing

@@ -36,28 +36,28 @@ func New(pool *pgxpool.Pool) *Store {
 
 func (s *Store) Initialize(ctx context.Context) error { return nil }
 
-func (s *Store) Put(ctx context.Context, space did.DID, cause cid.Cid, delta int64, receiptAt time.Time) error {
+func (s *Store) Put(ctx context.Context, space did.DID, cause cid.Cid, delta int64, receiptAt time.Time) (bool, error) {
 	return PutWith(ctx, s.pool, space, cause, delta, receiptAt)
 }
 
 // PutWith inserts an upload diff row using the provided querier, allowing the
 // write to participate in an external transaction. It exists so the upload
 // store can batch upload-diff writes with its own updates in one atomic unit.
-func PutWith(ctx context.Context, q pgxExec, space did.DID, cause cid.Cid, delta int64, receiptAt time.Time) error {
+func PutWith(ctx context.Context, q pgxExec, space did.DID, cause cid.Cid, delta int64, receiptAt time.Time) (bool, error) {
 	// ON CONFLICT DO NOTHING is what makes a replayed cause the no-op the schema
-	// describes. Without it a repeat of the same (space, receipt_at, cause)
-	// raises a unique violation, and because this write shares the caller's
-	// transaction that error would abort the whole accounting update — failing
-	// a change that has already been applied to the upload table.
-	_, err := q.Exec(ctx, `
+	// describes, rather than a unique violation that fails the caller's whole
+	// accounting transaction. The reported flag is how the caller keeps its
+	// running total in step: a suppressed insert must not move the counters
+	// either, or the total stops matching the log it anchors.
+	tag, err := q.Exec(ctx, `
 		INSERT INTO upload_diff (space, receipt_at, cause, delta)
 		VALUES ($1, $2, $3, $4)
 		ON CONFLICT (space, receipt_at, cause) DO NOTHING
 	`, space.String(), receiptAt.UTC(), cause.String(), delta)
 	if err != nil {
-		return fmt.Errorf("putting upload diff: %w", err)
+		return false, fmt.Errorf("putting upload diff: %w", err)
 	}
-	return nil
+	return tag.RowsAffected() > 0, nil
 }
 
 func (s *Store) List(ctx context.Context, space did.DID, after time.Time, options ...uploaddiff.ListOption) (store.Page[uploaddiff.DifferenceRecord], error) {

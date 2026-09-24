@@ -40,7 +40,12 @@ func WithListCursor(cursor string) ListOption {
 }
 
 type Store interface {
-	Put(ctx context.Context, space did.DID, cause cid.Cid, delta int64, receiptAt time.Time) error
+	// Put records one object-count change, and reports whether it was
+	// recorded: false means the log already held an identical one and this
+	// call changed nothing. A caller that also keeps a running total has to
+	// honour that, or a replay moves the total while the log stays put and the
+	// two stop agreeing.
+	Put(ctx context.Context, space did.DID, cause cid.Cid, delta int64, receiptAt time.Time) (bool, error)
 	// List upload diffs whose receipt was issued after the given time.
 	List(ctx context.Context, space did.DID, after time.Time, options ...ListOption) (store.Page[DifferenceRecord], error)
 }

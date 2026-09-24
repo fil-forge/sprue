@@ -223,8 +223,15 @@ func (m *Store) Upsert(ctx context.Context, space did.DID, root cid.Cid, index *
 // lock. A fallible store wired in here would tear the two apart, so it would
 // have to come with rollback.
 func (m *Store) recordDelta(ctx context.Context, space did.DID, cause cid.Cid, delta int64, metric string) error {
-	if err := m.uploadDiffStore.Put(ctx, space, cause, delta, time.Now()); err != nil {
+	recorded, err := m.uploadDiffStore.Put(ctx, space, cause, delta, time.Now())
+	if err != nil {
 		return fmt.Errorf("putting upload diff: %w", err)
+	}
+	// The log already held this change, so the counter must not move for it
+	// either: the counter is what the log is anchored on, and one advancing
+	// without the other leaves a reconstructed count permanently offset.
+	if !recorded {
+		return nil
 	}
 
 	inc := map[string]uint64{metric: 1}

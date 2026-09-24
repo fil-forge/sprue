@@ -293,8 +293,15 @@ func (s *Store) Upsert(ctx context.Context, space did.DID, root cid.Cid, index *
 // property of the space, and a row per provider would multiply it by however
 // many serve that space.
 func (s *Store) recordDelta(ctx context.Context, tx pgx.Tx, space did.DID, cause cid.Cid, delta int64, metric string) error {
-	if err := pguploaddiff.PutWith(ctx, tx, space, cause, delta, time.Now()); err != nil {
+	recorded, err := pguploaddiff.PutWith(ctx, tx, space, cause, delta, time.Now())
+	if err != nil {
 		return err
+	}
+	// The log already held this change, so the counter must not move for it
+	// either: the counter is what the log is anchored on, and one advancing
+	// without the other leaves a reconstructed count permanently offset.
+	if !recorded {
+		return nil
 	}
 
 	inc := map[string]uint64{metric: 1}

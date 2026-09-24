@@ -421,6 +421,34 @@ func TestUploadStore(t *testing.T) {
 				}
 				require.EqualValues(t, spaceM[metrics.UploadAddTotalMetric], sum)
 			})
+
+			t.Run("a change the log already holds moves no counter", func(t *testing.T) {
+				// The counter is what the log is anchored on, so a suppressed
+				// diff row must leave the counter alone too. One advancing
+				// without the other offsets every reconstructed count for the
+				// space, for good.
+				space := testutil.RandomDID(t)
+				cause := testutil.RandomCID(t)
+				at := time.Now().UTC().Truncate(time.Millisecond)
+
+				recorded, err := b.uploadDiffs.Put(t.Context(), space, cause, 1, at)
+				require.NoError(t, err)
+				require.True(t, recorded)
+
+				// The same change again: the log keeps one row, so the
+				// counters must stay where they are.
+				recorded, err = b.uploadDiffs.Put(t.Context(), space, cause, 1, at)
+				require.NoError(t, err)
+				require.False(t, recorded)
+
+				diffs, err := b.uploadDiffs.List(t.Context(), space, time.Time{})
+				require.NoError(t, err)
+				var sum int64
+				for _, d := range diffs.Results {
+					sum += d.Delta
+				}
+				require.EqualValues(t, 1, sum)
+			})
 		})
 	}
 }

@@ -12,6 +12,8 @@ import (
 	uploaddiff "github.com/fil-forge/sprue/pkg/store/upload_diff"
 	uploaddiffmemory "github.com/fil-forge/sprue/pkg/store/upload_diff/memory"
 	uploaddiffpostgres "github.com/fil-forge/sprue/pkg/store/upload_diff/postgres"
+	"github.com/fil-forge/ucantone/did"
+	"github.com/ipfs/go-cid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -57,8 +59,7 @@ func TestUploadDiffStore(t *testing.T) {
 				cause := testutil.RandomCID(t)
 				receiptAt := time.Now().UTC().Truncate(time.Millisecond)
 
-				err := s.Put(t.Context(), space, cause, 1, receiptAt)
-				require.NoError(t, err)
+				mustPut(t, s, t.Context(), space, cause, 1, receiptAt)
 
 				page, err := s.List(t.Context(), space, time.Time{})
 				require.NoError(t, err)
@@ -81,9 +82,9 @@ func TestUploadDiffStore(t *testing.T) {
 				t2 := base.Add(-2 * time.Hour)
 				t3 := base.Add(-1 * time.Hour)
 
-				require.NoError(t, s.Put(t.Context(), space, cause, 100, t1))
-				require.NoError(t, s.Put(t.Context(), space, cause, 200, t2))
-				require.NoError(t, s.Put(t.Context(), space, cause, 300, t3))
+				mustPut(t, s, t.Context(), space, cause, 100, t1)
+				mustPut(t, s, t.Context(), space, cause, 200, t2)
+				mustPut(t, s, t.Context(), space, cause, 300, t3)
 
 				// after epoch zero returns all
 				page, err := s.List(t.Context(), space, time.Time{})
@@ -120,9 +121,9 @@ func TestUploadDiffStore(t *testing.T) {
 
 				base := time.Now().UTC()
 				// insert out of order
-				require.NoError(t, s.Put(t.Context(), space, cause, 300, base.Add(-1*time.Hour)))
-				require.NoError(t, s.Put(t.Context(), space, cause, 100, base.Add(-3*time.Hour)))
-				require.NoError(t, s.Put(t.Context(), space, cause, 200, base.Add(-2*time.Hour)))
+				mustPut(t, s, t.Context(), space, cause, 300, base.Add(-1*time.Hour))
+				mustPut(t, s, t.Context(), space, cause, 100, base.Add(-3*time.Hour))
+				mustPut(t, s, t.Context(), space, cause, 200, base.Add(-2*time.Hour))
 
 				page, err := s.List(t.Context(), space, time.Time{})
 				require.NoError(t, err)
@@ -139,7 +140,7 @@ func TestUploadDiffStore(t *testing.T) {
 
 				base := time.Now().UTC()
 				for i := range 5 {
-					require.NoError(t, s.Put(t.Context(), space, cause, int64(i+1)*100, base.Add(time.Duration(i)*time.Hour)))
+					mustPut(t, s, t.Context(), space, cause, int64(i+1)*100, base.Add(time.Duration(i)*time.Hour))
 				}
 
 				// first page of 2
@@ -162,7 +163,7 @@ func TestUploadDiffStore(t *testing.T) {
 
 				base := time.Now().UTC()
 				for i := range 5 {
-					require.NoError(t, s.Put(t.Context(), space, cause, int64(i+1)*100, base.Add(time.Duration(i)*time.Hour)))
+					mustPut(t, s, t.Context(), space, cause, int64(i+1)*100, base.Add(time.Duration(i)*time.Hour))
 				}
 
 				all, err := store.Collect(t.Context(), func(ctx context.Context, opts store.PaginationConfig) (store.Page[uploaddiff.DifferenceRecord], error) {
@@ -183,8 +184,8 @@ func TestUploadDiffStore(t *testing.T) {
 				cause := testutil.RandomCID(t)
 
 				base := time.Now().UTC()
-				require.NoError(t, s.Put(t.Context(), space1, cause, 100, base))
-				require.NoError(t, s.Put(t.Context(), space2, cause, 200, base))
+				mustPut(t, s, t.Context(), space1, cause, 100, base)
+				mustPut(t, s, t.Context(), space2, cause, 200, base)
 
 				page1, err := s.List(t.Context(), space1, time.Time{})
 				require.NoError(t, err)
@@ -202,8 +203,7 @@ func TestUploadDiffStore(t *testing.T) {
 				space := testutil.RandomDID(t)
 				cause := testutil.RandomCID(t)
 
-				err := s.Put(t.Context(), space, cause, -1, time.Now().UTC())
-				require.NoError(t, err)
+				mustPut(t, s, t.Context(), space, cause, -1, time.Now().UTC())
 
 				page, err := s.List(t.Context(), space, time.Time{})
 				require.NoError(t, err)
@@ -216,8 +216,8 @@ func TestUploadDiffStore(t *testing.T) {
 				space := testutil.RandomDID(t)
 				base := time.Now().UTC().Truncate(time.Millisecond)
 				for i := range 3 {
-					require.NoError(t, s.Put(t.Context(), space,
-						testutil.RandomCID(t), 1, base.Add(time.Duration(i)*time.Millisecond)))
+					mustPut(t, s, t.Context(), space,
+						testutil.RandomCID(t), 1, base.Add(time.Duration(i)*time.Millisecond))
 				}
 
 				// Zero means "unset", as it does in Postgres. Slicing a page to
@@ -238,7 +238,7 @@ func TestUploadDiffStore(t *testing.T) {
 				at := time.Now().UTC().Truncate(time.Millisecond)
 				const total = 5
 				for range total {
-					require.NoError(t, s.Put(t.Context(), space, testutil.RandomCID(t), 1, at))
+					mustPut(t, s, t.Context(), space, testutil.RandomCID(t), 1, at)
 				}
 
 				seen := map[string]bool{}
@@ -278,6 +278,41 @@ func TestUploadDiffStore(t *testing.T) {
 				}
 				wg.Wait()
 			})
+		})
+	}
+}
+
+// mustPut records a change and asserts the store accepted it as new.
+func mustPut(t *testing.T, s uploaddiff.Store, ctx context.Context, space did.DID, cause cid.Cid, delta int64, receiptAt time.Time) {
+	t.Helper()
+	recorded, err := s.Put(ctx, space, cause, delta, receiptAt)
+	require.NoError(t, err)
+	require.True(t, recorded, "the change should be new to the log")
+}
+
+// TestPutReportsARepeatedChange: the same (space, receipt_at, cause) is one
+// change recorded twice. Both backends suppress it and say so, because the
+// caller gates its running total on the answer — a counter that moved while
+// the log did not would leave a reconstructed count permanently offset.
+func TestPutReportsARepeatedChange(t *testing.T) {
+	for _, k := range storeKinds {
+		t.Run(string(k), func(t *testing.T) {
+			s := makeStore(t, k)
+			space := testutil.RandomDID(t)
+			cause := testutil.RandomCID(t)
+			at := time.Now().UTC().Truncate(time.Millisecond)
+
+			recorded, err := s.Put(t.Context(), space, cause, 1, at)
+			require.NoError(t, err)
+			require.True(t, recorded)
+
+			recorded, err = s.Put(t.Context(), space, cause, 1, at)
+			require.NoError(t, err)
+			require.False(t, recorded, "a repeat of the same change is not recorded again")
+
+			page, err := s.List(t.Context(), space, time.Time{})
+			require.NoError(t, err)
+			require.Len(t, page.Results, 1, "and leaves one row, not two")
 		})
 	}
 }
