@@ -209,23 +209,21 @@ func (s *Store) ListShards(ctx context.Context, space did.DID, root cid.Cid, opt
 }
 
 func (s *Store) Remove(ctx context.Context, space did.DID, root cid.Cid, cause cid.Cid) error {
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("beginning transaction: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	// The delete comes before the consumer lookup so a missing root reports
-	// ErrUploadNotFound whatever else is true of the space. The handler turns
-	// that one error into idempotent success; reporting a space's lack of
+	// Both reads happen before the transaction opens, as they do in
+	// blob_registry.Deregister. Collecting consumers from inside it would have
+	// this call hold one pooled connection while waiting for another, which
+	// deadlocks on a single-connection pool and under enough concurrent
+	// removes on any pool.
+	//
+	// The existence check comes first so a missing root reports
+	// ErrUploadNotFound whatever else is true of the space: the handler turns
+	// that one error into idempotent success, and reporting a space's lack of
 	// consumers instead would fail a remove of something that was never there.
-	tag, err := tx.Exec(ctx, `DELETE FROM upload WHERE space = $1 AND root = $2`, space.String(), root.String())
+	exists, err := s.Exists(ctx, space, root)
 	if err != nil {
-		return fmt.Errorf("removing upload: %w", err)
+		return err
 	}
-	// Nothing was removed, so nothing is counted. The count must not move for
-	// an idempotent remove.
-	if tag.RowsAffected() == 0 {
+	if !exists {
 		return upload.ErrUploadNotFound
 	}
 
@@ -233,6 +231,23 @@ func (s *Store) Remove(ctx context.Context, space did.DID, root cid.Cid, cause c
 	if err != nil {
 		return err
 	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("beginning transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	tag, err := tx.Exec(ctx, `DELETE FROM upload WHERE space = $1 AND root = $2`, space.String(), root.String())
+	if err != nil {
+		return fmt.Errorf("removing upload: %w", err)
+	}
+	// Nothing was removed, so nothing is counted: another remove won the race
+	// between the check above and this delete. The count must not move for it.
+	if tag.RowsAffected() == 0 {
+		return upload.ErrUploadNotFound
+	}
+
 	if err := s.recordDelta(ctx, tx, space, consumers, cause, -1, metrics.UploadRemoveTotalMetric); err != nil {
 		return err
 	}

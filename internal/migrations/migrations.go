@@ -30,11 +30,31 @@ func UpDB(ctx context.Context, db *sql.DB, logger *zap.Logger) error {
 	return runUp(ctx, db, logger)
 }
 
-func runUp(ctx context.Context, db *sql.DB, logger *zap.Logger) error {
+// UpToDB applies migrations up to and including version, leaving the later
+// ones pending. It exists so a test can populate the schema as an older
+// deployment left it and then check what the next migration makes of it.
+func UpToDB(ctx context.Context, db *sql.DB, version int64, logger *zap.Logger) error {
+	if err := prepare(logger); err != nil {
+		return err
+	}
+	if err := goose.UpToContext(ctx, db, "sql", version); err != nil {
+		return fmt.Errorf("running goose migrations to %d: %w", version, err)
+	}
+	return nil
+}
+
+func prepare(logger *zap.Logger) error {
 	goose.SetBaseFS(FS)
 	goose.SetLogger(&zapGooseLogger{logger: logger})
 	if err := goose.SetDialect("postgres"); err != nil {
 		return fmt.Errorf("setting goose dialect: %w", err)
+	}
+	return nil
+}
+
+func runUp(ctx context.Context, db *sql.DB, logger *zap.Logger) error {
+	if err := prepare(logger); err != nil {
+		return err
 	}
 	if err := goose.UpContext(ctx, db, "sql"); err != nil {
 		return fmt.Errorf("running goose migrations: %w", err)
