@@ -150,7 +150,11 @@ func createUCANServer(id multikey.Issuer, agentStore agent.Store, handlers []ser
 	serverOpts := append(
 		slices.Clone(cfg.serverOptions),
 		server.WithReceiptTimestamps(true),
-		server.WithEventListener(&ucan_server.AgentMessageLogger{Logger: logger, AgentStore: agentStore}),
+		// The incoming message is stored while the handlers run, not before:
+		// nothing a handler reads from the agent store is written by this
+		// request, and the server still waits for the write before the
+		// response leaves.
+		server.WithConcurrentEventListener(&ucan_server.AgentMessageLogger{Logger: logger, AgentStore: agentStore}),
 		server.WithEventListener(&ucan_server.ErrorHandler{Logger: logger}),
 		server.WithEventListener(tracing.SpanNamer{}),
 		server.WithValidationOptions(

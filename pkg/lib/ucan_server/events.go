@@ -50,6 +50,12 @@ func (l *ErrorHandler) OnResponseEncode(ctx context.Context, ct ucan.Container) 
 	return nil
 }
 
+// AgentMessageLogger stores every request and response the server handles as
+// an agent message. Register it with [server.WithConcurrentEventListener]:
+// OnRequestDecode then runs alongside the handlers rather than ahead of them,
+// which is safe because no handler reads its own request back from the store,
+// and the server waits for the write before encoding the response, so the
+// message is in place by the time a client can ask for it.
 type AgentMessageLogger struct {
 	Logger     *zap.Logger
 	AgentStore agent.Store
