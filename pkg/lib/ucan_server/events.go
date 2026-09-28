@@ -56,6 +56,13 @@ func (l *ErrorHandler) OnResponseEncode(ctx context.Context, ct ucan.Container) 
 // which is safe because no handler reads its own request back from the store,
 // and the server waits for the write before encoding the response, so the
 // message is in place by the time a client can ask for it.
+//
+// The two writes fail differently. The incoming message is a record nobody
+// reads on a request path, so a failed write is logged and the request goes
+// on: failing it would reach the client only after the handlers had run, and
+// the retry that provokes does more harm than the missing record. The
+// outgoing message carries the receipts clients fetch later, so its failure
+// fails the request.
 type AgentMessageLogger struct {
 	Logger     *zap.Logger
 	AgentStore agent.Store
@@ -67,8 +74,11 @@ var _ server.ResponseEncodeListener = (*AgentMessageLogger)(nil)
 func (r *AgentMessageLogger) OnRequestDecode(ctx context.Context, msg ucan.Container) error {
 	err := r.AgentStore.Write(ctx, msg, agent.Index(msg))
 	if err != nil {
-		r.Logger.Error("failed to write incoming agent message to store", zap.Error(err))
-		return fmt.Errorf("writing incoming agent message to agent store: %w", err)
+		tasks := make([]string, 0, len(msg.Invocations()))
+		for _, inv := range msg.Invocations() {
+			tasks = append(tasks, inv.Command().String()+" "+inv.Task().Link().String())
+		}
+		r.Logger.Error("failed to write incoming agent message to store", zap.Error(err), zap.Strings("tasks", tasks))
 	}
 	return nil
 }
