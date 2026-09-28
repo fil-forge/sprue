@@ -3,7 +3,7 @@ module github.com/fil-forge/sprue
 go 1.27.0
 
 require (
-	github.com/alanshaw/dag-json-gen v0.0.9
+	github.com/alanshaw/dag-json-gen v0.0.10
 	github.com/aws/aws-sdk-go-v2 v1.47.0
 	github.com/aws/aws-sdk-go-v2/config v1.33.5
 	github.com/aws/aws-sdk-go-v2/credentials v1.20.5
@@ -11,7 +11,7 @@ require (
 	github.com/docker/docker v28.5.2+incompatible
 	github.com/exaring/otelpgx v0.12.0
 	github.com/fil-forge/libforge v0.0.0-20260924130614-243c8c81eac2
-	github.com/fil-forge/ucantone v0.0.0-20260924160040-c31dec73d9b3
+	github.com/fil-forge/ucantone v0.0.0-20260928174307-22b4465e21b8
 	github.com/google/uuid v1.6.0
 	github.com/ipfs/go-cid v0.6.2
 	github.com/jackc/pgx/v5 v5.11.0
