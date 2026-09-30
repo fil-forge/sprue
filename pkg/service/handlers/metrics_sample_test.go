@@ -12,6 +12,7 @@ import (
 	"github.com/fil-forge/sprue/pkg/store/metrics"
 	metrics_store "github.com/fil-forge/sprue/pkg/store/metrics/memory"
 	spacediff_store "github.com/fil-forge/sprue/pkg/store/space_diff/memory"
+	uploaddiff_store "github.com/fil-forge/sprue/pkg/store/upload_diff/memory"
 	"github.com/fil-forge/sprue/pkg/usage"
 	"github.com/fil-forge/ucantone/did"
 	"github.com/fil-forge/ucantone/errors"
@@ -58,12 +59,13 @@ func (failingSpaceStore) Get(context.Context, did.DID) (map[string]uint64, error
 func newMetricsSampleHandler(
 	t *testing.T,
 	diffs *spacediff_store.Store,
+	uploadDiffs *uploaddiff_store.Store,
 	spaceMetrics *metrics_store.SpaceStore,
 	now time.Time,
 ) server.Route {
 	t.Helper()
 	logger := zaptest.NewLogger(t)
-	svc := usage.NewService(diffs, spaceMetrics, logger, usage.WithClock(func() time.Time { return now }))
+	svc := usage.NewService(diffs, uploadDiffs, spaceMetrics, logger, usage.WithClock(func() time.Time { return now }))
 	return handlers.NewMetricsSampleHandler(svc, logger)
 }
 
@@ -85,15 +87,24 @@ func TestMetricsSampleHandler(t *testing.T) {
 
 	t.Run("returns a sample per window", func(t *testing.T) {
 		diffs := spacediff_store.New()
+		uploadDiffs := uploaddiff_store.New()
 		spaceMetrics := metrics_store.NewSpaceStore()
 		space := testutil.RandomIssuer(t)
 
-		handler := newMetricsSampleHandler(t, diffs, spaceMetrics, to)
+		handler := newMetricsSampleHandler(t, diffs, uploadDiffs, spaceMetrics, to)
 
 		require.NoError(t, diffs.Put(ctx, space.DID(), testutil.RandomCID(t), 4096, from.Add(90*time.Minute)))
 		require.NoError(t, spaceMetrics.IncrementTotals(ctx, space.DID(), map[string]uint64{
 			metrics.BlobAddTotalMetric:     1,
 			metrics.BlobAddSizeTotalMetric: 4096,
+		}))
+
+		// The object count comes from the other log, so assert it travels too.
+		recorded, err := uploadDiffs.Put(ctx, space.DID(), testutil.RandomCID(t), 1, from.Add(90*time.Minute))
+		require.NoError(t, err)
+		require.True(t, recorded)
+		require.NoError(t, spaceMetrics.IncrementTotals(ctx, space.DID(), map[string]uint64{
+			metrics.UploadAddTotalMetric: 1,
 		}))
 
 		req, res := invokeMetricsSample(t, ctx, alice, uploadService, space, args())
@@ -111,11 +122,14 @@ func TestMetricsSampleHandler(t *testing.T) {
 			samples[0].BytesStored, samples[1].BytesStored, samples[2].BytesStored,
 		})
 		require.Equal(t, uint64(4096), samples[1].BytesIngested)
+		require.Equal(t, []uint64{0, 1, 1}, []uint64{
+			samples[0].UploadCount, samples[1].UploadCount, samples[2].UploadCount,
+		})
 	})
 
 	t.Run("fails the invocation on an unusable range", func(t *testing.T) {
 		space := testutil.RandomIssuer(t)
-		handler := newMetricsSampleHandler(t, spacediff_store.New(), metrics_store.NewSpaceStore(), to)
+		handler := newMetricsSampleHandler(t, spacediff_store.New(), uploaddiff_store.New(), metrics_store.NewSpaceStore(), to)
 
 		req, res := invokeMetricsSample(t, ctx, alice, uploadService, space, &metricscmds.SampleArguments{
 			From:   to.Unix(),
@@ -134,7 +148,7 @@ func TestMetricsSampleHandler(t *testing.T) {
 		logger := zaptest.NewLogger(t)
 		space := testutil.RandomIssuer(t)
 		svc := usage.NewService(
-			spacediff_store.New(), failingSpaceStore{metrics_store.NewSpaceStore()}, logger,
+			spacediff_store.New(), uploaddiff_store.New(), failingSpaceStore{metrics_store.NewSpaceStore()}, logger,
 			usage.WithClock(func() time.Time { return to }))
 		handler := handlers.NewMetricsSampleHandler(svc, logger)
 

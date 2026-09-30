@@ -1,5 +1,5 @@
-// Package usage reconstructs per-space usage time series from the space diff
-// log and the space's running byte counters.
+// Package usage reconstructs per-space usage time series from the space and
+// upload diff logs and the space's running byte and object counters.
 package usage
 
 import (
@@ -11,6 +11,7 @@ import (
 	metricscmds "github.com/fil-forge/libforge/commands/metrics"
 	"github.com/fil-forge/sprue/pkg/store/metrics"
 	spacediff "github.com/fil-forge/sprue/pkg/store/space_diff"
+	uploaddiff "github.com/fil-forge/sprue/pkg/store/upload_diff"
 	"github.com/fil-forge/ucantone/did"
 	"github.com/fil-forge/ucantone/errors"
 	"go.uber.org/zap"
@@ -75,6 +76,8 @@ type Sample struct {
 	BytesStored uint64
 	// BytesIngested is the bytes added to the space during the bucket.
 	BytesIngested uint64
+	// UploadCount is the uploads the space holds as of End.
+	UploadCount uint64
 }
 
 // Series is a dense run of samples: one per window over [From, To), ordered by
@@ -87,9 +90,10 @@ type Series struct {
 	Samples []Sample
 }
 
-// Service answers usage queries against the recorded space diffs.
+// Service answers usage queries against the recorded diffs.
 type Service struct {
 	diffs        spacediff.Store
+	uploadDiffs  uploaddiff.Store
 	spaceMetrics metrics.SpaceStore
 	logger       *zap.Logger
 	now          func() time.Time
@@ -102,11 +106,12 @@ func WithClock(now func() time.Time) Option {
 	return func(s *Service) { s.now = now }
 }
 
-// NewService builds a usage service over the space diff log and the space byte
-// counters.
-func NewService(diffs spacediff.Store, spaceMetrics metrics.SpaceStore, logger *zap.Logger, opts ...Option) *Service {
+// NewService builds a usage service over the two diff logs and the space
+// counters they are anchored on.
+func NewService(diffs spacediff.Store, uploadDiffs uploaddiff.Store, spaceMetrics metrics.SpaceStore, logger *zap.Logger, opts ...Option) *Service {
 	s := &Service{
 		diffs:        diffs,
+		uploadDiffs:  uploadDiffs,
 		spaceMetrics: spaceMetrics,
 		logger:       logger,
 		now:          time.Now,
@@ -193,7 +198,7 @@ func (s *Service) Sample(ctx context.Context, space did.DID, from, to time.Time,
 
 // run replays a space's diffs into n buckets of window over [from, to).
 func (s *Service) run(ctx context.Context, space did.DID, from, to time.Time, window time.Duration, n int) ([]Sample, error) {
-	stored, rows, err := s.read(ctx, space, from)
+	reading, err := s.read(ctx, space, from)
 	if err != nil {
 		return nil, err
 	}
@@ -201,12 +206,13 @@ func (s *Service) run(ctx context.Context, space did.DID, from, to time.Time, wi
 	// Bucket k covers [from+k*window, from+(k+1)*window).
 	deltas := make([]int64, n)
 	ingested := make([]uint64, n)
+	uploadDeltas := make([]int64, n)
 
 	// Changes at or after `to` are what separates the counters, which describe
-	// now, from the stored bytes at `to`.
-	var tail int64
+	// now, from what the space held at `to`.
+	var tail, uploadTail int64
 
-	for _, r := range rows {
+	for _, r := range reading.byteRows {
 		switch {
 		case r.ReceiptAt.Before(from):
 			// Earlier than the range, so already part of the stored bytes at
@@ -225,6 +231,20 @@ func (s *Service) run(ctx context.Context, space did.DID, from, to time.Time, wi
 		}
 	}
 
+	// The upload log is bucketed the same way. Its deltas are objects rather
+	// than bytes, so it yields only a gauge: there is no ingested equivalent.
+	for _, r := range reading.uploadRows {
+		switch {
+		case r.ReceiptAt.Before(from):
+			continue
+		case !r.ReceiptAt.Before(to):
+			uploadTail += r.Delta
+		default:
+			k := int(r.ReceiptAt.Sub(from) / window)
+			uploadDeltas[k] += r.Delta
+		}
+	}
+
 	// Walk back from the stored bytes at `to`, shedding each bucket's changes to
 	// reach the bytes held when that bucket opened.
 	// Bucket ends are accumulated rather than reached by multiplying the window
@@ -240,7 +260,8 @@ func (s *Service) run(ctx context.Context, space did.DID, from, to time.Time, wi
 	}
 
 	samples := make([]Sample, n)
-	cur := stored - tail
+	cur := reading.storedBytes - tail
+	uploads := reading.uploads - uploadTail
 	for k := n - 1; k >= 0; k-- {
 		end := ends[k]
 		held := cur
@@ -254,60 +275,116 @@ func (s *Service) run(ctx context.Context, space did.DID, from, to time.Time, wi
 				zap.Int64("bytes", held))
 			held = 0
 		}
-		samples[k] = Sample{End: end, BytesStored: uint64(held), BytesIngested: ingested[k]}
+		count := uploads
+		if count < 0 {
+			s.logger.Warn("space upload count unwound below zero",
+				zap.Stringer("space", space),
+				zap.Time("bucket", end),
+				zap.Int64("uploads", count))
+			count = 0
+		}
+		samples[k] = Sample{
+			End:           end,
+			BytesStored:   uint64(held),
+			BytesIngested: ingested[k],
+			UploadCount:   uint64(count),
+		}
 		cur -= deltas[k]
+		uploads -= uploadDeltas[k]
 	}
 
 	return samples, nil
 }
 
-// read returns the bytes the space currently holds, together with its diffs from
-// the start of the range onwards, both describing the same instant.
+// reading is what a space currently holds and the changes that got it there,
+// both logs and both totals describing one instant.
+type reading struct {
+	storedBytes int64
+	uploads     int64
+	byteRows    []spacediff.DifferenceRecord
+	uploadRows  []uploaddiff.DifferenceRecord
+}
+
+// read returns what the space currently holds, together with its diffs from the
+// start of the range onwards, all describing the same instant.
 //
-// The two come from different tables and one total anchors every sample, so a
-// blob landing between the reads would shift the whole series by its size. The
-// counters only ever increase, so reading them again after the scan detects
-// exactly that: unchanged means nothing committed for this space while the scan
-// ran. A change and an equal removal are caught too, because the counters are
+// The totals and the logs come from different tables and one total anchors every
+// sample, so a change landing between the reads would shift a whole series. The
+// counters only ever increase, so reading them again after the scans detects
+// exactly that: unchanged means nothing committed for this space while they ran.
+// A change and an equal removal are caught too, because the counters are
 // compared separately rather than by their difference.
 //
-// This assumes the backend makes a change visible in both stores at once, which
-// the postgres stores do by committing them in one transaction. The in-memory
-// stores write them separately, so a reader there can still catch a diff row
-// whose counters have not moved yet; that backend is for development and tests.
-func (s *Service) read(ctx context.Context, space did.DID, from time.Time) (int64, []spacediff.DifferenceRecord, error) {
+// Both logs are scanned inside one envelope. Validating them separately would
+// let the byte series and the upload series describe different instants, which
+// is the same skew at one remove.
+//
+// This assumes the backend makes a change visible in its log and its counters at
+// once, which the postgres stores do by committing them in one transaction. The
+// in-memory stores write them separately, so a reader there can still catch a
+// row whose counters have not moved yet; that backend is for development and
+// tests.
+func (s *Service) read(ctx context.Context, space did.DID, from time.Time) (reading, error) {
 	totals, err := s.spaceMetrics.Get(ctx, space)
 	if err != nil {
-		return 0, nil, fmt.Errorf("getting space metrics: %w", err)
+		return reading{}, fmt.Errorf("getting space metrics: %w", err)
 	}
 
 	for attempt := 1; ; attempt++ {
-		rows, err := s.scan(ctx, space, from)
+		byteRows, err := s.scan(ctx, space, from)
 		if err != nil {
-			return 0, nil, err
+			return reading{}, err
+		}
+		uploadRows, err := s.scanUploads(ctx, space, from)
+		if err != nil {
+			return reading{}, err
 		}
 
 		after, err := s.spaceMetrics.Get(ctx, space)
 		if err != nil {
-			return 0, nil, fmt.Errorf("getting space metrics: %w", err)
+			return reading{}, fmt.Errorf("getting space metrics: %w", err)
 		}
 
-		if after[metrics.BlobAddSizeTotalMetric] == totals[metrics.BlobAddSizeTotalMetric] &&
-			after[metrics.BlobRemoveSizeTotalMetric] == totals[metrics.BlobRemoveSizeTotalMetric] {
-			stored, err := storedBytes(totals)
+		if settled(totals, after) {
+			storedBytes, err := storedBytes(totals)
 			if err != nil {
-				return 0, nil, err
+				return reading{}, err
 			}
-			return stored, rows, nil
+			uploads, err := storedUploads(totals)
+			if err != nil {
+				return reading{}, err
+			}
+			return reading{
+				storedBytes: storedBytes,
+				uploads:     uploads,
+				byteRows:    byteRows,
+				uploadRows:  uploadRows,
+			}, nil
 		}
 
 		if attempt >= totalsAttempts {
 			s.logger.Warn("gave up reading consistent space usage",
 				zap.Stringer("space", space), zap.Int("attempts", attempt))
-			return 0, nil, ErrUsageUnstable
+			return reading{}, ErrUsageUnstable
 		}
 		totals = after
 	}
+}
+
+// settled reports whether every counter the series is built from held still
+// across the scans.
+func settled(before, after map[string]uint64) bool {
+	for _, m := range []string{
+		metrics.BlobAddSizeTotalMetric,
+		metrics.BlobRemoveSizeTotalMetric,
+		metrics.UploadAddTotalMetric,
+		metrics.UploadRemoveTotalMetric,
+	} {
+		if before[m] != after[m] {
+			return false
+		}
+	}
+	return true
 }
 
 // scan collects the diffs recorded from the start of the range onwards. The
@@ -340,6 +417,44 @@ func (s *Service) scan(ctx context.Context, space did.DID, from time.Time) ([]sp
 		}
 		cursor = page.Cursor
 	}
+}
+
+// scanUploads collects the upload diffs over the same bound as scan. The two
+// logs have the same shape, so this is the same loop against the other store.
+func (s *Service) scanUploads(ctx context.Context, space did.DID, from time.Time) ([]uploaddiff.DifferenceRecord, error) {
+	after := from.Add(-time.Second)
+
+	var rows []uploaddiff.DifferenceRecord
+	var cursor *string
+	for {
+		var opts []uploaddiff.ListOption
+		if cursor != nil {
+			opts = append(opts, uploaddiff.WithListCursor(*cursor))
+		}
+		page, err := s.uploadDiffs.List(ctx, space, after, opts...)
+		if err != nil {
+			return nil, fmt.Errorf("listing upload diffs: %w", err)
+		}
+		rows = append(rows, page.Results...)
+		if len(rows) > maxScanRows {
+			return nil, ErrRangeTooBusy
+		}
+		if page.Cursor == nil || len(page.Results) == 0 {
+			return rows, nil
+		}
+		cursor = page.Cursor
+	}
+}
+
+// storedUploads derives the uploads a space currently holds from its add and
+// remove counters, which only ever increase.
+func storedUploads(totals map[string]uint64) (int64, error) {
+	added := totals[metrics.UploadAddTotalMetric]
+	removed := totals[metrics.UploadRemoveTotalMetric]
+	if removed > added || added-removed > math.MaxInt64 {
+		return 0, fmt.Errorf("space upload counters inconsistent: added %d, removed %d", added, removed)
+	}
+	return int64(added - removed), nil
 }
 
 // storedBytes derives the bytes a space currently holds from its add and remove

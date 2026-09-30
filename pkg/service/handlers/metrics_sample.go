@@ -52,6 +52,7 @@ func NewMetricsSampleHandler(usageSvc *usage.Service, logger *zap.Logger) server
 					Timestamp:     s.End.Unix(),
 					BytesStored:   s.BytesStored,
 					BytesIngested: s.BytesIngested,
+					UploadCount:   s.UploadCount,
 				})
 			}
 
