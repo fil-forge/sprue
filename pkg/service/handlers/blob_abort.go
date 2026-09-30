@@ -1,24 +1,30 @@
 package handlers
 
 import (
+	"bytes"
+	"context"
 	"fmt"
 
 	blobcmds "github.com/fil-forge/libforge/commands/blob"
-	"github.com/fil-forge/libforge/digestutil"
+	httpcmds "github.com/fil-forge/libforge/commands/http"
 	ucanlib "github.com/fil-forge/libforge/ucan"
 	"github.com/fil-forge/sprue/pkg/piriclient"
 	"github.com/fil-forge/sprue/pkg/routing"
 	"github.com/fil-forge/sprue/pkg/store/agent"
 	"github.com/fil-forge/ucantone/binding"
+	"github.com/fil-forge/ucantone/did"
 	"github.com/fil-forge/ucantone/errors"
 	"github.com/fil-forge/ucantone/server"
 	"github.com/fil-forge/ucantone/ucan"
+	"github.com/ipfs/go-cid"
 	"go.uber.org/zap"
 )
 
 // NewBlobAbortHandler abandons a space's in-flight upload of a parked
 // (never-accepted) blob: it recovers the storage node holding it from the
-// Cause receipt chain and forwards a /blob/reject there. Nothing is
+// Cause receipt chain and forwards a /blob/reject there. The reject names the
+// blob as the upload did: by digest, or, for a blob added without one, by its
+// allocation, so the node also drops the upload it is still expecting. Nothing is
 // deregistered — registration happens only at accept, which a parked blob
 // never reached.
 //
@@ -35,17 +41,14 @@ func NewBlobAbortHandler(router *routing.Service, nodeProvider piriclient.Provid
 		func(req *binding.Request[*blobcmds.AbortArguments], res *binding.Response[*blobcmds.AbortOK]) error {
 			args := req.Task().Arguments()
 			space := req.Invocation().Subject()
-			log := log.With(
-				zap.Stringer("space", space),
-				zap.String("blob", digestutil.Format(args.Digest)),
-			)
+			log := log.With(zap.Stringer("space", space), zap.Stringer("cause", args.Cause))
 			log.Debug("aborting blob upload")
 
 			if !args.Cause.Defined() {
 				return res.SetFailure(blobcmds.ErrMissingCause)
 			}
 
-			provider, err := primaryProviderForBlob(req.Context(), agentStore, args.Cause)
+			provider, reject, err := rejectionFor(req.Context(), agentStore, space, args.Cause)
 			if err != nil {
 				// An unknown cause — one whose receipt chain we don't hold —
 				// cannot route to a node; per the RFC it is the named error
@@ -73,10 +76,7 @@ func NewBlobAbortHandler(router *routing.Service, nodeProvider piriclient.Provid
 			// The proof chain for /blob/reject comes from the proofs the
 			// provider granted the upload service at registration.
 			proofStore := ucanlib.NewContainerProofStore(info.Proofs)
-			_, inv, rcpt, err := client.Reject(req.Context(), &piriclient.RejectRequest{
-				Space:  space,
-				Digest: args.Digest,
-			}, proofStore)
+			_, inv, rcpt, err := client.Reject(req.Context(), &reject, proofStore)
 			if err != nil {
 				// The node refuses to reject a blob this space has accepted.
 				// Surface the named failure rather than a generic fault so
@@ -100,4 +100,46 @@ func NewBlobAbortHandler(router *routing.Service, nodeProvider piriclient.Provid
 			return res.SetSuccess(&blobcmds.AbortOK{})
 		},
 	)
+}
+
+// rejectionFor recovers, from the receipt chain of the /blob/add task cause,
+// the storage node an upload went to and the /blob/reject that retires it
+// there. An accept that names the digest rejects by digest; one that names
+// only the hash function rejects the allocation its /http/put was made to.
+func rejectionFor(ctx context.Context, agentStore agent.Store, space did.DID, cause cid.Cid) (did.DID, blobcmds.RejectArguments, error) {
+	addRcpt, err := agentStore.GetReceipt(ctx, cause)
+	if err != nil {
+		return did.Undef, blobcmds.RejectArguments{}, fmt.Errorf("getting receipt for blob add: %w", err)
+	}
+	if addRcpt.Out().IsErr() {
+		return did.Undef, blobcmds.RejectArguments{}, fmt.Errorf("blob add receipt contains failure")
+	}
+	o, _ := addRcpt.Out().Unpack()
+	var addOK blobcmds.AddOK
+	if err := addOK.UnmarshalCBOR(bytes.NewReader(o)); err != nil {
+		return did.Undef, blobcmds.RejectArguments{}, fmt.Errorf("unmarshaling add OK result: %w", err)
+	}
+
+	accInv, err := agentStore.GetInvocation(ctx, addOK.Site.Task)
+	if err != nil {
+		return did.Undef, blobcmds.RejectArguments{}, fmt.Errorf("getting invocation for blob accept: %w", err)
+	}
+	var accArgs blobcmds.AcceptArguments
+	if err := accArgs.UnmarshalCBOR(bytes.NewReader(accInv.ArgumentsBytes())); err != nil {
+		return did.Undef, blobcmds.RejectArguments{}, fmt.Errorf("unmarshaling accept arguments: %w", err)
+	}
+	provider := accInv.Subject()
+	if b, ok := accArgs.Blob.Blob(); ok {
+		return provider, blobcmds.RejectByDigest(space, b.Digest), nil
+	}
+
+	putInv, err := agentStore.GetInvocation(ctx, accArgs.Put.Task)
+	if err != nil {
+		return did.Undef, blobcmds.RejectArguments{}, fmt.Errorf("getting invocation for HTTP PUT: %w", err)
+	}
+	var putArgs httpcmds.PutArguments
+	if err := putArgs.UnmarshalCBOR(bytes.NewReader(putInv.ArgumentsBytes())); err != nil {
+		return did.Undef, blobcmds.RejectArguments{}, fmt.Errorf("unmarshaling HTTP PUT arguments: %w", err)
+	}
+	return provider, blobcmds.RejectByAllocation(space, putArgs.Destination.Task), nil
 }

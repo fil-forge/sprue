@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 
+	assertcmds "github.com/fil-forge/libforge/commands/assert"
 	blobcmds "github.com/fil-forge/libforge/commands/blob"
 	httpcmds "github.com/fil-forge/libforge/commands/http"
 	ucancmds "github.com/fil-forge/libforge/commands/ucan"
@@ -21,6 +22,7 @@ import (
 	"github.com/fil-forge/ucantone/ucan/container"
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/ipfs/go-cid"
+	"github.com/multiformats/go-multihash"
 	"go.uber.org/zap"
 )
 
@@ -32,7 +34,9 @@ import (
 var containerTokenBudget = container.MaxTokens - 256
 
 // concludedPut is one delivered /http/put receipt resolved to the allocation
-// it fulfils — the space, blob and provider its acceptance needs.
+// it fulfils — the space, blob and provider its acceptance needs. The blob
+// always carries its digest: for an allocation that named only the hash
+// function, it is the digest the put receipt reports.
 type concludedPut struct {
 	putInv    ucan.Invocation
 	provider  did.DID
@@ -118,6 +122,10 @@ func NewHTTPPutConcludeHandler(
 // make, so a failure here fails the conclusion. The allocations are fetched
 // from the agent store in one lookup, so a batch costs one round trip rather
 // than one per blob.
+//
+// An allocation that named only the hash function takes its digest from the
+// put receipt, which is the only place it is reported. A receipt that reports
+// none has nothing to accept, and is skipped like a failed put.
 func resolveAllocations(ctx context.Context, agentStore agent.Store, conclusions []Conclusion, log *zap.Logger) ([]*concludedPut, error) {
 	allocTasks := make([]cid.Cid, len(conclusions))
 	for i, conclusion := range conclusions {
@@ -136,7 +144,7 @@ func resolveAllocations(ctx context.Context, agentStore agent.Store, conclusions
 		return nil, fmt.Errorf("getting allocation invocations: %w", err)
 	}
 
-	puts := make([]*concludedPut, len(conclusions))
+	puts := make([]*concludedPut, 0, len(conclusions))
 	for i, conclusion := range conclusions {
 		log := log.With(
 			zap.Stringer("ran", conclusion.Receipt.Ran()),
@@ -154,25 +162,61 @@ func resolveAllocations(ctx context.Context, agentStore agent.Store, conclusions
 			return nil, fmt.Errorf("unmarshaling allocate arguments: %w", err)
 		}
 
-		puts[i] = &concludedPut{
+		// The accept names the blob as the allocation did, so its task link
+		// is the one /blob/add returned as AddOK.Site.
+		acceptReq := &piriclient.AcceptRequest{
+			Space: allocArgs.Space,
+			Blob:  allocArgs.Blob,
+			Put:   conclusion.Invocation.Task().Link(),
+		}
+		blob, ok := allocArgs.Blob.Blob()
+		if !ok {
+			code, _ := allocArgs.Blob.DigestCode()
+			digest, err := putDigest(conclusion.Receipt, code)
+			if err != nil {
+				log.Warn("skipping conclusion of a put that reports no usable digest", zap.Error(err))
+				continue
+			}
+			blob = blobcmds.Blob{Digest: digest, Size: code.Size}
+			acceptReq.PutInvocation = conclusion.Invocation
+			acceptReq.PutReceipt = conclusion.Receipt
+		}
+
+		puts = append(puts, &concludedPut{
 			putInv: conclusion.Invocation,
 			// The allocate invocation's subject and audience are both the
 			// storage provider (its proofs are rooted at the provider).
 			// The space travels in the allocate arguments rather than on
 			// the subject.
-			provider: allocInv.Subject(),
-			space:    allocArgs.Space,
-			blob:     allocArgs.Blob,
-			cause:    allocArgs.Cause,
-			acceptReq: &piriclient.AcceptRequest{
-				Space:  allocArgs.Space,
-				Digest: allocArgs.Blob.Digest,
-				Size:   allocArgs.Blob.Size,
-				Put:    conclusion.Invocation.Task().Link(),
-			},
-		}
+			provider:  allocInv.Subject(),
+			space:     allocArgs.Space,
+			blob:      blob,
+			cause:     allocArgs.Cause,
+			acceptReq: acceptReq,
+		})
 	}
 	return puts, nil
+}
+
+// putDigest returns the digest a put receipt reports for a blob allocated with
+// only its hash function, checking it is a digest of that function.
+func putDigest(rcpt ucan.Receipt, code blobcmds.BlobDigestCode) (multihash.Multihash, error) {
+	out, _ := rcpt.Out().Unpack()
+	var putOK httpcmds.PutOK
+	if err := putOK.UnmarshalCBOR(bytes.NewReader(out)); err != nil {
+		return nil, fmt.Errorf("decoding put result: %w", err)
+	}
+	if putOK.Blob == nil {
+		return nil, fmt.Errorf("put result reports no digest")
+	}
+	decoded, err := multihash.Decode(putOK.Blob.Digest)
+	if err != nil {
+		return nil, fmt.Errorf("decoding reported digest: %w", err)
+	}
+	if decoded.Code != code.DigestCode {
+		return nil, fmt.Errorf("reported digest has code 0x%x, allocation names 0x%x", decoded.Code, code.DigestCode)
+	}
+	return putOK.Blob.Digest, nil
 }
 
 // concludeResponse packs the acceptances into the conclusion's response.
@@ -432,6 +476,7 @@ func acceptOnProvider(
 		return accInvs, accRcpts, fmt.Errorf("writing agent message: %w", err)
 	}
 
+	claims := invocationsByLink(metas)
 	for i, res := range results {
 		put := puts[i]
 		log := log.With(
@@ -466,6 +511,16 @@ func acceptOnProvider(
 			continue
 		}
 		log.Debug("accept success", zap.Stringer("site", acceptOK.Site))
+		// The node computed the digest of a blob allocated without one, and
+		// its location commitment names it. Registering under a digest the
+		// commitment does not name would index content the node never
+		// claimed to hold.
+		if _, hashed := put.acceptReq.Blob.Blob(); !hashed {
+			if err := checkLocationContent(claims[acceptOK.Site], put.blob.Digest); err != nil {
+				log.Error("location commitment does not match the put", zap.Error(err))
+				continue
+			}
+		}
 		err = blobRegistry.Register(ctx, put.space, put.blob, put.cause)
 		// it's ok if there's already a registration of this blob in this space
 		if err != nil && !errors.Is(err, blobregistry.ErrEntryExists) {
@@ -473,4 +528,37 @@ func acceptOnProvider(
 		}
 	}
 	return accInvs, accRcpts, acceptErr
+}
+
+// invocationsByLink indexes the invocations a node attached to its responses.
+func invocationsByLink(metas []ucan.Container) map[cid.Cid]ucan.Invocation {
+	invs := make(map[cid.Cid]ucan.Invocation)
+	for _, meta := range metas {
+		if meta == nil {
+			continue
+		}
+		for _, inv := range meta.Invocations() {
+			invs[inv.Link()] = inv
+		}
+	}
+	return invs
+}
+
+// checkLocationContent checks that claim is a location commitment for digest.
+func checkLocationContent(claim ucan.Invocation, digest multihash.Multihash) error {
+	if claim == nil {
+		return fmt.Errorf("location commitment not in the response")
+	}
+	if claim.Command() != assertcmds.Location.Command {
+		return fmt.Errorf("site is a %s invocation", claim.Command())
+	}
+	var args assertcmds.LocationArguments
+	if err := args.UnmarshalCBOR(bytes.NewReader(claim.ArgumentsBytes())); err != nil {
+		return fmt.Errorf("decoding location commitment: %w", err)
+	}
+	if !bytes.Equal(args.Content, digest) {
+		return fmt.Errorf("location commitment names %s, put reports %s",
+			digestutil.Format(args.Content), digestutil.Format(digest))
+	}
+	return nil
 }

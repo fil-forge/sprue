@@ -122,14 +122,14 @@ func seedParkedBlobChain(
 	allocInv := testutil.Must(blobcmds.Allocate.Invoke(
 		uploadService,
 		storageProvider.DID(),
-		&blobcmds.AllocateArguments{Space: space, Blob: blob, Cause: testutil.RandomCID(t)},
+		&blobcmds.AllocateArguments{Space: space, Blob: blobcmds.SpecFromBlob(blob), Cause: testutil.RandomCID(t)},
 		invocation.WithAudience(storageProvider.DID()),
 	))(t)
 	putInv := testutil.Must(httpcmds.Put.Invoke(
 		testutil.DeriveBlobProvider(t, blob.Digest),
 		testutil.DeriveBlobProvider(t, blob.Digest).DID(),
 		&httpcmds.PutArguments{
-			Body:        blob,
+			Body:        blobcmds.SpecFromBlob(blob),
 			Destination: promise.AwaitOK{Task: allocInv.Task().Link()},
 		},
 	))(t)
@@ -138,7 +138,7 @@ func seedParkedBlobChain(
 		storageProvider.DID(),
 		&blobcmds.AcceptArguments{
 			Space: space,
-			Blob:  blob,
+			Blob:  blobcmds.SpecFromBlob(blob),
 			Put:   promise.AwaitOK{Task: putInv.Task().Link()},
 		},
 		invocation.WithAudience(storageProvider.DID()),
@@ -147,7 +147,7 @@ func seedParkedBlobChain(
 	addInv := testutil.Must(blobcmds.Add.Invoke(
 		testutil.Alice,
 		space,
-		&blobcmds.AddArguments{Blob: blob},
+		&blobcmds.AddArguments{Blob: blobcmds.SpecFromBlob(blob)},
 		invocation.WithAudience(uploadService.DID()),
 	))(t)
 	addRcpt := testutil.Must(receipt.IssueOK(
@@ -213,8 +213,10 @@ func TestBlobAbortHandler(t *testing.T) {
 
 		calls := piriSrv.Calls()
 		require.Len(t, calls, 1, "abort forwarded to the provider as /blob/reject")
-		require.Equal(t, space.DID(), calls[0].Space)
-		require.Equal(t, blob.Digest, calls[0].Digest)
+		require.Equal(t, space.DID(), calls[0].Space())
+		digest, ok := calls[0].Digest()
+		require.True(t, ok, "the upload named its digest, so the reject does")
+		require.Equal(t, blob.Digest, digest)
 	})
 
 	t.Run("missing cause is unrepresentable", func(t *testing.T) {

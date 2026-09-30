@@ -20,6 +20,7 @@ import (
 	"github.com/fil-forge/ucantone/binding"
 	"github.com/fil-forge/ucantone/did"
 	"github.com/fil-forge/ucantone/errors"
+	edm "github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/ipld/datamodel"
 	"github.com/fil-forge/ucantone/multikey"
 	ed25519signer "github.com/fil-forge/ucantone/multikey/ed25519"
@@ -41,18 +42,12 @@ func NewBlobAddHandler(id identity.Identity, provisioningSvc *provisioning.Servi
 			args := req.Task().Arguments()
 			blob := args.Blob
 			space := req.Invocation().Subject()
-			b58digest := digestutil.Format(blob.Digest)
+			digested, hashed := blob.Blob()
 
-			log := log.With(
-				zap.Stringer("space", space),
-				zap.Dict(
-					"blob",
-					zap.String("digest", b58digest),
-					zap.Uint64("size", blob.Size),
-				),
-			)
+			log := log.With(zap.Stringer("space", space), blobField(blob))
 			log.Debug("adding blob")
 
+			// Nothing is done for a space that is not provisioned.
 			providers, err := provisioningSvc.ListServiceProviders(req.Context(), space)
 			if err != nil {
 				log.Error("failed to list service providers", zap.Error(err))
@@ -62,9 +57,48 @@ func NewBlobAddHandler(id identity.Identity, provisioningSvc *provisioning.Servi
 				return res.SetFailure(errors.New(accesscmds.InsufficientStorageErrorName, "space has no storage provider"))
 			}
 
-			reg, err := blobRegistry.Get(req.Context(), space, blob.Digest)
-			if err != nil {
-				if !errors.Is(err, blobregistry.ErrEntryNotFound) {
+			// A blob named only by its hash function is keyed by this task: the
+			// /http/put key derives from its link, and the allocation hangs off
+			// it. Without a nonce, two such adds of the same size in a space
+			// would be the same task.
+			if !hashed && len(req.Invocation().Nonce()) == 0 {
+				return res.SetFailure(errors.New(MissingNonceErrorName,
+					"a %s without a digest must carry a nonce", blobcmds.Add.Command))
+			}
+			cause := req.Invocation().Task().Link()
+
+			// A digest-less add that has already run is answered with its
+			// first result: a second allocation for the same task would
+			// share its /http/put key and orphan the first. The receipt is
+			// written only once the first response has gone out, so this is
+			// what tells a replay apart from the add itself.
+			if !hashed {
+				prior, err := agentStore.GetReceipt(req.Context(), cause)
+				if err != nil && !errors.Is(err, agent.ErrReceiptNotFound) {
+					log.Error("failed to check for a prior blob add", zap.Error(err))
+					return fmt.Errorf("checking for a prior blob add: %w", err)
+				}
+				if err == nil {
+					log.Debug("replaying blob add", zap.Stringer("cause", cause))
+					if prior.Out().IsErr() {
+						_, x := prior.Out().Unpack()
+						var model edm.ErrorModel
+						if err := model.UnmarshalCBOR(bytes.NewReader(x)); err != nil {
+							return fmt.Errorf("decoding replayed blob add failure: %w", err)
+						}
+						return res.SetFailure(model)
+					}
+					return replayAdd(req.Context(), agentStore, prior, res, log)
+				}
+			}
+
+			// Without a digest there is nothing to look up: the add always
+			// uploads.
+			err = blobregistry.ErrEntryNotFound
+			var reg blobregistry.Record
+			if hashed {
+				reg, err = blobRegistry.Get(req.Context(), space, digested.Digest)
+				if err != nil && !errors.Is(err, blobregistry.ErrEntryNotFound) {
 					log.Error("failed to get blob registration", zap.Error(err))
 					return err
 				}
@@ -89,82 +123,23 @@ func NewBlobAddHandler(id identity.Identity, provisioningSvc *provisioning.Servi
 					log.Error("blob registration receipt contains failure")
 					return fmt.Errorf("blob registration receipt contains failure")
 				}
-
-				o, _ := addRcpt.Out().Unpack()
-				var addOK blobcmds.AddOK
-				if err := addOK.UnmarshalCBOR(bytes.NewReader(o)); err != nil {
-					log.Error("failed to unmarshal add OK result", zap.Error(err))
-					return fmt.Errorf("unmarshaling add OK result: %w", err)
-				}
-
-				accRcpt, err := agentStore.GetReceipt(req.Context(), addOK.Site.Task)
-				if err != nil {
-					log.Error("failed to get receipt for blob accept", zap.Error(err))
-					return fmt.Errorf("getting receipt for blob accept: %w", err)
-				}
-
-				accInv, err := agentStore.GetInvocation(req.Context(), addOK.Site.Task)
-				if err != nil {
-					log.Error("failed to get invocation for blob accept", zap.Error(err))
-					return fmt.Errorf("getting invocation for blob accept: %w", err)
-				}
-
-				var accArgs blobcmds.AcceptArguments
-				if err := accArgs.UnmarshalCBOR(bytes.NewReader(accInv.ArgumentsBytes())); err != nil {
-					log.Error("failed to rebind accept OK result", zap.Error(err))
-					return fmt.Errorf("rebinding accept OK result: %w", err)
-				}
-
-				putRcpt, err := agentStore.GetReceipt(req.Context(), accArgs.Put.Task)
-				if err != nil {
-					log.Error("failed to get receipt for HTTP PUT", zap.Error(err))
-					return fmt.Errorf("getting receipt for HTTP PUT: %w", err)
-				}
-
-				putInv, err := agentStore.GetInvocation(req.Context(), accArgs.Put.Task)
-				if err != nil {
-					log.Error("failed to get invocation for HTTP PUT", zap.Error(err))
-					return fmt.Errorf("getting invocation for HTTP PUT: %w", err)
-				}
-
-				var putArgs httpcmds.PutArguments
-				if err := putArgs.UnmarshalCBOR(bytes.NewReader(putInv.ArgumentsBytes())); err != nil {
-					log.Error("failed to unmarshal HTTP PUT arguments", zap.Error(err))
-					return fmt.Errorf("unmarshaling HTTP PUT arguments: %w", err)
-				}
-
-				allocRcpt, err := agentStore.GetReceipt(req.Context(), putArgs.Destination.Task)
-				if err != nil {
-					log.Error("failed to get receipt for allocation", zap.Error(err))
-					return fmt.Errorf("getting receipt for allocation: %w", err)
-				}
-
-				allocInv, err := agentStore.GetInvocation(req.Context(), putArgs.Destination.Task)
-				if err != nil {
-					log.Error("failed to get invocation for allocation", zap.Error(err))
-					return fmt.Errorf("getting invocation for allocation: %w", err)
-				}
-
-				res.SetMetadata(container.New(
-					container.WithInvocations(allocInv, putInv, accInv),
-					container.WithReceipts(allocRcpt, putRcpt, accRcpt),
-				))
-
-				return res.SetSuccess(&addOK)
+				return replayAdd(req.Context(), agentStore, addRcpt, res, log)
 			}
 
-			cause := req.Invocation().Task().Link()
 			provider, allocInv, allocRcpt, allocOK, err := doAllocate(req.Context(), router, nodeProvider, agentStore, space, blob, cause, log)
 			if err != nil {
 				if errors.Is(err, routing.ErrCandidateUnavailable) {
 					return res.SetFailure(routing.ErrCandidateUnavailable)
+				}
+				if errors.Is(err, blobcmds.ErrUnsupportedDigestCode) {
+					return res.SetFailure(blobcmds.ErrUnsupportedDigestCode)
 				}
 				log.Error("allocation failed", zap.Error(err))
 				return fmt.Errorf("allocating space: %w", err)
 			}
 			log = log.With(zap.Stringer("provider", provider.ID))
 
-			putInv, putRcpt, err := genPut(blob, allocInv, allocOK, log)
+			putInv, putRcpt, err := genPut(blob, cause, allocInv, allocOK, log)
 			if err != nil {
 				log.Error("failed to generate put invocation", zap.Error(err))
 				return fmt.Errorf("generating put invocation: %w", err)
@@ -206,7 +181,7 @@ func doAllocate(
 	nodeProvider piriclient.Provider,
 	agentStore agent.Store,
 	space did.DID,
-	blob blobcmds.Blob,
+	blob blobcmds.BlobSpec,
 	cause cid.Cid,
 	logger *zap.Logger,
 ) (routing.StorageProviderInfo, ucan.Invocation, ucan.Receipt, blobcmds.AllocateOK, error) {
@@ -214,9 +189,17 @@ func doAllocate(
 	log.Debug("doing allocation")
 
 	var exclusions []did.DID
+	// unsupported records that a candidate refused the digest code. Once no
+	// candidate is left, that refusal is the answer: the client can retry
+	// with the digest.
+	unsupported := false
 	for {
 		candidate, err := router.SelectStorageProvider(ctx, space, blob, routing.WithExclusions(exclusions...))
 		if err != nil {
+			if unsupported && errors.Is(err, routing.ErrCandidateUnavailable) {
+				log.Warn("no storage node supports the digest code")
+				return routing.StorageProviderInfo{}, nil, nil, blobcmds.AllocateOK{}, blobcmds.ErrUnsupportedDigestCode
+			}
 			log.Error("failed to select storage node", zap.Error(err))
 			return routing.StorageProviderInfo{}, nil, nil, blobcmds.AllocateOK{}, err
 		}
@@ -233,12 +216,14 @@ func doAllocate(
 		// provider granted the upload service at registration.
 		proofStore := ucanlib.NewContainerProofStore(candidate.Proofs)
 		res, inv, rcpt, err := client.Allocate(ctx, &piriclient.AllocateRequest{
-			Space:  space,
-			Digest: blob.Digest,
-			Size:   blob.Size,
-			Cause:  cause,
+			Space: space,
+			Blob:  blob,
+			Cause: cause,
 		}, proofStore)
 		if err != nil {
+			if hasErrorName(err, blobcmds.UnsupportedDigestCodeErrorName) {
+				unsupported = true
+			}
 			log.Warn("failed to allocate blob", zap.Error(err))
 			exclusions = append(exclusions, candidate.ID)
 			continue
@@ -265,14 +250,19 @@ func writeAgentMessage(ctx context.Context, agentStore agent.Store, invs []ucan.
 // Generates an invocation to put the blob to the storage provider. It MAY
 // return a receipt if the allocation result indicates that the provider already
 // has the blob.
-func genPut(blob blobcmds.Blob, allocInv ucan.Invocation, allocOK blobcmds.AllocateOK, logger *zap.Logger) (ucan.Invocation, ucan.Receipt, error) {
+func genPut(blob blobcmds.BlobSpec, cause cid.Cid, allocInv ucan.Invocation, allocOK blobcmds.AllocateOK, logger *zap.Logger) (ucan.Invocation, ucan.Receipt, error) {
 	log := logger
 	log.Debug("generating put invocation")
 
 	// Derive the principal that will provide the blob from the blob digest.
 	// we do this so that any actor with a blob could issue a receipt for the
-	// `/http/put` invocation.
-	blobProvider, err := deriveDID(blob.Digest)
+	// `/http/put` invocation. A blob named without its digest derives it from
+	// the `/blob/add` task instead, which only the adding client knows.
+	keySource := cause.Hash()
+	if b, ok := blob.Blob(); ok {
+		keySource = b.Digest
+	}
+	blobProvider, err := deriveDID(keySource)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -358,7 +348,7 @@ func maybeAccept(
 	nodeProvider piriclient.Provider,
 	providerInfo routing.StorageProviderInfo,
 	space did.DID,
-	blob blobcmds.Blob,
+	blob blobcmds.BlobSpec,
 	cause cid.Cid, // original /blob/add task
 	putInv ucan.Invocation,
 	putRcpt ucan.Receipt,
@@ -378,10 +368,9 @@ func maybeAccept(
 	proofStore := ucanlib.NewContainerProofStore(providerInfo.Proofs)
 
 	accReq := piriclient.AcceptRequest{
-		Space:  space,
-		Digest: blob.Digest,
-		Size:   blob.Size,
-		Put:    putInv.Task().Link(),
+		Space: space,
+		Blob:  blob,
+		Put:   putInv.Task().Link(),
 	}
 
 	accInv, _, err := c.AcceptInvocation(ctx, &accReq, proofStore, invocation.WithNoNonce())
@@ -394,7 +383,9 @@ func maybeAccept(
 	var extras acceptExtras
 
 	// If put has already succeeded, we can execute `/blob/accept` right away.
-	if putRcpt != nil && putRcpt.Out().IsOK() {
+	// That happens only when the provider already holds the blob, which it can
+	// know only from its digest.
+	if digested, ok := blob.Blob(); ok && putRcpt != nil && putRcpt.Out().IsOK() {
 		res, inv, rcpt, meta, err := c.Accept(ctx, &accReq, proofStore, invocation.WithNoNonce())
 		if err != nil {
 			log.Error("failed to execute accept on piri", zap.Error(err))
@@ -422,7 +413,7 @@ func maybeAccept(
 			return nil, nil, acceptExtras{}, err
 		}
 
-		err = blobRegistry.Register(ctx, space, blob, cause)
+		err = blobRegistry.Register(ctx, space, digested, cause)
 		if err != nil {
 			log.Error("failed to register blob", zap.Error(err))
 			return nil, nil, acceptExtras{}, err
@@ -433,4 +424,90 @@ func maybeAccept(
 	}
 
 	return accInv, accRcpt, extras, nil
+}
+
+// MissingNonceErrorName is the receipt-failure name for a `/blob/add` that
+// names no digest and carries no nonce.
+const MissingNonceErrorName = "MissingNonce"
+
+// blobField logs a blob by its digest, or by its hash function when it names
+// no digest.
+func blobField(blob blobcmds.BlobSpec) zap.Field {
+	if b, ok := blob.Blob(); ok {
+		return zap.Dict("blob", zap.String("digest", digestutil.Format(b.Digest)), zap.Uint64("size", b.Size))
+	}
+	code, _ := blob.DigestCode()
+	return zap.Dict("blob", zap.Uint64("digestCode", code.DigestCode), zap.Uint64("size", code.Size))
+}
+
+// hasErrorName reports whether err is, or wraps, a named failure called name,
+// such as one decoded from a receipt.
+func hasErrorName(err error, name string) bool {
+	var named errors.Named
+	return errors.As(err, &named) && named.Name() == name
+}
+
+// replayAdd answers a /blob/add with the result of an add that already ran:
+// addRcpt's success, and the allocate, put and accept tasks behind it. The put
+// and accept receipts are included when they exist; an add whose put has not
+// been concluded has neither yet.
+func replayAdd(ctx context.Context, agentStore agent.Store, addRcpt ucan.Receipt, res *binding.Response[*blobcmds.AddOK], log *zap.Logger) error {
+	o, _ := addRcpt.Out().Unpack()
+	var addOK blobcmds.AddOK
+	if err := addOK.UnmarshalCBOR(bytes.NewReader(o)); err != nil {
+		log.Error("failed to unmarshal add OK result", zap.Error(err))
+		return fmt.Errorf("unmarshaling add OK result: %w", err)
+	}
+
+	accInv, err := agentStore.GetInvocation(ctx, addOK.Site.Task)
+	if err != nil {
+		log.Error("failed to get invocation for blob accept", zap.Error(err))
+		return fmt.Errorf("getting invocation for blob accept: %w", err)
+	}
+	var accArgs blobcmds.AcceptArguments
+	if err := accArgs.UnmarshalCBOR(bytes.NewReader(accInv.ArgumentsBytes())); err != nil {
+		log.Error("failed to rebind accept OK result", zap.Error(err))
+		return fmt.Errorf("rebinding accept OK result: %w", err)
+	}
+
+	putInv, err := agentStore.GetInvocation(ctx, accArgs.Put.Task)
+	if err != nil {
+		log.Error("failed to get invocation for HTTP PUT", zap.Error(err))
+		return fmt.Errorf("getting invocation for HTTP PUT: %w", err)
+	}
+	var putArgs httpcmds.PutArguments
+	if err := putArgs.UnmarshalCBOR(bytes.NewReader(putInv.ArgumentsBytes())); err != nil {
+		log.Error("failed to unmarshal HTTP PUT arguments", zap.Error(err))
+		return fmt.Errorf("unmarshaling HTTP PUT arguments: %w", err)
+	}
+
+	allocRcpt, err := agentStore.GetReceipt(ctx, putArgs.Destination.Task)
+	if err != nil {
+		log.Error("failed to get receipt for allocation", zap.Error(err))
+		return fmt.Errorf("getting receipt for allocation: %w", err)
+	}
+	allocInv, err := agentStore.GetInvocation(ctx, putArgs.Destination.Task)
+	if err != nil {
+		log.Error("failed to get invocation for allocation", zap.Error(err))
+		return fmt.Errorf("getting invocation for allocation: %w", err)
+	}
+
+	rcpts := []ucan.Receipt{allocRcpt}
+	for _, task := range []cid.Cid{accArgs.Put.Task, addOK.Site.Task} {
+		rcpt, err := agentStore.GetReceipt(ctx, task)
+		if errors.Is(err, agent.ErrReceiptNotFound) {
+			continue
+		}
+		if err != nil {
+			log.Error("failed to get receipt", zap.Stringer("task", task), zap.Error(err))
+			return fmt.Errorf("getting receipt for %s: %w", task, err)
+		}
+		rcpts = append(rcpts, rcpt)
+	}
+
+	res.SetMetadata(container.New(
+		container.WithInvocations(allocInv, putInv, accInv),
+		container.WithReceipts(rcpts...),
+	))
+	return res.SetSuccess(&addOK)
 }

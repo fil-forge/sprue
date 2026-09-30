@@ -57,10 +57,9 @@ func TestAcceptInvocationExpiry(t *testing.T) {
 	proofStore := ucanlib.NewContainerProofStore(container.New(container.WithDelegations(acceptProof)))
 
 	req := &AcceptRequest{
-		Space:  testutil.RandomDID(t),
-		Digest: testutil.RandomMultihash(t),
-		Size:   1024,
-		Put:    testutil.RandomCID(t),
+		Space: testutil.RandomDID(t),
+		Blob:  blobcmds.SpecFromBlob(blobcmds.Blob{Digest: testutil.RandomMultihash(t), Size: 1024}),
+		Put:   testutil.RandomCID(t),
 	}
 
 	inv, _, err := client.AcceptInvocation(ctx, req, proofStore, invocation.WithNoNonce())
@@ -158,10 +157,9 @@ func acceptRequests(t *testing.T, n int) []*AcceptRequest {
 	reqs := make([]*AcceptRequest, n)
 	for i := range reqs {
 		reqs[i] = &AcceptRequest{
-			Space:  testutil.RandomDID(t),
-			Digest: testutil.RandomMultihash(t),
-			Size:   1024,
-			Put:    testutil.RandomCID(t),
+			Space: testutil.RandomDID(t),
+			Blob:  blobcmds.SpecFromBlob(blobcmds.Blob{Digest: testutil.RandomMultihash(t), Size: 1024}),
+			Put:   testutil.RandomCID(t),
 		}
 	}
 	return reqs

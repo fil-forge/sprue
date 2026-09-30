@@ -58,7 +58,7 @@ func TestGetProviderInfo(t *testing.T) {
 func TestSelectStorageProvider(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	ctx := t.Context()
-	blob := blob.Blob{Size: 1024}
+	blob := blob.SpecFromBlob(blob.Blob{Size: 1024})
 	space := testutil.RandomDID(t)
 
 	t.Run("no providers", func(t *testing.T) {
@@ -201,7 +201,7 @@ func TestSelectReplicationProvider(t *testing.T) {
 func TestSelectStorageProviderWithPolicy(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	ctx := t.Context()
-	blob := blob.Blob{Size: 1024}
+	blob := blob.SpecFromBlob(blob.Blob{Size: 1024})
 
 	// setup registers two healthy providers and a policy naming only the first,
 	// referenced by the returned space.
