@@ -98,8 +98,8 @@ github.com/felixge/httpsnoop v1.1.0 h1:3YtUj32ZZkqZtt3sZZsClsymw/QDuVfpNhoA31zeO
 github.com/felixge/httpsnoop v1.1.0/go.mod h1:Zqxgdd+1Rkcz8euOqdr7lqgCRJztwr5hp9vDSi5UZCE=
 github.com/fil-forge/libforge v0.0.0-20260928151559-99540866a323 h1:2hZKA/dxRN7+8Ku9M68irr0LqoHctyx6mpYtUn9rzIs=
 github.com/fil-forge/libforge v0.0.0-20260928151559-99540866a323/go.mod h1:sKml7ScjN2ov8F7jTuBIv823EgyWGTJG6cvA8ronPk4=
-github.com/fil-forge/ucantone v0.0.0-20260924160040-c31dec73d9b3 h1:Ta5ODMWR9mM4zMfRp/K1unAKvnt7f5dhehRA+YHiv7w=
-github.com/fil-forge/ucantone v0.0.0-20260924160040-c31dec73d9b3/go.mod h1:aX35jlUs3hnWAhigjO8z9kMPiYnkW3XOW8iVoJyz7cg=
+github.com/fil-forge/ucantone v0.0.0-20260928174307-22b4465e21b8 h1:vTYyYXf/bhx4b9hZxIi+coLzGj8JwpUV2X0cdSV/D0A=
+github.com/fil-forge/ucantone v0.0.0-20260928174307-22b4465e21b8/go.mod h1:SHfS9ODaEQWe5OXWo3i/ueLLpgBBCz1226TpQe3tzxE=
 github.com/filecoin-project/go-data-segment v0.0.1 h1:1wmDxOG4ubWQm3ZC1XI5nCon5qgSq7Ra3Rb6Dbu10Gs=
 github.com/filecoin-project/go-data-segment v0.0.1/go.mod h1:H0/NKbsRxmRFBcLibmABv+yFNHdmtl5AyplYLnb0Zv4=
 github.com/filecoin-project/go-fil-commcid v0.3.1 h1:4EfxpHSlvtkOqa9weG2Yt5kxFmPib2xU7Uc9Lbqk7fs=

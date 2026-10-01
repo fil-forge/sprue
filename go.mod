@@ -11,7 +11,7 @@ require (
 	github.com/docker/docker v28.5.2+incompatible
 	github.com/exaring/otelpgx v0.12.0
 	github.com/fil-forge/libforge v0.0.0-20260928151559-99540866a323
-	github.com/fil-forge/ucantone v0.0.0-20260924160040-c31dec73d9b3
+	github.com/fil-forge/ucantone v0.0.0-20260928174307-22b4465e21b8
 	github.com/google/uuid v1.6.0
 	github.com/ipfs/go-cid v0.6.2
 	github.com/jackc/pgx/v5 v5.11.0
