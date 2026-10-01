@@ -112,7 +112,7 @@ func TestBlobAddHandler(t *testing.T) {
 
 		space := testutil.RandomIssuer(t)
 		args := blobcmds.AddArguments{
-			Blob: blobcmds.SpecFromBlob(blobcmds.Blob{Digest: testutil.RandomMultihash(t), Size: 1024}),
+			Blob: blobcmds.SpecFromDigest(testutil.RandomMultihash(t), 1024),
 		}
 
 		inv, err := blobcmds.Add.Invoke(
@@ -144,7 +144,7 @@ func TestBlobAddHandler(t *testing.T) {
 
 		// No storage providers in spStore — the router will return ErrCandidateUnavailable.
 		args := blobcmds.AddArguments{
-			Blob: blobcmds.SpecFromBlob(blobcmds.Blob{Digest: testutil.RandomMultihash(t), Size: 1024}),
+			Blob: blobcmds.SpecFromDigest(testutil.RandomMultihash(t), 1024),
 		}
 
 		inv, err := blobcmds.Add.Invoke(
@@ -179,7 +179,7 @@ func TestBlobAddHandler(t *testing.T) {
 		require.NoError(t, err)
 
 		args := blobcmds.AddArguments{
-			Blob: blobcmds.SpecFromBlob(blobcmds.Blob{Digest: testutil.RandomMultihash(t), Size: 1024}),
+			Blob: blobcmds.SpecFromDigest(testutil.RandomMultihash(t), 1024),
 		}
 
 		inv, err := blobcmds.Add.Invoke(
@@ -234,7 +234,7 @@ func TestBlobAddHandler(t *testing.T) {
 		require.NoError(t, err)
 
 		args := blobcmds.AddArguments{
-			Blob: blobcmds.SpecFromBlob(blobcmds.Blob{Digest: testutil.RandomMultihash(t), Size: 1024}),
+			Blob: blobcmds.SpecFromDigest(testutil.RandomMultihash(t), 1024),
 		}
 
 		inv, err := blobcmds.Add.Invoke(
@@ -297,7 +297,7 @@ func TestBlobAddHandler(t *testing.T) {
 
 		for range 10 {
 			args := blobcmds.AddArguments{
-				Blob: blobcmds.SpecFromBlob(blobcmds.Blob{Digest: testutil.RandomMultihash(t), Size: 1024}),
+				Blob: blobcmds.SpecFromDigest(testutil.RandomMultihash(t), 1024),
 			}
 			inv, err := blobcmds.Add.Invoke(
 				testutil.Alice,
@@ -347,7 +347,7 @@ func TestBlobAddHandler(t *testing.T) {
 		require.NoError(t, deps.policyStore.SetSpacePolicy(ctx, space.DID(), policy, testutil.RandomCID(t)))
 
 		args := blobcmds.AddArguments{
-			Blob: blobcmds.SpecFromBlob(blobcmds.Blob{Digest: testutil.RandomMultihash(t), Size: 1024}),
+			Blob: blobcmds.SpecFromDigest(testutil.RandomMultihash(t), 1024),
 		}
 		inv, err := blobcmds.Add.Invoke(
 			testutil.Alice,
@@ -388,7 +388,7 @@ func TestBlobAddHandler(t *testing.T) {
 		require.NoError(t, err)
 
 		args := blobcmds.AddArguments{
-			Blob: blobcmds.SpecFromBlob(blobcmds.Blob{Digest: testutil.RandomMultihash(t), Size: 1024}),
+			Blob: blobcmds.SpecFromDigest(testutil.RandomMultihash(t), 1024),
 		}
 
 		inv, err := blobcmds.Add.Invoke(

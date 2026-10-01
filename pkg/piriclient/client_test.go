@@ -61,7 +61,7 @@ func TestAcceptInvocationExpiry(t *testing.T) {
 
 	req := &AcceptRequest{
 		Space: testutil.RandomDID(t),
-		Blob:  blobcmds.SpecFromBlob(blobcmds.Blob{Digest: testutil.RandomMultihash(t), Size: 1024}),
+		Blob:  blobcmds.SpecFromDigest(testutil.RandomMultihash(t), 1024),
 		Put:   testutil.RandomCID(t),
 	}
 
@@ -161,7 +161,7 @@ func acceptRequests(t *testing.T, n int) []*AcceptRequest {
 	for i := range reqs {
 		reqs[i] = &AcceptRequest{
 			Space: testutil.RandomDID(t),
-			Blob:  blobcmds.SpecFromBlob(blobcmds.Blob{Digest: testutil.RandomMultihash(t), Size: 1024}),
+			Blob:  blobcmds.SpecFromDigest(testutil.RandomMultihash(t), 1024),
 			Put:   testutil.RandomCID(t),
 		}
 	}
