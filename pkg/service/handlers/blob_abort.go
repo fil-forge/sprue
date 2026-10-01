@@ -129,8 +129,8 @@ func rejectionFor(ctx context.Context, agentStore agent.Store, space did.DID, ca
 		return did.Undef, blobcmds.RejectArguments{}, fmt.Errorf("unmarshaling accept arguments: %w", err)
 	}
 	provider := accInv.Subject()
-	if b, ok := accArgs.Blob.Blob(); ok {
-		return provider, blobcmds.RejectByDigest(space, b.Digest), nil
+	if digest, ok := accArgs.Blob.Digest(); ok {
+		return provider, blobcmds.RejectByDigest(space, digest), nil
 	}
 
 	putInv, err := agentStore.GetInvocation(ctx, accArgs.Put.Task)

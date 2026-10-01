@@ -169,15 +169,14 @@ func resolveAllocations(ctx context.Context, agentStore agent.Store, conclusions
 			Blob:  allocArgs.Blob,
 			Put:   conclusion.Invocation.Task().Link(),
 		}
-		blob, ok := allocArgs.Blob.Blob()
+		digest, ok := allocArgs.Blob.Digest()
 		if !ok {
-			code, _ := allocArgs.Blob.DigestCode()
-			digest, err := putDigest(conclusion.Receipt, code)
+			var err error
+			digest, err = putDigest(conclusion.Receipt, allocArgs.Blob.DigestCode())
 			if err != nil {
 				log.Warn("skipping conclusion of a put that reports no usable digest", zap.Error(err))
 				continue
 			}
-			blob = blobcmds.Blob{Digest: digest, Size: code.Size}
 			acceptReq.PutInvocation = conclusion.Invocation
 			acceptReq.PutReceipt = conclusion.Receipt
 		}
@@ -190,7 +189,7 @@ func resolveAllocations(ctx context.Context, agentStore agent.Store, conclusions
 			// the subject.
 			provider:  allocInv.Subject(),
 			space:     allocArgs.Space,
-			blob:      blob,
+			blob:      blobcmds.Blob{Digest: digest, Size: allocArgs.Blob.Size()},
 			cause:     allocArgs.Cause,
 			acceptReq: acceptReq,
 		})
@@ -200,7 +199,7 @@ func resolveAllocations(ctx context.Context, agentStore agent.Store, conclusions
 
 // putDigest returns the digest a put receipt reports for a blob allocated with
 // only its hash function, checking it is a digest of that function.
-func putDigest(rcpt ucan.Receipt, code blobcmds.BlobDigestCode) (multihash.Multihash, error) {
+func putDigest(rcpt ucan.Receipt, code uint64) (multihash.Multihash, error) {
 	out, _ := rcpt.Out().Unpack()
 	var putOK httpcmds.PutOK
 	if err := putOK.UnmarshalCBOR(bytes.NewReader(out)); err != nil {
@@ -213,8 +212,8 @@ func putDigest(rcpt ucan.Receipt, code blobcmds.BlobDigestCode) (multihash.Multi
 	if err != nil {
 		return nil, fmt.Errorf("decoding reported digest: %w", err)
 	}
-	if decoded.Code != code.DigestCode {
-		return nil, fmt.Errorf("reported digest has code 0x%x, allocation names 0x%x", decoded.Code, code.DigestCode)
+	if decoded.Code != code {
+		return nil, fmt.Errorf("reported digest has code 0x%x, allocation names 0x%x", decoded.Code, code)
 	}
 	return putOK.Blob.Digest, nil
 }
@@ -515,7 +514,7 @@ func acceptOnProvider(
 		// its location commitment names it. Registering under a digest the
 		// commitment does not name would index content the node never
 		// claimed to hold.
-		if _, hashed := put.acceptReq.Blob.Blob(); !hashed {
+		if _, hashed := put.acceptReq.Blob.Digest(); !hashed {
 			if err := checkLocationContent(claims[acceptOK.Site], put.blob.Digest); err != nil {
 				log.Error("location commitment does not match the put", zap.Error(err))
 				continue

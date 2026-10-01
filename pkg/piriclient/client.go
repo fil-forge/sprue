@@ -9,6 +9,7 @@ import (
 
 	blobcmds "github.com/fil-forge/libforge/commands/blob"
 	blobreplicacmds "github.com/fil-forge/libforge/commands/blob/replica"
+	httpcmds "github.com/fil-forge/libforge/commands/http"
 	ucanlib "github.com/fil-forge/libforge/ucan"
 	"github.com/fil-forge/sprue/pkg/lib/ucan_client"
 	"github.com/fil-forge/ucantone/client"
@@ -146,11 +147,17 @@ type AcceptRequest struct {
 	PutReceipt    ucan.Receipt
 }
 
-// putEvidence returns the put invocations and receipts reqs carry.
-func putEvidence(reqs ...*AcceptRequest) ([]ucan.Invocation, []ucan.Receipt) {
+// putEvidence returns the put invocations and receipts reqs carry. A request
+// whose blob names no digest must carry both: the node takes the digest from
+// the receipt and checks it against the invocation, so an accept without them
+// can only fail.
+func putEvidence(reqs ...*AcceptRequest) ([]ucan.Invocation, []ucan.Receipt, error) {
 	var invs []ucan.Invocation
 	var rcpts []ucan.Receipt
 	for _, req := range reqs {
+		if _, hashed := req.Blob.Digest(); !hashed && (req.PutInvocation == nil || req.PutReceipt == nil) {
+			return nil, nil, fmt.Errorf("accept of a blob without a digest needs its %s invocation and receipt (put %s)", httpcmds.Put.Command, req.Put)
+		}
 		if req.PutInvocation != nil {
 			invs = append(invs, req.PutInvocation)
 		}
@@ -158,11 +165,15 @@ func putEvidence(reqs ...*AcceptRequest) ([]ucan.Invocation, []ucan.Receipt) {
 			rcpts = append(rcpts, req.PutReceipt)
 		}
 	}
-	return invs, rcpts
+	return invs, rcpts, nil
 }
 
 // Accept sends a /blob/accept invocation to the piri node.
 func (c *Client) Accept(ctx context.Context, req *AcceptRequest, proofStore ucanlib.ProofStore, options ...invocation.Option) (*blobcmds.AcceptOK, ucan.Invocation, ucan.Receipt, ucan.Container, error) {
+	putInvs, putRcpts, err := putEvidence(req)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
 	inv, prfs, err := c.AcceptInvocation(ctx, req, proofStore, options...)
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("creating accept invocation: %w", err)
@@ -174,7 +185,6 @@ func (c *Client) Accept(ctx context.Context, req *AcceptRequest, proofStore ucan
 		zap.Int("proofs", len(prfs)),
 	)
 
-	putInvs, putRcpts := putEvidence(req)
 	acceptOK, rcpt, meta, err := ucan_client.Execute[*blobcmds.AcceptOK](
 		ctx,
 		c.client,
@@ -232,6 +242,11 @@ func (c *Client) AcceptBatch(ctx context.Context, reqs []*AcceptRequest, proofSt
 	if len(reqs) == 0 {
 		return nil, nil, nil
 	}
+	// Checked for the whole batch up front, so a bad request fails the call
+	// before any chunk has run on the node.
+	if _, _, err := putEvidence(reqs...); err != nil {
+		return nil, nil, err
+	}
 	// Every accept to one node proves the same way, so the chain is resolved
 	// once rather than per invocation.
 	prfs, prfLinks, err := c.acceptProofs(ctx, proofStore)
@@ -264,7 +279,10 @@ func (c *Client) AcceptBatch(ctx context.Context, reqs []*AcceptRequest, proofSt
 		}
 
 		c.logger.Debug("executing accept batch", zap.Int("invocations", len(invs)))
-		putInvs, putRcpts := putEvidence(reqs[start:end]...)
+		putInvs, putRcpts, err := putEvidence(reqs[start:end]...)
+		if err != nil {
+			return results, metas, err
+		}
 		res, err := c.client.ExecuteBatch(batch.NewRequest(ctx, invs,
 			batch.WithDelegations(prfs...),
 			batch.WithInvocations(putInvs...),

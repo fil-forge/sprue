@@ -126,8 +126,7 @@ func newDigestlessPiri(t *testing.T, uploadService identity.Identity) *digestles
 		if acc.putReceipt == nil {
 			return res.SetFailure(errors.New("MissingPutReceipt", "no %s receipt in the request", httpcmds.Put.Command))
 		}
-		code, _ := args.Blob.DigestCode()
-		content, err := putDigest(acc.putReceipt, code)
+		content, err := putDigest(acc.putReceipt, args.Blob.DigestCode())
 		if err != nil {
 			return err
 		}
@@ -313,22 +312,23 @@ func TestDigestlessBlobAdd(t *testing.T) {
 
 		allocs := w.piri.Allocates()
 		require.Len(t, allocs, 1)
-		code, ok := allocs[0].Blob.DigestCode()
-		require.True(t, ok, "the allocation names no digest")
-		require.Equal(t, blobcmds.BlobDigestCode{DigestCode: multihash.SHA2_256, Size: 1024}, code)
+		_, hasDigest := allocs[0].Blob.Digest()
+		require.False(t, hasDigest, "the allocation names no digest")
+		require.Equal(t, uint64(multihash.SHA2_256), allocs[0].Blob.DigestCode())
+		require.EqualValues(t, 1024, allocs[0].Blob.Size())
 		require.Equal(t, add.inv.Task().Link(), allocs[0].Cause)
 
 		key := testutil.Must(deriveDID(add.inv.Task().Link().Hash()))(t)
 		require.Equal(t, key.DID(), add.putInv.Issuer(), "the put key derives from the add task")
 		var putArgs httpcmds.PutArguments
 		require.NoError(t, putArgs.UnmarshalCBOR(bytes.NewReader(add.putInv.ArgumentsBytes())))
-		_, ok = putArgs.Body.DigestCode()
-		require.True(t, ok, "the put body names no digest")
+		_, hasDigest = putArgs.Body.Digest()
+		require.False(t, hasDigest, "the put body names no digest")
 
 		var accArgs blobcmds.AcceptArguments
 		require.NoError(t, accArgs.UnmarshalCBOR(bytes.NewReader(add.accInv.ArgumentsBytes())))
-		_, ok = accArgs.Blob.DigestCode()
-		require.True(t, ok, "the accept names no digest")
+		_, hasDigest = accArgs.Blob.Digest()
+		require.False(t, hasDigest, "the accept names no digest")
 		require.Equal(t, add.accInv.Task().Link(), addOK.Site.Task)
 		require.Empty(t, w.piri.Accepts(), "nothing is accepted before the put")
 	})

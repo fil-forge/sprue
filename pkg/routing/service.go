@@ -128,8 +128,8 @@ func (s *Service) SelectStorageProvider(ctx context.Context, space did.DID, blob
 		option(cfg)
 	}
 	log := s.logger.With(zap.Stringer("space", space), zap.Uint64("size", blob.Size()))
-	if b, ok := blob.Blob(); ok {
-		log = log.With(zap.String("digest", digestutil.Format(b.Digest)))
+	if digest, ok := blob.Digest(); ok {
+		log = log.With(zap.String("digest", digestutil.Format(digest)))
 	}
 	log.Debug("selecting storage provider")
 

@@ -42,7 +42,7 @@ func NewBlobAddHandler(id identity.Identity, provisioningSvc *provisioning.Servi
 			args := req.Task().Arguments()
 			blob := args.Blob
 			space := req.Invocation().Subject()
-			digested, hashed := blob.Blob()
+			digest, hashed := blob.Digest()
 
 			log := log.With(zap.Stringer("space", space), blobField(blob))
 			log.Debug("adding blob")
@@ -97,7 +97,7 @@ func NewBlobAddHandler(id identity.Identity, provisioningSvc *provisioning.Servi
 			err = blobregistry.ErrEntryNotFound
 			var reg blobregistry.Record
 			if hashed {
-				reg, err = blobRegistry.Get(req.Context(), space, digested.Digest)
+				reg, err = blobRegistry.Get(req.Context(), space, digest)
 				if err != nil && !errors.Is(err, blobregistry.ErrEntryNotFound) {
 					log.Error("failed to get blob registration", zap.Error(err))
 					return err
@@ -259,8 +259,8 @@ func genPut(blob blobcmds.BlobSpec, cause cid.Cid, allocInv ucan.Invocation, all
 	// `/http/put` invocation. A blob named without its digest derives it from
 	// the `/blob/add` task instead, which only the adding client knows.
 	keySource := cause.Hash()
-	if b, ok := blob.Blob(); ok {
-		keySource = b.Digest
+	if digest, ok := blob.Digest(); ok {
+		keySource = digest
 	}
 	blobProvider, err := deriveDID(keySource)
 	if err != nil {
@@ -385,7 +385,7 @@ func maybeAccept(
 	// If put has already succeeded, we can execute `/blob/accept` right away.
 	// That happens only when the provider already holds the blob, which it can
 	// know only from its digest.
-	if digested, ok := blob.Blob(); ok && putRcpt != nil && putRcpt.Out().IsOK() {
+	if digest, ok := blob.Digest(); ok && putRcpt != nil && putRcpt.Out().IsOK() {
 		res, inv, rcpt, meta, err := c.Accept(ctx, &accReq, proofStore, invocation.WithNoNonce())
 		if err != nil {
 			log.Error("failed to execute accept on piri", zap.Error(err))
@@ -413,7 +413,7 @@ func maybeAccept(
 			return nil, nil, acceptExtras{}, err
 		}
 
-		err = blobRegistry.Register(ctx, space, digested, cause)
+		err = blobRegistry.Register(ctx, space, blobcmds.Blob{Digest: digest, Size: blob.Size()}, cause)
 		if err != nil {
 			log.Error("failed to register blob", zap.Error(err))
 			return nil, nil, acceptExtras{}, err
@@ -433,11 +433,10 @@ const MissingNonceErrorName = "MissingNonce"
 // blobField logs a blob by its digest, or by its hash function when it names
 // no digest.
 func blobField(blob blobcmds.BlobSpec) zap.Field {
-	if b, ok := blob.Blob(); ok {
-		return zap.Dict("blob", zap.String("digest", digestutil.Format(b.Digest)), zap.Uint64("size", b.Size))
+	if digest, ok := blob.Digest(); ok {
+		return zap.Dict("blob", zap.String("digest", digestutil.Format(digest)), zap.Uint64("size", blob.Size()))
 	}
-	code, _ := blob.DigestCode()
-	return zap.Dict("blob", zap.Uint64("digestCode", code.DigestCode), zap.Uint64("size", code.Size))
+	return zap.Dict("blob", zap.Uint64("digestCode", blob.DigestCode()), zap.Uint64("size", blob.Size()))
 }
 
 // hasErrorName reports whether err is, or wraps, a named failure called name,

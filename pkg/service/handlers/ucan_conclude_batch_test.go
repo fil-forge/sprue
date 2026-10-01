@@ -91,7 +91,8 @@ func newCountingPiri(t *testing.T, storageProvider ucan.Issuer, uploadService id
 	) error {
 		p.accepts.Add(1)
 		args := req.Task().Arguments()
-		blob, _ := args.Blob.Blob()
+		digest, _ := args.Blob.Digest()
+		blob := blobcmds.Blob{Digest: digest, Size: args.Blob.Size()}
 		p.mu.Lock()
 		p.acceptTasks[string(blob.Digest)] = req.Task().Link()
 		p.mu.Unlock()
