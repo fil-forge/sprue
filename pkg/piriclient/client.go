@@ -434,9 +434,9 @@ func (c *Client) ReleaseInvocation(ctx context.Context, req *ReleaseRequest, pro
 }
 
 // Reject sends a /blob/reject invocation to the piri node, retiring the
-// space's parked (never-accepted) blob, named by its digest or, for a blob
-// allocated without one, by its allocation. Piri refuses accepted blobs with a
-// BlobAccepted failure; otherwise the handler is idempotent.
+// allocation of a parked (never-accepted) blob, named by the /blob/allocate
+// task that made it. Piri refuses accepted blobs with a BlobAccepted failure;
+// otherwise the handler is idempotent.
 func (c *Client) Reject(ctx context.Context, req *blobcmds.RejectArguments, proofStore ucanlib.ProofStore, options ...invocation.Option) (*blobcmds.RejectOK, ucan.Invocation, ucan.Receipt, error) {
 	inv, prfs, err := c.RejectInvocation(ctx, req, proofStore, options...)
 	if err != nil {
@@ -465,9 +465,8 @@ func (c *Client) Reject(ctx context.Context, req *blobcmds.RejectArguments, proo
 // RejectInvocation returns the invocation for the reject request.
 func (c *Client) RejectInvocation(ctx context.Context, req *blobcmds.RejectArguments, proofStore ucanlib.ProofStore, options ...invocation.Option) (ucan.Invocation, []ucan.Delegation, error) {
 	// As with allocate/accept/release, the proof chain is rooted at the
-	// storage provider, so the subject is the provider DID and the space
-	// travels in the arguments. Cause is not forwarded — it is upload-service
-	// routing metadata, meaningless to the node.
+	// storage provider, so the subject is the provider DID. The node knows
+	// the space and blob of the allocation the arguments name.
 	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.issuer.DID(), blobcmds.Reject.Command, c.piriDID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("building proof chain: %w", err)

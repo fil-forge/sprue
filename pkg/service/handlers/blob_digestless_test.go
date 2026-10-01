@@ -413,25 +413,34 @@ func TestDigestlessConclude(t *testing.T) {
 func TestDigestlessAbort(t *testing.T) {
 	w := newDigestlessWorld(t)
 	add := w.addDigestless(t, 1024)
+	abort := func(space ucan.Issuer) ucan.Receipt {
+		inv := testutil.Must(blobcmds.Abort.Invoke(
+			testutil.Alice,
+			space.DID(),
+			&blobcmds.AbortArguments{Add: add.inv.Task().Link()},
+			invocation.WithAudience(w.uploadService.DID()),
+		))(t)
+		req := execution.NewRequest(t.Context(), inv)
+		res := testutil.Must(execution.NewResponse(inv.Task().Link(), execution.WithIssuer(w.uploadService)))(t)
+		require.NoError(t, w.abort.Handler(req, res))
+		return res.Receipt()
+	}
 
-	inv := testutil.Must(blobcmds.Abort.Invoke(
-		testutil.Alice,
-		w.space.DID(),
-		&blobcmds.AbortArguments{Cause: add.inv.Task().Link()},
-		invocation.WithAudience(w.uploadService.DID()),
-	))(t)
-	req := execution.NewRequest(t.Context(), inv)
-	res := testutil.Must(execution.NewResponse(inv.Task().Link(), execution.WithIssuer(w.uploadService)))(t)
-	require.NoError(t, w.abort.Handler(req, res))
-	_, err := blobcmds.Abort.Unpack(res.Receipt())
-	require.NoError(t, err)
+	t.Run("another space cannot abort the upload", func(t *testing.T) {
+		_, err := blobcmds.Abort.Unpack(abort(testutil.RandomIssuer(t)))
+		var model datamodel.ErrorModel
+		require.ErrorAs(t, err, &model)
+		require.Equal(t, blobcmds.MissingCauseErrorName, model.Name())
+		require.Empty(t, w.piri.Rejects())
+	})
 
-	rejects := w.piri.Rejects()
-	require.Len(t, rejects, 1)
-	require.Equal(t, w.space.DID(), rejects[0].Space())
-	link, ok := rejects[0].Allocation()
-	require.True(t, ok, "an upload without a digest is rejected by its allocation")
-	require.Equal(t, add.allocInv.Task().Link(), link)
+	t.Run("the space rejects the allocation its add made", func(t *testing.T) {
+		_, err := blobcmds.Abort.Unpack(abort(w.space))
+		require.NoError(t, err)
+		rejects := w.piri.Rejects()
+		require.Len(t, rejects, 1)
+		require.Equal(t, add.allocInv.Task().Link(), rejects[0].Allocation)
+	})
 }
 
 func TestDigestlessBlobAddReplay(t *testing.T) {

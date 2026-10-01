@@ -22,14 +22,13 @@ import (
 
 // NewBlobAbortHandler abandons a space's in-flight upload of a parked
 // (never-accepted) blob: it recovers the storage node holding it from the
-// Cause receipt chain and forwards a /blob/reject there. The reject names the
-// blob as the upload did: by digest, or, for a blob added without one, by its
-// allocation, so the node also drops the upload it is still expecting. Nothing is
+// receipt chain of the Add task and forwards a /blob/reject of the allocation
+// the add made there, which the node knows the space and blob of. Nothing is
 // deregistered — registration happens only at accept, which a parked blob
 // never reached.
 //
-// A cause that does not resolve to a known /blob/add task fails with
-// the named error MissingCause; a node refusing the translated reject
+// An add that does not resolve to a known /blob/add task in the space fails
+// with the named error MissingCause; a node refusing the translated reject
 // because the space has accepted the blob surfaces the node's BlobAccepted
 // as a named failure, so the client can distinguish "use /blob/remove"
 // from a retryable fault. Other forward errors are propagated as generic
@@ -41,20 +40,20 @@ func NewBlobAbortHandler(router *routing.Service, nodeProvider piriclient.Provid
 		func(req *binding.Request[*blobcmds.AbortArguments], res *binding.Response[*blobcmds.AbortOK]) error {
 			args := req.Task().Arguments()
 			space := req.Invocation().Subject()
-			log := log.With(zap.Stringer("space", space), zap.Stringer("cause", args.Cause))
+			log := log.With(zap.Stringer("space", space), zap.Stringer("add", args.Add))
 			log.Debug("aborting blob upload")
 
-			if !args.Cause.Defined() {
+			if !args.Add.Defined() {
 				return res.SetFailure(blobcmds.ErrMissingCause)
 			}
 
-			provider, reject, err := rejectionFor(req.Context(), agentStore, space, args.Cause)
+			provider, reject, err := rejectionFor(req.Context(), agentStore, space, args.Add)
 			if err != nil {
-				// An unknown cause — one whose receipt chain we don't hold —
-				// cannot route to a node; per the RFC it is the named error
-				// MissingCause, not a retryable execution fault.
-				if errors.Is(err, agent.ErrReceiptNotFound) || errors.Is(err, agent.ErrInvocationNotFound) {
-					log.Debug("cause does not resolve to a known blob add task", zap.Error(err))
+				// An unknown add — one whose receipt chain we don't hold, or
+				// another space's — cannot route to a node; per the RFC it is
+				// the named error MissingCause, not a retryable execution fault.
+				if errors.Is(err, agent.ErrReceiptNotFound) || errors.Is(err, agent.ErrInvocationNotFound) || errors.Is(err, errOtherSpace) {
+					log.Debug("add does not resolve to a known blob add task", zap.Error(err))
 					return res.SetFailure(errors.New(blobcmds.MissingCauseErrorName,
 						"cause does not resolve to a known /blob/add task"))
 				}
@@ -102,12 +101,17 @@ func NewBlobAbortHandler(router *routing.Service, nodeProvider piriclient.Provid
 	)
 }
 
-// rejectionFor recovers, from the receipt chain of the /blob/add task cause,
-// the storage node an upload went to and the /blob/reject that retires it
-// there. An accept that names the digest rejects by digest; one that names
-// only the hash function rejects the allocation its /http/put was made to.
-func rejectionFor(ctx context.Context, agentStore agent.Store, space did.DID, cause cid.Cid) (did.DID, blobcmds.RejectArguments, error) {
-	addRcpt, err := agentStore.GetReceipt(ctx, cause)
+// errOtherSpace reports an add task that belongs to a space other than the
+// abort's.
+var errOtherSpace = errors.New("OtherSpace", "add task belongs to another space")
+
+// rejectionFor recovers, from the receipt chain of the /blob/add task add, the
+// storage node an upload went to and the /blob/reject that retires it there:
+// a reject of the allocation its /http/put was made to. The reject names no
+// space, so the add is checked to be space's here; another space's add fails
+// with errOtherSpace.
+func rejectionFor(ctx context.Context, agentStore agent.Store, space did.DID, add cid.Cid) (did.DID, blobcmds.RejectArguments, error) {
+	addRcpt, err := agentStore.GetReceipt(ctx, add)
 	if err != nil {
 		return did.Undef, blobcmds.RejectArguments{}, fmt.Errorf("getting receipt for blob add: %w", err)
 	}
@@ -128,9 +132,8 @@ func rejectionFor(ctx context.Context, agentStore agent.Store, space did.DID, ca
 	if err := accArgs.UnmarshalCBOR(bytes.NewReader(accInv.ArgumentsBytes())); err != nil {
 		return did.Undef, blobcmds.RejectArguments{}, fmt.Errorf("unmarshaling accept arguments: %w", err)
 	}
-	provider := accInv.Subject()
-	if digest, ok := accArgs.Blob.Digest(); ok {
-		return provider, blobcmds.RejectByDigest(space, digest), nil
+	if accArgs.Space != space {
+		return did.Undef, blobcmds.RejectArguments{}, errOtherSpace
 	}
 
 	putInv, err := agentStore.GetInvocation(ctx, accArgs.Put.Task)
@@ -141,5 +144,5 @@ func rejectionFor(ctx context.Context, agentStore agent.Store, space did.DID, ca
 	if err := putArgs.UnmarshalCBOR(bytes.NewReader(putInv.ArgumentsBytes())); err != nil {
 		return did.Undef, blobcmds.RejectArguments{}, fmt.Errorf("unmarshaling HTTP PUT arguments: %w", err)
 	}
-	return provider, blobcmds.RejectByAllocation(space, putArgs.Destination.Task), nil
+	return accInv.Subject(), blobcmds.RejectArguments{Allocation: putArgs.Destination.Task}, nil
 }
