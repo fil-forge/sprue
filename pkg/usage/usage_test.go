@@ -14,6 +14,9 @@ import (
 	spacediff "github.com/fil-forge/sprue/pkg/store/space_diff"
 	spacediffmemory "github.com/fil-forge/sprue/pkg/store/space_diff/memory"
 	spacediffpostgres "github.com/fil-forge/sprue/pkg/store/space_diff/postgres"
+	uploaddiff "github.com/fil-forge/sprue/pkg/store/upload_diff"
+	uploaddiffmemory "github.com/fil-forge/sprue/pkg/store/upload_diff/memory"
+	uploaddiffpostgres "github.com/fil-forge/sprue/pkg/store/upload_diff/postgres"
 	"github.com/fil-forge/sprue/pkg/usage"
 	"github.com/fil-forge/ucantone/did"
 	"github.com/fil-forge/ucantone/errors"
@@ -37,14 +40,15 @@ var base = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 const window = time.Hour
 
 type stores struct {
-	diffs   spacediff.Store
-	metrics metrics.SpaceStore
+	diffs       spacediff.Store
+	uploadDiffs uploaddiff.Store
+	metrics     metrics.SpaceStore
 }
 
 func makeStores(t *testing.T, k StoreKind) stores {
 	switch k {
 	case Memory:
-		return stores{diffs: spacediffmemory.New(), metrics: metricsmemory.NewSpaceStore()}
+		return stores{diffs: spacediffmemory.New(), uploadDiffs: uploaddiffmemory.New(), metrics: metricsmemory.NewSpaceStore()}
 	case Postgres:
 		if testutil.IsRunningInCI(t) && runtime.GOOS == "linux" {
 			if !testutil.IsDockerAvailable(t) {
@@ -55,15 +59,26 @@ func makeStores(t *testing.T, k StoreKind) stores {
 			t.SkipNow()
 		}
 		pool := testutil.CreatePostgres(t)
-		return stores{diffs: spacediffpostgres.New(pool), metrics: metricspostgres.NewSpaceStore(pool)}
+		return stores{diffs: spacediffpostgres.New(pool), uploadDiffs: uploaddiffpostgres.New(pool), metrics: metricspostgres.NewSpaceStore(pool)}
 	}
 	panic("unknown store kind")
+}
+
+// memoryStores is the in-memory bundle the tests that do not need the store
+// matrix build directly.
+func memoryStores() stores {
+	return stores{
+		diffs:       spacediffmemory.New(),
+		uploadDiffs: uploaddiffmemory.New(),
+		metrics:     metricsmemory.NewSpaceStore(),
+	}
 }
 
 func newService(t *testing.T, s stores, now time.Time) *usage.Service {
 	t.Helper()
 	return usage.NewService(
 		s.diffs,
+		s.uploadDiffs,
 		s.metrics,
 		zaptest.NewLogger(t),
 		usage.WithClock(func() time.Time { return now }),
@@ -94,6 +109,37 @@ func seedRemove(t *testing.T, s stores, space did.DID, size uint64, at time.Time
 		metrics.BlobRemoveTotalMetric:     1,
 		metrics.BlobRemoveSizeTotalMetric: size,
 	})
+}
+
+// seedUpload records one object-count change the way the upload store commits
+// it: an upload_diff row and the matching counter, the counter moving only when
+// the log took the row.
+func seedUpload(t *testing.T, s stores, space did.DID, delta int64, at time.Time, metric string) {
+	t.Helper()
+	recorded, err := s.uploadDiffs.Put(t.Context(), space, testutil.RandomCID(t), delta, at)
+	require.NoError(t, err)
+	require.True(t, recorded, "the change should be new to the log")
+	require.NoError(t, s.metrics.IncrementTotals(t.Context(), space, map[string]uint64{metric: 1}))
+}
+
+// seedUploadAdd and seedUploadRemove are the two directions of a count change.
+func seedUploadAdd(t *testing.T, s stores, space did.DID, at time.Time) {
+	t.Helper()
+	seedUpload(t, s, space, 1, at, metrics.UploadAddTotalMetric)
+}
+
+func seedUploadRemove(t *testing.T, s stores, space did.DID, at time.Time) {
+	t.Helper()
+	seedUpload(t, s, space, -1, at, metrics.UploadRemoveTotalMetric)
+}
+
+// uploads reads the object-count gauge out of a series.
+func uploads(samples []usage.Sample) []uint64 {
+	out := make([]uint64, 0, len(samples))
+	for _, s := range samples {
+		out = append(out, s.UploadCount)
+	}
+	return out
 }
 
 // seedChange applies one change: a diff row and the matching counters.
@@ -346,6 +392,61 @@ func testSampleWithStoreKind(k StoreKind) func(*testing.T) {
 			}
 		})
 
+		t.Run("counts uploads held at each bucket end", func(t *testing.T) {
+			s := makeStores(t, k)
+			space := testutil.RandomDID(t)
+
+			seedUploadAdd(t, s, space, base.Add(30*time.Minute))
+			seedUploadAdd(t, s, space, base.Add(window+30*time.Minute))
+			seedUploadRemove(t, s, space, base.Add(3*window+30*time.Minute))
+
+			to := base.Add(5 * window)
+			series, err := newService(t, s, to).Sample(t.Context(), space, base, to, window)
+			require.NoError(t, err)
+			require.Equal(t, []uint64{1, 2, 2, 1, 1}, uploads(run(t, series)))
+		})
+
+		t.Run("counts uploads independently of stored bytes", func(t *testing.T) {
+			s := makeStores(t, k)
+			space := testutil.RandomDID(t)
+
+			// One upload of 1024 bytes: the byte gauge and the object gauge
+			// move together but are read from different logs.
+			seedAdd(t, s, space, 1024, base.Add(30*time.Minute))
+			seedUploadAdd(t, s, space, base.Add(30*time.Minute))
+
+			to := base.Add(2 * window)
+			series, err := newService(t, s, to).Sample(t.Context(), space, base, to, window)
+			require.NoError(t, err)
+			require.Equal(t, []uint64{1024, 1024}, stored(run(t, series)))
+			require.Equal(t, []uint64{1, 1}, uploads(run(t, series)))
+		})
+
+		t.Run("carries uploads held before the range through all of it", func(t *testing.T) {
+			s := makeStores(t, k)
+			space := testutil.RandomDID(t)
+			seedUploadAdd(t, s, space, base.Add(-48*time.Hour))
+
+			to := base.Add(3 * window)
+			series, err := newService(t, s, to).Sample(t.Context(), space, base, to, window)
+			require.NoError(t, err)
+			require.Equal(t, []uint64{1, 1, 1}, uploads(run(t, series)))
+		})
+
+		t.Run("excludes uploads added after the range", func(t *testing.T) {
+			s := makeStores(t, k)
+			space := testutil.RandomDID(t)
+			seedUploadAdd(t, s, space, base.Add(30*time.Minute))
+			// Recorded after the range but before now, so it is in the counters
+			// and must be shed before the walk back begins.
+			seedUploadAdd(t, s, space, base.Add(4*window))
+
+			to := base.Add(2 * window)
+			series, err := newService(t, s, to.Add(3*window)).Sample(t.Context(), space, base, to, window)
+			require.NoError(t, err)
+			require.Equal(t, []uint64{1, 1}, uploads(run(t, series)))
+		})
+
 		t.Run("returns 768 samples for 32 days of hourly buckets", func(t *testing.T) {
 			s := makeStores(t, k)
 			space := testutil.RandomDID(t)
@@ -364,7 +465,7 @@ func testSampleWithStoreKind(k StoreKind) func(*testing.T) {
 }
 
 func TestSampleRejectsBadArguments(t *testing.T) {
-	s := stores{diffs: spacediffmemory.New(), metrics: metricsmemory.NewSpaceStore()}
+	s := memoryStores()
 	svc := newService(t, s, base.Add(24*time.Hour))
 	space := testutil.RandomDID(t)
 
@@ -390,7 +491,7 @@ func TestSampleRejectsBadArguments(t *testing.T) {
 }
 
 func TestSampleRejectsMoreBucketsThanTheLimit(t *testing.T) {
-	s := stores{diffs: spacediffmemory.New(), metrics: metricsmemory.NewSpaceStore()}
+	s := memoryStores()
 	to := base.Add((usage.MaxSamples + 1) * window)
 	// The count is taken after the range is clamped to now, so the clock has to
 	// be past the end for the whole range to count.
@@ -411,7 +512,7 @@ func TestSampleRejectsMoreBucketsThanTheLimit(t *testing.T) {
 // exported and must refuse one rather than panic or quietly measure a range it
 // cannot express.
 func TestSampleRejectsASpanThatSaturatesADuration(t *testing.T) {
-	s := stores{diffs: spacediffmemory.New(), metrics: metricsmemory.NewSpaceStore()}
+	s := memoryStores()
 	now := time.Unix(1<<40, 0).UTC()
 	svc := newService(t, s, now)
 	space := testutil.RandomDID(t)
@@ -433,7 +534,7 @@ func TestSampleRejectsASpanThatSaturatesADuration(t *testing.T) {
 // A range the service can express is served in full: its last bucket ends where
 // the range does, however far apart the ends are.
 func TestSampleCoversAWideButExpressibleRange(t *testing.T) {
-	s := stores{diffs: spacediffmemory.New(), metrics: metricsmemory.NewSpaceStore()}
+	s := memoryStores()
 	from := time.Date(1900, 1, 1, 0, 0, 0, 0, time.UTC)
 	now := time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC)
 	svc := newService(t, s, now)
@@ -493,6 +594,7 @@ func (m *movingSpaceStore) Get(ctx context.Context, space did.DID) (map[string]u
 		if err := m.SpaceStore.IncrementTotals(ctx, space, map[string]uint64{
 			metrics.BlobAddTotalMetric:     1,
 			metrics.BlobAddSizeTotalMetric: 512,
+			metrics.UploadAddTotalMetric:   1,
 		}); err != nil {
 			return nil, err
 		}
@@ -506,8 +608,9 @@ func TestSampleRefusesAnInconsistentRead(t *testing.T) {
 
 	t.Run("fails when the space never settles", func(t *testing.T) {
 		s := stores{
-			diffs:   spacediffmemory.New(),
-			metrics: &movingSpaceStore{SpaceStore: metricsmemory.NewSpaceStore(), settleAfter: 100},
+			diffs:       spacediffmemory.New(),
+			uploadDiffs: uploaddiffmemory.New(),
+			metrics:     &movingSpaceStore{SpaceStore: metricsmemory.NewSpaceStore(), settleAfter: 100},
 		}
 		_, err := newService(t, s, to).Sample(t.Context(), space, base, to, window)
 		var named errors.Named
@@ -517,8 +620,9 @@ func TestSampleRefusesAnInconsistentRead(t *testing.T) {
 
 	t.Run("succeeds once the space settles", func(t *testing.T) {
 		s := stores{
-			diffs:   spacediffmemory.New(),
-			metrics: &movingSpaceStore{SpaceStore: metricsmemory.NewSpaceStore(), settleAfter: 1},
+			diffs:       spacediffmemory.New(),
+			uploadDiffs: uploaddiffmemory.New(),
+			metrics:     &movingSpaceStore{SpaceStore: metricsmemory.NewSpaceStore(), settleAfter: 1},
 		}
 		series, err := newService(t, s, to).Sample(t.Context(), space, base, to, window)
 		require.NoError(t, err)
