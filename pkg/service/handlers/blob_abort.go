@@ -109,7 +109,10 @@ var errOtherSpace = errors.New("OtherSpace", "add task belongs to another space"
 // storage node an upload went to and the /blob/reject that retires it there:
 // a reject of the allocation its /http/put was made to. The reject names no
 // space, so the add is checked to be space's here; another space's add fails
-// with errOtherSpace.
+// with errOtherSpace. The chain runs through the /blob/accept invocation, which
+// /blob/add issues whether or not it executes it, so a blob that was never
+// accepted still has one. Whether the blob was accepted is the storage node's
+// to decide, by refusing the reject with BlobAccepted.
 func rejectionFor(ctx context.Context, agentStore agent.Store, space did.DID, add cid.Cid) (did.DID, blobcmds.RejectArguments, error) {
 	addRcpt, err := agentStore.GetReceipt(ctx, add)
 	if err != nil {
