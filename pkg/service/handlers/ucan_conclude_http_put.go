@@ -165,9 +165,11 @@ func resolveAllocations(ctx context.Context, agentStore agent.Store, conclusions
 		// The accept names the blob as the allocation did, so its task link
 		// is the one /blob/add returned as AddOK.Site.
 		acceptReq := &piriclient.AcceptRequest{
-			Space: allocArgs.Space,
-			Blob:  allocArgs.Blob,
-			Put:   conclusion.Invocation.Task().Link(),
+			Space:         allocArgs.Space,
+			Blob:          allocArgs.Blob,
+			Put:           conclusion.Invocation.Task().Link(),
+			PutInvocation: conclusion.Invocation,
+			PutReceipt:    conclusion.Receipt,
 		}
 		digest, ok := allocArgs.Blob.Digest()
 		if !ok {
@@ -177,8 +179,6 @@ func resolveAllocations(ctx context.Context, agentStore agent.Store, conclusions
 				log.Warn("skipping conclusion of a put that reports no usable digest", zap.Error(err))
 				continue
 			}
-			acceptReq.PutInvocation = conclusion.Invocation
-			acceptReq.PutReceipt = conclusion.Receipt
 		}
 
 		puts = append(puts, &concludedPut{

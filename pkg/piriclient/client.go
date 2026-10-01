@@ -141,8 +141,11 @@ type AcceptRequest struct {
 	// from the /http/put receipt.
 	Blob blobcmds.BlobSpec
 	Put  cid.Cid // Link to the /http/put task that uploaded the blob
-	// PutInvocation and PutReceipt travel in the request container when Blob
-	// names no digest, so the node can check the digest the receipt reports.
+	// PutInvocation and PutReceipt travel in the request container when they
+	// are known. The invocation names the allocation the put was made to, so
+	// the node records which allocation it accepted; for a Blob that names no
+	// digest both are required, and the node checks the digest the receipt
+	// reports.
 	PutInvocation ucan.Invocation
 	PutReceipt    ucan.Receipt
 }

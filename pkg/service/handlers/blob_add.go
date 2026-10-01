@@ -368,9 +368,11 @@ func maybeAccept(
 	proofStore := ucanlib.NewContainerProofStore(providerInfo.Proofs)
 
 	accReq := piriclient.AcceptRequest{
-		Space: space,
-		Blob:  blob,
-		Put:   putInv.Task().Link(),
+		Space:         space,
+		Blob:          blob,
+		Put:           putInv.Task().Link(),
+		PutInvocation: putInv,
+		PutReceipt:    putRcpt,
 	}
 
 	accInv, _, err := c.AcceptInvocation(ctx, &accReq, proofStore, invocation.WithNoNonce())
