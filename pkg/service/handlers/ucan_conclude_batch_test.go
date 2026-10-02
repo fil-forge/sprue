@@ -91,15 +91,17 @@ func newCountingPiri(t *testing.T, storageProvider ucan.Issuer, uploadService id
 	) error {
 		p.accepts.Add(1)
 		args := req.Task().Arguments()
+		digest, _ := args.Blob.Digest()
+		blob := blobcmds.Blob{Digest: digest, Size: args.Blob.Size()}
 		p.mu.Lock()
-		p.acceptTasks[string(args.Blob.Digest)] = req.Task().Link()
+		p.acceptTasks[string(blob.Digest)] = req.Task().Link()
 		p.mu.Unlock()
-		if p.reject[string(args.Blob.Digest)] {
+		if p.reject[string(blob.Digest)] {
 			return res.SetFailure(errors.New("BlobNotFound", "blob not delivered"))
 		}
 		// A node reporting success with a result that is not an acceptance:
 		// issued directly, since the typed response only emits an AcceptOK.
-		if payload, ok := p.malformed[string(args.Blob.Digest)]; ok {
+		if payload, ok := p.malformed[string(blob.Digest)]; ok {
 			rcpt, err := receipt.IssueOK(storageProvider, req.Task().Link(), payload)
 			if err != nil {
 				return err
@@ -112,12 +114,12 @@ func newCountingPiri(t *testing.T, storageProvider ucan.Issuer, uploadService id
 		// them (`pkg/ucanhandlers/blob/accept.go`): the commitment by the
 		// invocation's own link, the PDP by its task link.
 		claim, err := invocation.Invoke(storageProvider, storageProvider.DID(),
-			assertLocationCommand, datamodel.Map{"digest": []byte(args.Blob.Digest)})
+			assertLocationCommand, datamodel.Map{"digest": []byte(blob.Digest)})
 		if err != nil {
 			return err
 		}
 		pdpAccept, err := invocation.Invoke(storageProvider, storageProvider.DID(),
-			pdpAcceptCommand, datamodel.Map{"blob": []byte(args.Blob.Digest)},
+			pdpAcceptCommand, datamodel.Map{"blob": []byte(blob.Digest)},
 			invocation.WithNoExpiration(), invocation.WithNoNonce())
 		if err != nil {
 			return err
@@ -159,7 +161,7 @@ func parkBlobs(t *testing.T, ctx context.Context, deps *httpPutDeps, uploadServi
 		allocInv, err := blobcmds.Allocate.Invoke(
 			uploadService,
 			storageProvider.DID(),
-			&blobcmds.AllocateArguments{Space: space, Blob: blob, Cause: cause},
+			&blobcmds.AllocateArguments{Space: space, Blob: blobcmds.SpecFromBlob(blob), Cause: cause},
 			invocation.WithAudience(storageProvider.DID()),
 		)
 		require.NoError(t, err)
@@ -170,7 +172,7 @@ func parkBlobs(t *testing.T, ctx context.Context, deps *httpPutDeps, uploadServi
 		putInv, err := httpcmds.Put.Invoke(
 			blobProvider,
 			blobProvider.DID(),
-			&httpcmds.PutArguments{Body: blob, Destination: promise.AwaitOK{Task: allocInv.Task().Link()}},
+			&httpcmds.PutArguments{Body: blobcmds.SpecFromBlob(blob), Destination: promise.AwaitOK{Task: allocInv.Task().Link()}},
 			invocation.WithAudience(blobProvider.DID()),
 		)
 		require.NoError(t, err)

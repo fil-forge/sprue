@@ -10,6 +10,7 @@ import (
 	"time"
 
 	blobcmds "github.com/fil-forge/libforge/commands/blob"
+	httpcmds "github.com/fil-forge/libforge/commands/http"
 	"github.com/fil-forge/libforge/identity"
 	ucanlib "github.com/fil-forge/libforge/ucan"
 	"github.com/fil-forge/sprue/internal/testutil"
@@ -23,7 +24,9 @@ import (
 	"github.com/fil-forge/ucantone/ucan/delegation"
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/fil-forge/ucantone/ucan/promise"
+	"github.com/fil-forge/ucantone/ucan/receipt"
 	"github.com/fil-forge/ucantone/validator"
+	"github.com/multiformats/go-multicodec"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 )
@@ -57,10 +60,9 @@ func TestAcceptInvocationExpiry(t *testing.T) {
 	proofStore := ucanlib.NewContainerProofStore(container.New(container.WithDelegations(acceptProof)))
 
 	req := &AcceptRequest{
-		Space:  testutil.RandomDID(t),
-		Digest: testutil.RandomMultihash(t),
-		Size:   1024,
-		Put:    testutil.RandomCID(t),
+		Space: testutil.RandomDID(t),
+		Blob:  blobcmds.SpecFromDigest(testutil.RandomMultihash(t), 1024),
+		Put:   testutil.RandomCID(t),
 	}
 
 	inv, _, err := client.AcceptInvocation(ctx, req, proofStore, invocation.WithNoNonce())
@@ -158,10 +160,9 @@ func acceptRequests(t *testing.T, n int) []*AcceptRequest {
 	reqs := make([]*AcceptRequest, n)
 	for i := range reqs {
 		reqs[i] = &AcceptRequest{
-			Space:  testutil.RandomDID(t),
-			Digest: testutil.RandomMultihash(t),
-			Size:   1024,
-			Put:    testutil.RandomCID(t),
+			Space: testutil.RandomDID(t),
+			Blob:  blobcmds.SpecFromDigest(testutil.RandomMultihash(t), 1024),
+			Put:   testutil.RandomCID(t),
 		}
 	}
 	return reqs
@@ -254,5 +255,39 @@ func TestAcceptBatchKeepsCompletedChunks(t *testing.T) {
 	}
 	for i := maxAcceptBatch; i < len(reqs); i++ {
 		require.Nil(t, results[i].Receipt, "accept %d never ran, so it has no receipt", i)
+	}
+}
+
+// An accept of a blob without a digest is refused before anything is sent
+// when it lacks its /http/put invocation or receipt: the node could only fail
+// it. In a batch the check covers every request, so no chunk runs.
+func TestAcceptNeedsPutEvidenceWithoutDigest(t *testing.T) {
+	c, proofs, node := acceptFixture(t, nil)
+	spec := blobcmds.SpecFromDigestCode(uint64(multicodec.Sha2_256), 1024)
+
+	putter := testutil.RandomIssuer(t)
+	putInv := testutil.Must(httpcmds.Put.Invoke(putter, putter.DID(), &httpcmds.PutArguments{
+		Body:        spec,
+		Destination: promise.AwaitOK{Task: testutil.RandomCID(t)},
+	}))(t)
+	putRcpt := testutil.Must(receipt.IssueOK(putter, putInv.Task().Link(), &httpcmds.PutOK{
+		Blob: &httpcmds.PutBlob{Digest: testutil.RandomMultihash(t)},
+	}))(t)
+	put := putInv.Task().Link()
+
+	for name, req := range map[string]*AcceptRequest{
+		"no put invocation or receipt": {Space: testutil.RandomDID(t), Blob: spec, Put: put},
+		"no put invocation":            {Space: testutil.RandomDID(t), Blob: spec, Put: put, PutReceipt: putRcpt},
+		"no put receipt":               {Space: testutil.RandomDID(t), Blob: spec, Put: put, PutInvocation: putInv},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, _, _, _, err := c.Accept(t.Context(), req, proofs)
+			require.Error(t, err)
+
+			reqs := append(acceptRequests(t, maxAcceptBatch+1), req)
+			_, _, err = c.AcceptBatch(t.Context(), reqs, proofs, invocation.WithNoNonce())
+			require.Error(t, err)
+			require.Zero(t, node.requests.Load(), "nothing reached the node")
+		})
 	}
 }

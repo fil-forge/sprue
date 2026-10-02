@@ -77,7 +77,7 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 			blobProvider,
 			blobProvider.DID(),
 			&httpcmds.PutArguments{
-				Body:        blobcmds.Blob{Digest: digest, Size: 1024},
+				Body:        blobcmds.SpecFromDigest(digest, 1024),
 				Destination: promise.AwaitOK{Task: nonExistentAllocTask},
 			},
 			invocation.WithAudience(blobProvider.DID()),
@@ -109,7 +109,7 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 		allocInv, err := blobcmds.Allocate.Invoke(
 			uploadService,
 			storageProvider.DID(),
-			&blobcmds.AllocateArguments{Space: space.DID(), Blob: blob, Cause: testutil.RandomCID(t)},
+			&blobcmds.AllocateArguments{Space: space.DID(), Blob: blobcmds.SpecFromBlob(blob), Cause: testutil.RandomCID(t)},
 			invocation.WithAudience(storageProvider.DID()),
 		)
 		require.NoError(t, err)
@@ -130,7 +130,7 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 			blobProvider,
 			blobProvider.DID(),
 			&httpcmds.PutArguments{
-				Body:        blob,
+				Body:        blobcmds.SpecFromBlob(blob),
 				Destination: promise.AwaitOK{Task: allocInv.Task().Link()},
 			},
 			invocation.WithAudience(blobProvider.DID()),
@@ -182,7 +182,7 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 		allocInv, err := blobcmds.Allocate.Invoke(
 			uploadService,
 			storageProvider.DID(),
-			&blobcmds.AllocateArguments{Space: space.DID(), Blob: blob, Cause: blobAddTaskLink},
+			&blobcmds.AllocateArguments{Space: space.DID(), Blob: blobcmds.SpecFromBlob(blob), Cause: blobAddTaskLink},
 			invocation.WithAudience(storageProvider.DID()),
 		)
 		require.NoError(t, err)
@@ -204,7 +204,7 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 			blobProvider,
 			blobProvider.DID(),
 			&httpcmds.PutArguments{
-				Body:        blob,
+				Body:        blobcmds.SpecFromBlob(blob),
 				Destination: promise.AwaitOK{Task: allocInv.Task().Link()},
 			},
 			invocation.WithAudience(blobProvider.DID()),

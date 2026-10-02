@@ -32,7 +32,6 @@ import (
 	"github.com/fil-forge/ucantone/ucan/receipt"
 	"github.com/fil-forge/ucantone/validator"
 	"github.com/ipfs/go-cid"
-	"github.com/multiformats/go-multihash"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
@@ -107,7 +106,8 @@ func (m *mockPiriRejectServer) Calls() []blobcmds.RejectArguments {
 // the /blob/add invocation + receipt (whose Site promise points at the
 // accept invocation, subject = provider) and the accept/put/alloc
 // invocations — but NO accept receipt and NO registry entry, exactly the
-// deferred-conclude state. Returns the add task link (the abort Cause).
+// deferred-conclude state. Returns the add task link, which the abort names,
+// and the allocate task link, which the reject names.
 func seedParkedBlobChain(
 	t *testing.T,
 	agentStore *agent_store.Store,
@@ -115,21 +115,21 @@ func seedParkedBlobChain(
 	storageProvider ucan.Issuer,
 	space did.DID,
 	blob blobcmds.Blob,
-) cid.Cid {
+) (add, alloc cid.Cid) {
 	t.Helper()
 	ctx := t.Context()
 
 	allocInv := testutil.Must(blobcmds.Allocate.Invoke(
 		uploadService,
 		storageProvider.DID(),
-		&blobcmds.AllocateArguments{Space: space, Blob: blob, Cause: testutil.RandomCID(t)},
+		&blobcmds.AllocateArguments{Space: space, Blob: blobcmds.SpecFromBlob(blob), Cause: testutil.RandomCID(t)},
 		invocation.WithAudience(storageProvider.DID()),
 	))(t)
 	putInv := testutil.Must(httpcmds.Put.Invoke(
 		testutil.DeriveBlobProvider(t, blob.Digest),
 		testutil.DeriveBlobProvider(t, blob.Digest).DID(),
 		&httpcmds.PutArguments{
-			Body:        blob,
+			Body:        blobcmds.SpecFromBlob(blob),
 			Destination: promise.AwaitOK{Task: allocInv.Task().Link()},
 		},
 	))(t)
@@ -138,7 +138,7 @@ func seedParkedBlobChain(
 		storageProvider.DID(),
 		&blobcmds.AcceptArguments{
 			Space: space,
-			Blob:  blob,
+			Blob:  blobcmds.SpecFromBlob(blob),
 			Put:   promise.AwaitOK{Task: putInv.Task().Link()},
 		},
 		invocation.WithAudience(storageProvider.DID()),
@@ -147,7 +147,7 @@ func seedParkedBlobChain(
 	addInv := testutil.Must(blobcmds.Add.Invoke(
 		testutil.Alice,
 		space,
-		&blobcmds.AddArguments{Blob: blob},
+		&blobcmds.AddArguments{Blob: blobcmds.SpecFromBlob(blob)},
 		invocation.WithAudience(uploadService.DID()),
 	))(t)
 	addRcpt := testutil.Must(receipt.IssueOK(
@@ -161,7 +161,7 @@ func seedParkedBlobChain(
 		container.WithReceipts(addRcpt),
 	)
 	require.NoError(t, agentStore.Write(ctx, msg, agent.Index(msg)))
-	return addInv.Task().Link()
+	return addInv.Task().Link(), allocInv.Task().Link()
 }
 
 func invokeBlobAbort(
@@ -169,14 +169,13 @@ func invokeBlobAbort(
 	deps *blobAbortTestDeps,
 	uploadService ucan.Issuer,
 	space ucan.Principal,
-	digest multihash.Multihash,
-	cause cid.Cid,
+	add cid.Cid,
 ) (ucan.Receipt, error) {
 	t.Helper()
 	inv := testutil.Must(blobcmds.Abort.Invoke(
 		testutil.Alice,
 		space.DID(),
-		&blobcmds.AbortArguments{Digest: digest, Cause: cause},
+		&blobcmds.AbortArguments{Add: add},
 		invocation.WithAudience(uploadService.DID()),
 	))(t)
 	req := execution.NewRequest(t.Context(), inv)
@@ -204,21 +203,20 @@ func TestBlobAbortHandler(t *testing.T) {
 		require.NoError(t, deps.spStore.Put(t.Context(), storageProvider.DID(), *piriURL, 100, nil,
 			container.New(container.WithDelegations(rejectProof))))
 
-		cause := seedParkedBlobChain(t, deps.agentStore, uploadService, storageProvider, space.DID(), blob)
+		add, alloc := seedParkedBlobChain(t, deps.agentStore, uploadService, storageProvider, space.DID(), blob)
 
-		rcpt, herr := invokeBlobAbort(t, deps, uploadService, space, blob.Digest, cause)
+		rcpt, herr := invokeBlobAbort(t, deps, uploadService, space, add)
 		require.NoError(t, herr)
 		_, err := blobcmds.Abort.Unpack(rcpt)
 		require.NoError(t, err)
 
 		calls := piriSrv.Calls()
 		require.Len(t, calls, 1, "abort forwarded to the provider as /blob/reject")
-		require.Equal(t, space.DID(), calls[0].Space)
-		require.Equal(t, blob.Digest, calls[0].Digest)
+		require.Equal(t, alloc, calls[0].Allocation, "the reject names the allocation the add made")
 	})
 
 	t.Run("missing cause is unrepresentable", func(t *testing.T) {
-		// AbortArguments.Cause is a required (non-pointer) field: an
+		// AbortArguments.Add is a required (non-pointer) field: an
 		// invocation without it cannot even be marshaled, so the provider
 		// lookup can always rely on it. (The handler keeps a defensive
 		// MissingCause failure for non-binding clients.)
@@ -226,7 +224,7 @@ func TestBlobAbortHandler(t *testing.T) {
 		_, err := blobcmds.Abort.Invoke(
 			testutil.Alice,
 			space.DID(),
-			&blobcmds.AbortArguments{Digest: testutil.RandomMultihash(t), Cause: cid.Undef},
+			&blobcmds.AbortArguments{Add: cid.Undef},
 			invocation.WithAudience(uploadService.DID()),
 		)
 		require.ErrorContains(t, err, "undefined cid")
@@ -237,7 +235,7 @@ func TestBlobAbortHandler(t *testing.T) {
 		space := testutil.RandomIssuer(t)
 		cause := testutil.RandomCID(t)
 
-		rcpt, herr := invokeBlobAbort(t, deps, uploadService, space, testutil.RandomMultihash(t), cause)
+		rcpt, herr := invokeBlobAbort(t, deps, uploadService, space, cause)
 		require.NoError(t, herr)
 		_, err := blobcmds.Abort.Unpack(rcpt)
 		var named errors.Named
@@ -259,9 +257,9 @@ func TestBlobAbortHandler(t *testing.T) {
 		require.NoError(t, deps.spStore.Put(t.Context(), storageProvider.DID(), *piriURL, 100, nil,
 			container.New(container.WithDelegations(rejectProof))))
 
-		cause := seedParkedBlobChain(t, deps.agentStore, uploadService, storageProvider, space.DID(), blob)
+		add, _ := seedParkedBlobChain(t, deps.agentStore, uploadService, storageProvider, space.DID(), blob)
 
-		rcpt, herr := invokeBlobAbort(t, deps, uploadService, space, blob.Digest, cause)
+		rcpt, herr := invokeBlobAbort(t, deps, uploadService, space, add)
 		require.NoError(t, herr)
 		_, err := blobcmds.Abort.Unpack(rcpt)
 		var named errors.Named

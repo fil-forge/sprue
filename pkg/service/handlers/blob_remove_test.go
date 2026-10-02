@@ -164,14 +164,14 @@ func registerStoredBlob(
 	allocInv := testutil.Must(blobcmds.Allocate.Invoke(
 		uploadService,
 		storageProvider.DID(),
-		&blobcmds.AllocateArguments{Space: space, Blob: blob, Cause: testutil.RandomCID(t)},
+		&blobcmds.AllocateArguments{Space: space, Blob: blobcmds.SpecFromBlob(blob), Cause: testutil.RandomCID(t)},
 		invocation.WithAudience(storageProvider.DID()),
 	))(t)
 	putInv := testutil.Must(httpcmds.Put.Invoke(
 		testutil.DeriveBlobProvider(t, blob.Digest),
 		testutil.DeriveBlobProvider(t, blob.Digest).DID(),
 		&httpcmds.PutArguments{
-			Body:        blob,
+			Body:        blobcmds.SpecFromBlob(blob),
 			Destination: promise.AwaitOK{Task: allocInv.Task().Link()},
 		},
 	))(t)
@@ -182,7 +182,7 @@ func registerStoredBlob(
 		storageProvider.DID(),
 		&blobcmds.AcceptArguments{
 			Space: space,
-			Blob:  blob,
+			Blob:  blobcmds.SpecFromBlob(blob),
 			Put:   promise.AwaitOK{Task: putInv.Task().Link()},
 		},
 		invocation.WithAudience(storageProvider.DID()),
@@ -191,7 +191,7 @@ func registerStoredBlob(
 	addInv := testutil.Must(blobcmds.Add.Invoke(
 		testutil.Alice,
 		space,
-		&blobcmds.AddArguments{Blob: blob},
+		&blobcmds.AddArguments{Blob: blobcmds.SpecFromBlob(blob)},
 		invocation.WithAudience(uploadService.DID()),
 	))(t)
 	addRcpt := testutil.Must(receipt.IssueOK(
