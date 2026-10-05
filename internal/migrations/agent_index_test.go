@@ -12,10 +12,10 @@ import (
 	"go.uber.org/zap"
 )
 
-// agentIndexInsertedAtMigration is the version that dates agent_index rows.
-// Stopping one short of it leaves the schema as a deployment without the
-// column would have it.
-const agentIndexInsertedAtMigration = 5
+// beforeAgentIndexInsertedAt is the last schema version in which agent_index
+// rows carry no date: the schema a deployment has immediately before the
+// migration that adds the column.
+const beforeAgentIndexInsertedAt = 5
 
 // TestAgentIndexInsertedAtDatesExistingRows: a purge by age must be able to
 // reach every row, including those written before the column existed. Those
@@ -31,7 +31,7 @@ func TestAgentIndexInsertedAtDatesExistingRows(t *testing.T) {
 	}
 
 	ctx := t.Context()
-	pool := testutil.CreatePostgresAt(t, agentIndexInsertedAtMigration)
+	pool := testutil.CreatePostgresAt(t, beforeAgentIndexInsertedAt)
 
 	task := testutil.RandomCID(t).String()
 	_, err := pool.Exec(ctx,
