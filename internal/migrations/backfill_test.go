@@ -11,10 +11,10 @@ import (
 	"go.uber.org/zap"
 )
 
-// uploadDiffMigration is the version that adds the object-count log. Stopping
-// one short of it leaves the schema as a deployment running without object
-// counts would have it.
-const uploadDiffMigration = 3
+// beforeUploadDiff is the last schema version without the object-count log:
+// the schema a deployment running without object counts has immediately
+// before the migration that adds it.
+const beforeUploadDiff = 3
 
 // TestUploadDiffBackfillsExistingUploads: the object count has to start from
 // the uploads a database already holds. Without the backfill the counters
@@ -31,7 +31,7 @@ func TestUploadDiffBackfillsExistingUploads(t *testing.T) {
 	}
 
 	ctx := t.Context()
-	pool := testutil.CreatePostgresAt(t, uploadDiffMigration)
+	pool := testutil.CreatePostgresAt(t, beforeUploadDiff)
 
 	// A space holding two uploads, as an older deployment left it.
 	space := testutil.RandomDID(t).String()

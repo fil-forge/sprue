@@ -11,10 +11,10 @@ import (
 	"go.uber.org/zap"
 )
 
-// spaceDiffDropProviderMigration is the version that drops provider and
-// subscription from the size log. Stopping one short of it leaves the schema as
-// a deployment still recording them would have it.
-const spaceDiffDropProviderMigration = 4
+// beforeSpaceDiffDropProvider is the last schema version in which the size log
+// records provider and subscription: the schema a deployment has immediately
+// before the migration that drops them.
+const beforeSpaceDiffDropProvider = 4
 
 // TestSpaceDiffDropProviderCollapsesProviderCopies: dropping provider takes the
 // primary key with it, and the key that replaces it cannot tell two providers'
@@ -32,7 +32,7 @@ func TestSpaceDiffDropProviderCollapsesProviderCopies(t *testing.T) {
 	}
 
 	ctx := t.Context()
-	pool := testutil.CreatePostgresAt(t, spaceDiffDropProviderMigration)
+	pool := testutil.CreatePostgresAt(t, beforeSpaceDiffDropProvider)
 
 	space := testutil.RandomDID(t).String()
 	shared := testutil.RandomCID(t).String()
