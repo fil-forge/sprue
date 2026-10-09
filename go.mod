@@ -9,7 +9,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/credentials v1.20.6
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.114.0
 	github.com/docker/docker v28.5.2+incompatible
-	github.com/exaring/otelpgx v0.12.0
+	github.com/exaring/otelpgx v0.12.1
 	github.com/fil-forge/libforge v0.0.0-20261001200856-b2db386b1f96
 	github.com/fil-forge/ucantone v0.0.0-20260928174307-22b4465e21b8
 	github.com/google/uuid v1.6.0
