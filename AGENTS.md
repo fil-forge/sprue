@@ -90,3 +90,13 @@ Configuration via YAML file or environment variables with `SPRUE_` prefix:
 - **jackc/pgx/v5**: PostgreSQL driver
 - **pressly/goose/v3**: SQL schema migrations
 - **viper/cobra**: Configuration and CLI
+
+## Observability
+
+When a change adds or alters behavior someone depends on, decide how on-call
+would see it working and see it fail, and add what's useful in the same PR:
+logs, complete trace spans, and an alert or dashboard panel in
+fil-forge/infra-central. Skip it for changes nothing operational depends on.
+When a feature's health is best read as a number, say so in the PR
+description, naming the metric and [FIL-1144](https://linear.app/filecoin-foundation/issue/FIL-1144).
+`docs/observability.md` says how to do each.
