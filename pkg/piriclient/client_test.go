@@ -291,3 +291,25 @@ func TestAcceptNeedsPutEvidenceWithoutDigest(t *testing.T) {
 		})
 	}
 }
+
+// A provider that never delegated /blob/release or /blob/reject leaves the
+// proof chain empty. The client refuses to send the invocation, which the node
+// could only reject, and names the missing grant.
+func TestReleaseAndRejectNeedProviderProofs(t *testing.T) {
+	// The fixture's proofs grant /blob/accept only.
+	c, proofs, node := acceptFixture(t, nil)
+
+	space := testutil.RandomIssuer(t)
+	digest := testutil.RandomMultihash(t)
+	cause := testutil.Must(blobcmds.Remove.Invoke(space, space.DID(), &blobcmds.RemoveArguments{Digest: digest}))(t)
+
+	_, _, _, err := c.Release(t.Context(), &ReleaseRequest{Space: space.DID(), Digest: digest, Cause: cause}, proofs)
+	require.ErrorIs(t, err, ErrMissingProof)
+	require.ErrorContains(t, err, blobcmds.Release.Command.String())
+
+	_, _, _, err = c.Reject(t.Context(), &blobcmds.RejectArguments{Allocation: testutil.RandomCID(t)}, proofs)
+	require.ErrorIs(t, err, ErrMissingProof)
+	require.ErrorContains(t, err, blobcmds.Reject.Command.String())
+
+	require.Zero(t, node.requests.Load(), "nothing reached the node")
+}
