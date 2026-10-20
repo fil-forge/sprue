@@ -72,6 +72,10 @@ type Store interface {
 	// the rest of the record unchanged. Returns [ErrStorageProviderNotFound] if
 	// the record does not exist.
 	SetWeights(ctx context.Context, providerID did.DID, weight int, replicationWeight *int) error
+	// SetProofs replaces the proofs of an existing storage provider and leaves
+	// the rest of the record unchanged. Returns [ErrStorageProviderNotFound] if
+	// the record does not exist.
+	SetProofs(ctx context.Context, providerID did.DID, proofs ucan.Container) error
 	// Get a storage provider record by provider DID. May return
 	// [ErrStorageProviderNotFound].
 	Get(ctx context.Context, providerID did.DID) (Record, error)
