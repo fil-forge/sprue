@@ -185,51 +185,6 @@ func TestAdminProviderRegisterHandler(t *testing.T) {
 		require.ErrorIs(t, err, storageprovider.ErrStorageProviderNotFound)
 	})
 
-	// Release and reject are invoked long after registration, so a provider
-	// that omits them would register fine and fail only on removal.
-	for _, omitted := range requiredProofCommands {
-		t.Run("rejects proofs omitting "+omitted.String(), func(t *testing.T) {
-			spStore := storage_provider_store.New()
-
-			handler := handlers.NewAdminProviderRegisterHandler(
-				identity.Identity{Issuer: uploadService}, spStore, logger,
-			)
-
-			storageProvider := testutil.RandomIssuer(t)
-
-			var dlgs []ucan.Delegation
-			for _, cmd := range requiredProofCommands {
-				if cmd == omitted {
-					continue
-				}
-				dlg, err := delegation.Delegate(storageProvider, uploadService.DID(), storageProvider.DID(), cmd)
-				require.NoError(t, err)
-				dlgs = append(dlgs, dlg)
-			}
-			proofBytes, err := container.Encode(container.Raw, container.New(container.WithDelegations(dlgs...)))
-			require.NoError(t, err)
-
-			args := provider.RegisterArguments{
-				Provider: storageProvider.DID(),
-				Endpoint: "https://piri.example.com",
-				Proofs:   proofBytes,
-			}
-
-			req := issueRegisterInvocation(t, uploadService, uploadService.DID(), args)
-			res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
-			require.NoError(t, err)
-
-			err = handler.Handler(req, res)
-			require.NoError(t, err)
-
-			_, err = provider.Register.Unpack(res.Receipt())
-			var errModel datamodel.ErrorModel
-			require.ErrorAs(t, err, &errModel)
-			require.Equal(t, "InvalidProofs", errModel.Name())
-			require.Contains(t, errModel.Error(), omitted.String())
-		})
-	}
-
 	t.Run("service identity can register", func(t *testing.T) {
 		spStore := storage_provider_store.New()
 

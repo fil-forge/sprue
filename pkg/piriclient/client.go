@@ -2,7 +2,6 @@ package piriclient
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/url"
 	"slices"
@@ -31,25 +30,6 @@ import (
 // invocation as proof for obtaining a retrieval delegation, and we want to
 // allow for retries and/or job queue delays.
 const replicaAllocationTTL = time.Hour * 24
-
-// ErrMissingProof reports that the provider has not delegated the command to
-// this client, so the node would refuse the invocation.
-var ErrMissingProof = errors.New("missing proof")
-
-// requiredProofs resolves the proof chain authorizing this client to invoke
-// cmd on the node. A proof store with no matching delegation yields an empty
-// chain rather than an error, so an empty chain fails here with
-// ErrMissingProof instead of reaching the node without proofs.
-func (c *Client) requiredProofs(ctx context.Context, proofStore ucanlib.ProofStore, cmd ucan.Command) ([]ucan.Delegation, []cid.Cid, error) {
-	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.issuer.DID(), cmd, c.piriDID)
-	if err != nil {
-		return nil, nil, fmt.Errorf("building proof chain: %w", err)
-	}
-	if len(prfs) == 0 {
-		return nil, nil, fmt.Errorf("%w: provider %s has not delegated %s", ErrMissingProof, c.piriDID, cmd)
-	}
-	return prfs, prfLinks, nil
-}
 
 // Client is a UCAN client for communicating with Piri nodes.
 type Client struct {
@@ -119,9 +99,9 @@ func (c *Client) AllocateInvocation(ctx context.Context, req *AllocateRequest, p
 	// The proof chain is rooted at the storage provider (the proofs the provider
 	// granted the upload service at registration), so the subject is the provider
 	// DID, not the space. The space rides in the invocation arguments instead.
-	prfs, prfLinks, err := c.requiredProofs(ctx, proofStore, blobcmds.Allocate.Command)
+	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.issuer.DID(), blobcmds.Allocate.Command, c.piriDID)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("building proof chain: %w", err)
 	}
 
 	options = slices.Clone(options)
@@ -342,9 +322,9 @@ func (c *Client) AcceptInvocation(ctx context.Context, req *AcceptRequest, proof
 func (c *Client) acceptProofs(ctx context.Context, proofStore ucanlib.ProofStore) ([]ucan.Delegation, []cid.Cid, error) {
 	// As with allocate, the proof chain is rooted at the storage provider, so the
 	// subject is the provider DID and the space travels in the arguments.
-	prfs, prfLinks, err := c.requiredProofs(ctx, proofStore, blobcmds.Accept.Command)
+	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.issuer.DID(), blobcmds.Accept.Command, c.piriDID)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("building proof chain: %w", err)
 	}
 	return prfs, prfLinks, nil
 }
@@ -427,9 +407,9 @@ func (c *Client) ReleaseInvocation(ctx context.Context, req *ReleaseRequest, pro
 	// As with allocate/accept, the proof chain is rooted at the storage
 	// provider, so the subject is the provider DID and the space travels in
 	// the arguments.
-	prfs, prfLinks, err := c.requiredProofs(ctx, proofStore, blobcmds.Release.Command)
+	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.issuer.DID(), blobcmds.Release.Command, c.piriDID)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("building proof chain: %w", err)
 	}
 
 	options = slices.Clone(options)
@@ -490,9 +470,9 @@ func (c *Client) RejectInvocation(ctx context.Context, req *blobcmds.RejectArgum
 	// As with allocate/accept/release, the proof chain is rooted at the
 	// storage provider, so the subject is the provider DID. The node knows
 	// the space and blob of the allocation the arguments name.
-	prfs, prfLinks, err := c.requiredProofs(ctx, proofStore, blobcmds.Reject.Command)
+	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.issuer.DID(), blobcmds.Reject.Command, c.piriDID)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("building proof chain: %w", err)
 	}
 
 	options = slices.Clone(options)
