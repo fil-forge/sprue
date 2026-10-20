@@ -223,7 +223,7 @@ func newDigestlessWorld(t *testing.T) *digestlessWorld {
 		proofs = append(proofs, testutil.Must(delegation.Delegate(
 			provider, uploadService.DID(), provider.DID(), cmd, delegation.WithNoExpiration()))(t))
 	}
-	require.NoError(t, spStore.Put(t.Context(), provider.DID(), *w.piri.url, 100, nil,
+	require.NoError(t, spStore.Add(t.Context(), provider.DID(), *w.piri.url, 100, nil,
 		container.New(container.WithDelegations(proofs...))))
 
 	router := routing.NewService(spStore, routing_policy_store.New(), logger)

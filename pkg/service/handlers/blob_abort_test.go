@@ -200,7 +200,7 @@ func TestBlobAbortHandler(t *testing.T) {
 		piriSrv := newMockPiriRejectServer(t, storageProvider, identity.Identity{Issuer: uploadService})
 		piriURL := testutil.Must(url.Parse(piriSrv.srv.URL))(t)
 		rejectProof := testutil.Must(blobcmds.Reject.Delegate(storageProvider, uploadService.DID(), storageProvider.DID()))(t)
-		require.NoError(t, deps.spStore.Put(t.Context(), storageProvider.DID(), *piriURL, 100, nil,
+		require.NoError(t, deps.spStore.Add(t.Context(), storageProvider.DID(), *piriURL, 100, nil,
 			container.New(container.WithDelegations(rejectProof))))
 
 		add, alloc := seedParkedBlobChain(t, deps.agentStore, uploadService, storageProvider, space.DID(), blob)
@@ -254,7 +254,7 @@ func TestBlobAbortHandler(t *testing.T) {
 		piriSrv.fail = blobcmds.ErrBlobAccepted
 		piriURL := testutil.Must(url.Parse(piriSrv.srv.URL))(t)
 		rejectProof := testutil.Must(blobcmds.Reject.Delegate(storageProvider, uploadService.DID(), storageProvider.DID()))(t)
-		require.NoError(t, deps.spStore.Put(t.Context(), storageProvider.DID(), *piriURL, 100, nil,
+		require.NoError(t, deps.spStore.Add(t.Context(), storageProvider.DID(), *piriURL, 100, nil,
 			container.New(container.WithDelegations(rejectProof))))
 
 		add, _ := seedParkedBlobChain(t, deps.agentStore, uploadService, storageProvider, space.DID(), blob)

@@ -44,7 +44,7 @@ func registerNode(t *testing.T, deps *routingTestDeps) did.DID {
 	t.Helper()
 	node := testutil.RandomDID(t)
 	endpoint := testutil.Must(url.Parse("https://piri.example.com"))(t)
-	require.NoError(t, deps.spStore.Put(t.Context(), node, *endpoint, 100, nil, container.New()))
+	require.NoError(t, deps.spStore.Add(t.Context(), node, *endpoint, 100, nil, container.New()))
 	return node
 }
 

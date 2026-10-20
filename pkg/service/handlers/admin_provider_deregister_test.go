@@ -59,7 +59,7 @@ func TestAdminProviderDeregisterHandler(t *testing.T) {
 		// Pre-populate the store so we can verify the record is NOT removed.
 		endpoint, err := url.Parse("https://piri.example.com")
 		require.NoError(t, err)
-		err = spStore.Put(ctx, storageProvider.DID(), *endpoint, 0, nil, container.New())
+		err = spStore.Add(ctx, storageProvider.DID(), *endpoint, 0, nil, container.New())
 		require.NoError(t, err)
 
 		args := provider.DeregisterArguments{
@@ -94,7 +94,7 @@ func TestAdminProviderDeregisterHandler(t *testing.T) {
 
 		endpoint, err := url.Parse("https://piri.example.com")
 		require.NoError(t, err)
-		err = spStore.Put(ctx, storageProvider.DID(), *endpoint, 0, nil, container.New())
+		err = spStore.Add(ctx, storageProvider.DID(), *endpoint, 0, nil, container.New())
 		require.NoError(t, err)
 
 		args := provider.DeregisterArguments{

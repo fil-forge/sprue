@@ -63,8 +63,6 @@ type Record struct {
 }
 
 type Store interface {
-	// Put creates a storage provider record, or replaces the existing one.
-	Put(ctx context.Context, providerID did.DID, endpoint url.URL, weight int, replicationWeight *int, proofs ucan.Container) error
 	// Add creates a storage provider record. Returns [ErrStorageProviderExists]
 	// if a record with this DID already exists.
 	Add(ctx context.Context, providerID did.DID, endpoint url.URL, weight int, replicationWeight *int, proofs ucan.Container) error

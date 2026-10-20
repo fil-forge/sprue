@@ -250,7 +250,7 @@ func TestBlobRemoveHandler(t *testing.T) {
 		storageProvider := testutil.RandomIssuer(t)
 		piriSrv := newMockPiriReleaseServer(t, storageProvider, identity.Identity{Issuer: uploadService})
 		piriURL := testutil.Must(url.Parse(piriSrv.srv.URL))(t)
-		require.NoError(t, deps.spStore.Put(t.Context(), storageProvider.DID(), *piriURL, 100, nil,
+		require.NoError(t, deps.spStore.Add(t.Context(), storageProvider.DID(), *piriURL, 100, nil,
 			releaseProviderProofs(t, storageProvider, uploadService)))
 
 		registerStoredBlob(t, deps, uploadService, storageProvider, space.DID(), blob)
@@ -296,13 +296,13 @@ func TestBlobRemoveHandler(t *testing.T) {
 		primary := testutil.RandomIssuer(t)
 		primarySrv := newMockPiriReleaseServer(t, primary, identity.Identity{Issuer: uploadService})
 		primaryURL := testutil.Must(url.Parse(primarySrv.srv.URL))(t)
-		require.NoError(t, deps.spStore.Put(t.Context(), primary.DID(), *primaryURL, 100, nil,
+		require.NoError(t, deps.spStore.Add(t.Context(), primary.DID(), *primaryURL, 100, nil,
 			releaseProviderProofs(t, primary, uploadService)))
 
 		replicaNode := testutil.RandomIssuer(t)
 		replicaSrv := newMockPiriReleaseServer(t, replicaNode, identity.Identity{Issuer: uploadService})
 		replicaURL := testutil.Must(url.Parse(replicaSrv.srv.URL))(t)
-		require.NoError(t, deps.spStore.Put(t.Context(), replicaNode.DID(), *replicaURL, 100, nil,
+		require.NoError(t, deps.spStore.Add(t.Context(), replicaNode.DID(), *replicaURL, 100, nil,
 			releaseProviderProofs(t, replicaNode, uploadService)))
 
 		registerStoredBlob(t, deps, uploadService, primary, space.DID(), blob)
@@ -326,7 +326,7 @@ func TestBlobRemoveHandler(t *testing.T) {
 		// listens on.
 		storageProvider := testutil.RandomIssuer(t)
 		deadURL := testutil.Must(url.Parse("http://127.0.0.1:1"))(t)
-		require.NoError(t, deps.spStore.Put(t.Context(), storageProvider.DID(), *deadURL, 100, nil,
+		require.NoError(t, deps.spStore.Add(t.Context(), storageProvider.DID(), *deadURL, 100, nil,
 			releaseProviderProofs(t, storageProvider, uploadService)))
 
 		registerStoredBlob(t, deps, uploadService, storageProvider, space.DID(), blob)

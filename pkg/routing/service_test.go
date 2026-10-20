@@ -23,7 +23,7 @@ func addProvider(t *testing.T, store *spmemory.Store, weight int, replicationWei
 	ctx := t.Context()
 	storageProvider := testutil.RandomIssuer(t)
 	endpoint := testutil.Must(url.Parse("https://piri.example.com"))(t)
-	err := store.Put(ctx, storageProvider.DID(), *endpoint, weight, replicationWeight, container.New())
+	err := store.Add(ctx, storageProvider.DID(), *endpoint, weight, replicationWeight, container.New())
 	require.NoError(t, err)
 	rec, err := store.Get(ctx, storageProvider.DID())
 	require.NoError(t, err)
@@ -235,7 +235,7 @@ func TestSelectStorageProviderWithPolicy(t *testing.T) {
 
 	t.Run("zero weight candidate does not fall back to other providers", func(t *testing.T) {
 		svc, store, _, space, inPolicy, _ := setup(t)
-		require.NoError(t, store.Put(ctx, inPolicy.Provider, inPolicy.Endpoint, 0, nil, inPolicy.Proofs))
+		require.NoError(t, store.SetWeights(ctx, inPolicy.Provider, 0, nil))
 		_, err := svc.SelectStorageProvider(ctx, space, blob)
 		require.ErrorIs(t, err, routing.ErrCandidateUnavailable)
 	})

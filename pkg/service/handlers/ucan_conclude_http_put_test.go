@@ -170,7 +170,7 @@ func TestHTTPPutConcludeHandler(t *testing.T) {
 		piriURL := testutil.Must(url.Parse(piriSrv.URL))(t)
 
 		deps := newHTTPPutDeps(t, piriclient.NewProvider(uploadService, logger), logger)
-		require.NoError(t, deps.spStore.Put(ctx, storageProvider.DID(), *piriURL, 100, nil, testutil.ProviderProofs(t, storageProvider, uploadService)))
+		require.NoError(t, deps.spStore.Add(ctx, storageProvider.DID(), *piriURL, 100, nil, testutil.ProviderProofs(t, storageProvider, uploadService)))
 
 		// Provision the space so blob_registry.Register succeeds.
 		account := testutil.Must(didmailto.New("alice@example.com"))(t)

@@ -208,8 +208,8 @@ func TestHTTPPutConcludeBatch(t *testing.T) {
 		piriB := newCountingPiri(t, spB, uploadService)
 
 		deps := newHTTPPutDeps(t, piriclient.NewProvider(uploadService, logger), logger)
-		require.NoError(t, deps.spStore.Put(ctx, spA.DID(), *piriA.url, 100, nil, testutil.ProviderProofs(t, spA, uploadService)))
-		require.NoError(t, deps.spStore.Put(ctx, spB.DID(), *piriB.url, 100, nil, testutil.ProviderProofs(t, spB, uploadService)))
+		require.NoError(t, deps.spStore.Add(ctx, spA.DID(), *piriA.url, 100, nil, testutil.ProviderProofs(t, spA, uploadService)))
+		require.NoError(t, deps.spStore.Add(ctx, spB.DID(), *piriB.url, 100, nil, testutil.ProviderProofs(t, spB, uploadService)))
 
 		space := testutil.RandomIssuer(t)
 		provisionConcludeSpace(t, ctx, deps, uploadService, space.DID())
@@ -249,7 +249,7 @@ func TestHTTPPutConcludeBatch(t *testing.T) {
 		piri := newCountingPiri(t, sp, uploadService)
 
 		deps := newHTTPPutDeps(t, piriclient.NewProvider(uploadService, logger), logger)
-		require.NoError(t, deps.spStore.Put(ctx, sp.DID(), *piri.url, 100, nil, testutil.ProviderProofs(t, sp, uploadService)))
+		require.NoError(t, deps.spStore.Add(ctx, sp.DID(), *piri.url, 100, nil, testutil.ProviderProofs(t, sp, uploadService)))
 
 		space := testutil.RandomIssuer(t)
 		provisionConcludeSpace(t, ctx, deps, uploadService, space.DID())
@@ -303,7 +303,7 @@ func TestHTTPPutConcludeAcceptsEveryInvocationInABatch(t *testing.T) {
 	sp := testutil.RandomIssuer(t)
 	piri := newCountingPiri(t, sp, uploadService)
 	deps := newHTTPPutDeps(t, piriclient.NewProvider(uploadService, logger), logger)
-	require.NoError(t, deps.spStore.Put(ctx, sp.DID(), *piri.url, 100, nil, testutil.ProviderProofs(t, sp, uploadService)))
+	require.NoError(t, deps.spStore.Add(ctx, sp.DID(), *piri.url, 100, nil, testutil.ProviderProofs(t, sp, uploadService)))
 
 	space := testutil.RandomIssuer(t)
 	provisionConcludeSpace(t, ctx, deps, uploadService, space.DID())
@@ -345,7 +345,7 @@ func TestHTTPPutConcludeSkipsFailedPuts(t *testing.T) {
 	piri := newCountingPiri(t, sp, uploadService)
 
 	deps := newHTTPPutDeps(t, piriclient.NewProvider(uploadService, logger), logger)
-	require.NoError(t, deps.spStore.Put(ctx, sp.DID(), *piri.url, 100, nil, testutil.ProviderProofs(t, sp, uploadService)))
+	require.NoError(t, deps.spStore.Add(ctx, sp.DID(), *piri.url, 100, nil, testutil.ProviderProofs(t, sp, uploadService)))
 
 	space := testutil.RandomIssuer(t)
 	provisionConcludeSpace(t, ctx, deps, uploadService, space.DID())
@@ -396,7 +396,7 @@ func TestHTTPPutConcludeAnswersLargeBatchByPolling(t *testing.T) {
 	sp := testutil.RandomIssuer(t)
 	piri := newCountingPiri(t, sp, uploadService)
 	deps := newHTTPPutDeps(t, piriclient.NewProvider(uploadService, logger), logger)
-	require.NoError(t, deps.spStore.Put(ctx, sp.DID(), *piri.url, 100, nil, testutil.ProviderProofs(t, sp, uploadService)))
+	require.NoError(t, deps.spStore.Add(ctx, sp.DID(), *piri.url, 100, nil, testutil.ProviderProofs(t, sp, uploadService)))
 
 	space := testutil.RandomIssuer(t)
 	provisionConcludeSpace(t, ctx, deps, uploadService, space.DID())
@@ -450,7 +450,7 @@ func TestHTTPPutConcludeKeepsCommitmentsRetrievableByAcceptTask(t *testing.T) {
 	sp := testutil.RandomIssuer(t)
 	piri := newCountingPiri(t, sp, uploadService)
 	deps := newHTTPPutDeps(t, piriclient.NewProvider(uploadService, logger), logger)
-	require.NoError(t, deps.spStore.Put(ctx, sp.DID(), *piri.url, 100, nil, testutil.ProviderProofs(t, sp, uploadService)))
+	require.NoError(t, deps.spStore.Add(ctx, sp.DID(), *piri.url, 100, nil, testutil.ProviderProofs(t, sp, uploadService)))
 
 	space := testutil.RandomIssuer(t)
 	provisionConcludeSpace(t, ctx, deps, uploadService, space.DID())
@@ -529,7 +529,7 @@ func TestHTTPPutConcludeRegistersOnlyUsableAcceptances(t *testing.T) {
 	sp := testutil.RandomIssuer(t)
 	piri := newCountingPiri(t, sp, uploadService)
 	deps := newHTTPPutDeps(t, piriclient.NewProvider(uploadService, logger), logger)
-	require.NoError(t, deps.spStore.Put(ctx, sp.DID(), *piri.url, 100, nil, testutil.ProviderProofs(t, sp, uploadService)))
+	require.NoError(t, deps.spStore.Add(ctx, sp.DID(), *piri.url, 100, nil, testutil.ProviderProofs(t, sp, uploadService)))
 
 	space := testutil.RandomIssuer(t)
 	provisionConcludeSpace(t, ctx, deps, uploadService, space.DID())
