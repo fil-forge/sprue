@@ -133,7 +133,8 @@ func (m *Store) ListShards(ctx context.Context, space did.DID, root cid.Cid, opt
 		c := shards[len(shards)-1].String()
 		cursor = &c
 	}
-	return store.Page[cid.Cid]{Results: shards, Cursor: cursor}, nil
+	// Upsert appends to and sorts the stored slice, so hand out a copy.
+	return store.Page[cid.Cid]{Results: slices.Clone(shards), Cursor: cursor}, nil
 }
 
 func (m *Store) Remove(ctx context.Context, space did.DID, root cid.Cid, cause cid.Cid) error {
@@ -188,7 +189,7 @@ func (m *Store) Upsert(ctx context.Context, space did.DID, root cid.Cid, index *
 	shardsByUpload, ok := m.shards[space]
 	if !ok {
 		shardsByUpload = map[cid.Cid][]cid.Cid{}
-		shardsByUpload[root] = shards
+		shardsByUpload[root] = slices.Clone(shards)
 		m.shards[space] = shardsByUpload
 	} else {
 		for _, s := range shards {

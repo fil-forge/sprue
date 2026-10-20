@@ -76,7 +76,7 @@ storage:
     # libpq-style connection string (used when storage.type is "postgres").
     dsn: "postgres://sprue:sprue@postgres:5432/sprue?sslmode=disable"
     # Maximum number of pool connections. 0 uses the pgx default.
-    max_conns: 10
+    max_conns: 20
     # Minimum idle connections to keep warm.
     min_conns: 0
     # Set to true to skip goose migrations at startup (they run by default).

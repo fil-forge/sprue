@@ -36,7 +36,7 @@ func NewProviderAddHandler(deploymentCfg config.DeploymentConfig, provisioningSv
 			space := args.Consumer
 			cause := req.Invocation().Task().Link()
 
-			log = log.With(
+			log := log.With(
 				zap.Stringer("account", account),
 				zap.Stringer("provider", serviceProvider),
 				zap.Stringer("space", space),

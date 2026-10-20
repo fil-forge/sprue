@@ -1,11 +1,12 @@
 package upload_test
 
 import (
-	"time"
-
+	"bytes"
 	"context"
 	"runtime"
+	"slices"
 	"testing"
+	"time"
 
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/store"
@@ -104,6 +105,20 @@ func listAllShards(t *testing.T, uploadStore upload.Store, space did.DID, root c
 	})
 	require.NoError(t, err)
 	return shards
+}
+
+// descendingCIDs returns n random CIDs in descending byte order, so a store
+// that sorts them in place by bytes changes the slice.
+func descendingCIDs(t *testing.T, n int) []cid.Cid {
+	t.Helper()
+	cids := make([]cid.Cid, n)
+	for i := range cids {
+		cids[i] = testutil.RandomCID(t)
+	}
+	slices.SortFunc(cids, func(a, b cid.Cid) int {
+		return bytes.Compare(b.Bytes(), a.Bytes())
+	})
+	return cids
 }
 
 func TestUploadStore(t *testing.T) {
@@ -302,6 +317,36 @@ func TestUploadStore(t *testing.T) {
 						require.Len(t, allShards, tc.shardCount)
 					})
 				}
+			})
+
+			t.Run("does not reorder the caller's shards", func(t *testing.T) {
+				space := testutil.RandomDID(t)
+				root := testutil.RandomCID(t)
+				shards := descendingCIDs(t, 3)
+				passed := slices.Clone(shards)
+
+				err := store.Upsert(t.Context(), space, root, nil, shards, testutil.RandomCID(t))
+				require.NoError(t, err)
+
+				require.Equal(t, passed, shards)
+			})
+
+			t.Run("listed shards do not change on a later upsert", func(t *testing.T) {
+				space := testutil.RandomDID(t)
+				root := testutil.RandomCID(t)
+				shards := descendingCIDs(t, 2)
+				// Spare capacity lets an aliasing store append in place.
+				initial := make([]cid.Cid, 1, 4)
+				initial[0] = shards[0]
+				require.NoError(t, store.Upsert(t.Context(), space, root, nil, initial, testutil.RandomCID(t)))
+				page, err := store.ListShards(t.Context(), space, root)
+				require.NoError(t, err)
+				listed := slices.Clone(page.Results)
+
+				err = store.Upsert(t.Context(), space, root, nil, shards[1:], testutil.RandomCID(t))
+				require.NoError(t, err)
+
+				require.Equal(t, listed, page.Results)
 			})
 
 			t.Run("Upsert increments space and admin object counts", func(t *testing.T) {

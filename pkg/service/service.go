@@ -158,6 +158,7 @@ func createUCANServer(id multikey.Issuer, agentStore agent.Store, handlers []ser
 		server.WithConcurrentEventListener(&ucan_server.AgentMessageLogger{Logger: logger, AgentStore: agentStore}),
 		server.WithEventListener(&ucan_server.ErrorHandler{Logger: logger}),
 		server.WithEventListener(tracing.SpanNamer{}),
+		server.WithPanicLogger(ucan_server.NewPanicLogger(logger)),
 		server.WithValidationOptions(
 			validator.WithDIDResolver(resolver),
 			validator.WithVerifierFactories(factories),

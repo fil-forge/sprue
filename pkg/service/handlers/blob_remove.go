@@ -87,7 +87,10 @@ func NewBlobRemoveHandler(router *routing.Service, nodeProvider piriclient.Provi
 				}
 			}
 
-			if err := blobRegistry.Deregister(req.Context(), space, args.Digest, cause); err != nil {
+			// Another invocation for the same blob, e.g. a duplicate in the same
+			// batch, may have deregistered it after we checked.
+			err = blobRegistry.Deregister(req.Context(), space, args.Digest, cause)
+			if err != nil && !errors.Is(err, blobregistry.ErrEntryNotFound) {
 				log.Error("failed to deregister blob", zap.Error(err))
 				return fmt.Errorf("deregistering blob: %w", err)
 			}

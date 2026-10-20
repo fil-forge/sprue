@@ -36,7 +36,7 @@ func (l *ErrorHandler) OnResponseEncode(ctx context.Context, ct ucan.Container) 
 			l.Logger.Error("failed to unmarshal handler execution error", zap.Error(err), zap.Binary("input", x))
 			continue
 		}
-		if model["name"].(string) != execution.HandlerExecutionErrorName {
+		if name, _ := model["name"].(string); name != execution.HandlerExecutionErrorName {
 			continue
 		}
 		l.Logger.Error(
