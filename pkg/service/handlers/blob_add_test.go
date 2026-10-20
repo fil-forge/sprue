@@ -61,7 +61,6 @@ func newBlobAddTestDeps(t *testing.T, uploadService multikey.Issuer, logger *zap
 	agentStore := agent_store.New()
 	blobReg := blob_registry.New(
 		spacediff_store.New(),
-		consumerStore,
 		metrics_store.NewSpaceStore(),
 		metrics_store.New(),
 	)
@@ -113,7 +112,7 @@ func TestBlobAddHandler(t *testing.T) {
 
 		space := testutil.RandomIssuer(t)
 		args := blobcmds.AddArguments{
-			Blob: blobcmds.Blob{Digest: testutil.RandomMultihash(t), Size: 1024},
+			Blob: blobcmds.SpecFromDigest(testutil.RandomMultihash(t), 1024),
 		}
 
 		inv, err := blobcmds.Add.Invoke(
@@ -145,7 +144,7 @@ func TestBlobAddHandler(t *testing.T) {
 
 		// No storage providers in spStore — the router will return ErrCandidateUnavailable.
 		args := blobcmds.AddArguments{
-			Blob: blobcmds.Blob{Digest: testutil.RandomMultihash(t), Size: 1024},
+			Blob: blobcmds.SpecFromDigest(testutil.RandomMultihash(t), 1024),
 		}
 
 		inv, err := blobcmds.Add.Invoke(
@@ -180,7 +179,7 @@ func TestBlobAddHandler(t *testing.T) {
 		require.NoError(t, err)
 
 		args := blobcmds.AddArguments{
-			Blob: blobcmds.Blob{Digest: testutil.RandomMultihash(t), Size: 1024},
+			Blob: blobcmds.SpecFromDigest(testutil.RandomMultihash(t), 1024),
 		}
 
 		inv, err := blobcmds.Add.Invoke(
@@ -235,7 +234,7 @@ func TestBlobAddHandler(t *testing.T) {
 		require.NoError(t, err)
 
 		args := blobcmds.AddArguments{
-			Blob: blobcmds.Blob{Digest: testutil.RandomMultihash(t), Size: 1024},
+			Blob: blobcmds.SpecFromDigest(testutil.RandomMultihash(t), 1024),
 		}
 
 		inv, err := blobcmds.Add.Invoke(
@@ -298,7 +297,7 @@ func TestBlobAddHandler(t *testing.T) {
 
 		for range 10 {
 			args := blobcmds.AddArguments{
-				Blob: blobcmds.Blob{Digest: testutil.RandomMultihash(t), Size: 1024},
+				Blob: blobcmds.SpecFromDigest(testutil.RandomMultihash(t), 1024),
 			}
 			inv, err := blobcmds.Add.Invoke(
 				testutil.Alice,
@@ -348,7 +347,7 @@ func TestBlobAddHandler(t *testing.T) {
 		require.NoError(t, deps.policyStore.SetSpacePolicy(ctx, space.DID(), policy, testutil.RandomCID(t)))
 
 		args := blobcmds.AddArguments{
-			Blob: blobcmds.Blob{Digest: testutil.RandomMultihash(t), Size: 1024},
+			Blob: blobcmds.SpecFromDigest(testutil.RandomMultihash(t), 1024),
 		}
 		inv, err := blobcmds.Add.Invoke(
 			testutil.Alice,
@@ -389,7 +388,7 @@ func TestBlobAddHandler(t *testing.T) {
 		require.NoError(t, err)
 
 		args := blobcmds.AddArguments{
-			Blob: blobcmds.Blob{Digest: testutil.RandomMultihash(t), Size: 1024},
+			Blob: blobcmds.SpecFromDigest(testutil.RandomMultihash(t), 1024),
 		}
 
 		inv, err := blobcmds.Add.Invoke(
@@ -434,7 +433,7 @@ func TestBlobAddHandler(t *testing.T) {
 		allocInv := testutil.Must(blobcmds.Allocate.Invoke(
 			uploadService,
 			space.DID(),
-			&blobcmds.AllocateArguments{Blob: blob, Cause: testutil.RandomCID(t)},
+			&blobcmds.AllocateArguments{Blob: blobcmds.SpecFromBlob(blob), Cause: testutil.RandomCID(t)},
 			invocation.WithAudience(storageProvider.DID()),
 		))(t)
 		allocRcpt := testutil.Must(receipt.IssueOK(
@@ -448,7 +447,7 @@ func TestBlobAddHandler(t *testing.T) {
 			blobProvider,
 			blobProvider.DID(),
 			&httpcmds.PutArguments{
-				Body:        blob,
+				Body:        blobcmds.SpecFromBlob(blob),
 				Destination: promise.AwaitOK{Task: allocInv.Task().Link()},
 			},
 			invocation.WithAudience(blobProvider.DID()),
@@ -464,7 +463,7 @@ func TestBlobAddHandler(t *testing.T) {
 			uploadService,
 			space.DID(),
 			&blobcmds.AcceptArguments{
-				Blob: blob,
+				Blob: blobcmds.SpecFromBlob(blob),
 				Put:  promise.AwaitOK{Task: putInv.Task().Link()},
 			},
 			invocation.WithAudience(storageProvider.DID()),
@@ -483,7 +482,7 @@ func TestBlobAddHandler(t *testing.T) {
 		prevAddInv := testutil.Must(blobcmds.Add.Invoke(
 			testutil.Alice,
 			space.DID(),
-			&blobcmds.AddArguments{Blob: blob},
+			&blobcmds.AddArguments{Blob: blobcmds.SpecFromBlob(blob)},
 			invocation.WithAudience(uploadService.DID()),
 		))(t)
 		prevAddRcpt := testutil.Must(receipt.IssueOK(
@@ -509,7 +508,7 @@ func TestBlobAddHandler(t *testing.T) {
 		inv := testutil.Must(blobcmds.Add.Invoke(
 			testutil.Alice,
 			space.DID(),
-			&blobcmds.AddArguments{Blob: blob},
+			&blobcmds.AddArguments{Blob: blobcmds.SpecFromBlob(blob)},
 			invocation.WithAudience(uploadService.DID()),
 		))(t)
 

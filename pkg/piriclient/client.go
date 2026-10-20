@@ -9,6 +9,7 @@ import (
 
 	blobcmds "github.com/fil-forge/libforge/commands/blob"
 	blobreplicacmds "github.com/fil-forge/libforge/commands/blob/replica"
+	httpcmds "github.com/fil-forge/libforge/commands/http"
 	ucanlib "github.com/fil-forge/libforge/ucan"
 	"github.com/fil-forge/sprue/pkg/lib/ucan_client"
 	"github.com/fil-forge/ucantone/client"
@@ -59,10 +60,11 @@ func NewWithClient(piriDID did.DID, issuer ucan.Issuer, client *client.HTTPClien
 
 // AllocateRequest contains the parameters for a /blob/allocate invocation.
 type AllocateRequest struct {
-	Space  did.DID
-	Digest multihash.Multihash
-	Size   uint64
-	Cause  cid.Cid
+	Space did.DID
+	// Blob names the blob by its digest, or by only the hash function when
+	// the digest is computed as the data is sent.
+	Blob  blobcmds.BlobSpec
+	Cause cid.Cid
 }
 
 // Allocate sends a /blob/allocate invocation to the piri node.
@@ -114,7 +116,7 @@ func (c *Client) AllocateInvocation(ctx context.Context, req *AllocateRequest, p
 		c.piriDID,
 		&blobcmds.AllocateArguments{
 			Space: req.Space,
-			Blob:  blobcmds.Blob{Digest: req.Digest, Size: req.Size},
+			Blob:  req.Blob,
 			Cause: req.Cause,
 		},
 		options...,
@@ -133,14 +135,48 @@ func (c *Client) PiriDID() did.DID {
 
 // AcceptRequest contains the parameters for a /blob/accept invocation.
 type AcceptRequest struct {
-	Space  did.DID
-	Digest multihash.Multihash
-	Size   uint64
-	Put    cid.Cid // Link to the /http/put task that uploaded the blob
+	Space did.DID
+	// Blob is the blob as the allocation named it. An accept of a blob
+	// allocated without its digest names no digest either: the node takes it
+	// from the /http/put receipt.
+	Blob blobcmds.BlobSpec
+	Put  cid.Cid // Link to the /http/put task that uploaded the blob
+	// PutInvocation and PutReceipt travel in the request container when they
+	// are known. The invocation names the allocation the put was made to, so
+	// the node records which allocation it accepted; for a Blob that names no
+	// digest both are required, and the node checks the digest the receipt
+	// reports.
+	PutInvocation ucan.Invocation
+	PutReceipt    ucan.Receipt
+}
+
+// putEvidence returns the put invocations and receipts reqs carry. A request
+// whose blob names no digest must carry both: the node takes the digest from
+// the receipt and checks it against the invocation, so an accept without them
+// can only fail.
+func putEvidence(reqs ...*AcceptRequest) ([]ucan.Invocation, []ucan.Receipt, error) {
+	var invs []ucan.Invocation
+	var rcpts []ucan.Receipt
+	for _, req := range reqs {
+		if _, hashed := req.Blob.Digest(); !hashed && (req.PutInvocation == nil || req.PutReceipt == nil) {
+			return nil, nil, fmt.Errorf("accept of a blob without a digest needs its %s invocation and receipt (put %s)", httpcmds.Put.Command, req.Put)
+		}
+		if req.PutInvocation != nil {
+			invs = append(invs, req.PutInvocation)
+		}
+		if req.PutReceipt != nil {
+			rcpts = append(rcpts, req.PutReceipt)
+		}
+	}
+	return invs, rcpts, nil
 }
 
 // Accept sends a /blob/accept invocation to the piri node.
 func (c *Client) Accept(ctx context.Context, req *AcceptRequest, proofStore ucanlib.ProofStore, options ...invocation.Option) (*blobcmds.AcceptOK, ucan.Invocation, ucan.Receipt, ucan.Container, error) {
+	putInvs, putRcpts, err := putEvidence(req)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
 	inv, prfs, err := c.AcceptInvocation(ctx, req, proofStore, options...)
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("creating accept invocation: %w", err)
@@ -158,6 +194,8 @@ func (c *Client) Accept(ctx context.Context, req *AcceptRequest, proofStore ucan
 		c.logger,
 		inv,
 		execution.WithDelegations(prfs...),
+		execution.WithInvocations(putInvs...),
+		execution.WithReceipts(putRcpts...),
 	)
 	if err != nil {
 		return nil, nil, nil, nil, err
@@ -179,7 +217,9 @@ const acceptInvocationTTL = 5 * 60
 // maxAcceptBatch caps the accepts sent in one request. A UCAN container holds
 // at most 8192 tokens, and each accept costs one receipt plus the two
 // invocations piri attaches to it (the location claim and the PDP promise),
-// so a node's response is ~3 tokens per accept. 1000 leaves ample headroom
+// so a node's response is ~3 tokens per accept. The request is the same size
+// when the blobs were allocated without a digest, since each accept then
+// carries its /http/put invocation and receipt. 1000 leaves ample headroom
 // and keeps any single request's latency bounded.
 const maxAcceptBatch = 1000
 
@@ -204,6 +244,11 @@ type AcceptResult struct {
 func (c *Client) AcceptBatch(ctx context.Context, reqs []*AcceptRequest, proofStore ucanlib.ProofStore, options ...invocation.Option) ([]AcceptResult, []ucan.Container, error) {
 	if len(reqs) == 0 {
 		return nil, nil, nil
+	}
+	// Checked for the whole batch up front, so a bad request fails the call
+	// before any chunk has run on the node.
+	if _, _, err := putEvidence(reqs...); err != nil {
+		return nil, nil, err
 	}
 	// Every accept to one node proves the same way, so the chain is resolved
 	// once rather than per invocation.
@@ -237,7 +282,15 @@ func (c *Client) AcceptBatch(ctx context.Context, reqs []*AcceptRequest, proofSt
 		}
 
 		c.logger.Debug("executing accept batch", zap.Int("invocations", len(invs)))
-		res, err := c.client.ExecuteBatch(batch.NewRequest(ctx, invs, batch.WithDelegations(prfs...)))
+		putInvs, putRcpts, err := putEvidence(reqs[start:end]...)
+		if err != nil {
+			return results, metas, err
+		}
+		res, err := c.client.ExecuteBatch(batch.NewRequest(ctx, invs,
+			batch.WithDelegations(prfs...),
+			batch.WithInvocations(putInvs...),
+			batch.WithReceipts(putRcpts...),
+		))
 		if err != nil {
 			c.logger.Error("failed to execute accept batch", zap.Error(err))
 			return results, metas, fmt.Errorf("executing accept batch: %w", err)
@@ -293,7 +346,7 @@ func (c *Client) acceptInvocation(req *AcceptRequest, options []invocation.Optio
 		c.piriDID,
 		&blobcmds.AcceptArguments{
 			Space: req.Space,
-			Blob:  blobcmds.Blob{Digest: req.Digest, Size: req.Size},
+			Blob:  req.Blob,
 			Put:   promise.AwaitOK{Task: req.Put},
 		},
 		options...,
@@ -383,16 +436,11 @@ func (c *Client) ReleaseInvocation(ctx context.Context, req *ReleaseRequest, pro
 	return inv, prfs, nil
 }
 
-// RejectRequest contains the parameters for a /blob/reject invocation.
-type RejectRequest struct {
-	Space  did.DID
-	Digest multihash.Multihash
-}
-
 // Reject sends a /blob/reject invocation to the piri node, retiring the
-// space's parked (never-accepted) blob. Piri refuses accepted blobs with a
-// BlobAccepted failure; otherwise the handler is idempotent.
-func (c *Client) Reject(ctx context.Context, req *RejectRequest, proofStore ucanlib.ProofStore, options ...invocation.Option) (*blobcmds.RejectOK, ucan.Invocation, ucan.Receipt, error) {
+// allocation of a parked (never-accepted) blob, named by the /blob/allocate
+// task that made it. Piri refuses accepted blobs with a BlobAccepted failure;
+// otherwise the handler is idempotent.
+func (c *Client) Reject(ctx context.Context, req *blobcmds.RejectArguments, proofStore ucanlib.ProofStore, options ...invocation.Option) (*blobcmds.RejectOK, ucan.Invocation, ucan.Receipt, error) {
 	inv, prfs, err := c.RejectInvocation(ctx, req, proofStore, options...)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("creating reject invocation: %w", err)
@@ -418,11 +466,10 @@ func (c *Client) Reject(ctx context.Context, req *RejectRequest, proofStore ucan
 }
 
 // RejectInvocation returns the invocation for the reject request.
-func (c *Client) RejectInvocation(ctx context.Context, req *RejectRequest, proofStore ucanlib.ProofStore, options ...invocation.Option) (ucan.Invocation, []ucan.Delegation, error) {
+func (c *Client) RejectInvocation(ctx context.Context, req *blobcmds.RejectArguments, proofStore ucanlib.ProofStore, options ...invocation.Option) (ucan.Invocation, []ucan.Delegation, error) {
 	// As with allocate/accept/release, the proof chain is rooted at the
-	// storage provider, so the subject is the provider DID and the space
-	// travels in the arguments. Cause is not forwarded — it is upload-service
-	// routing metadata, meaningless to the node.
+	// storage provider, so the subject is the provider DID. The node knows
+	// the space and blob of the allocation the arguments name.
 	prfs, prfLinks, err := proofStore.ProofChain(ctx, c.issuer.DID(), blobcmds.Reject.Command, c.piriDID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("building proof chain: %w", err)
@@ -435,15 +482,7 @@ func (c *Client) RejectInvocation(ctx context.Context, req *RejectRequest, proof
 		invocation.WithProofs(prfLinks...),
 	)
 
-	inv, err := blobcmds.Reject.Invoke(
-		c.issuer,
-		c.piriDID,
-		&blobcmds.RejectArguments{
-			Space:  req.Space,
-			Digest: req.Digest,
-		},
-		options...,
-	)
+	inv, err := blobcmds.Reject.Invoke(c.issuer, c.piriDID, req, options...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("creating reject invocation: %w", err)
 	}

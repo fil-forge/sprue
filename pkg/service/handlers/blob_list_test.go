@@ -24,7 +24,6 @@ func newBlobRegistry(t *testing.T) (*blob_registry.Store, *consumer_store.Store)
 	consumerStore := consumer_store.New()
 	return blob_registry.New(
 		spacediff_store.New(),
-		consumerStore,
 		metrics_store.NewSpaceStore(),
 		metrics_store.New(),
 	), consumerStore

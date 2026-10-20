@@ -20,13 +20,14 @@ func NewUploadRemoveHandler(uploadStore upload_store.Store, logger *zap.Logger) 
 		func(req *binding.Request[*uploadcmds.RemoveArguments], res *binding.Response[*uploadcmds.RemoveOK]) error {
 			args := req.Task().Arguments()
 			space := req.Invocation().Subject()
+			cause := req.Invocation().Task().Link()
 			log := log.With(
 				zap.Stringer("space", space),
 				zap.Stringer("root", args.Root),
 			)
 			log.Debug("removing upload")
 
-			err := uploadStore.Remove(req.Context(), space, args.Root)
+			err := uploadStore.Remove(req.Context(), space, args.Root, cause)
 			if err != nil && !errors.Is(err, upload_store.ErrUploadNotFound) {
 				log.Error("failed to remove upload", zap.Error(err))
 				return fmt.Errorf("removing upload: %w", err)

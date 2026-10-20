@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/exaring/otelpgx"
 	"github.com/fil-forge/sprue/internal/config"
 	"github.com/fil-forge/sprue/internal/migrations"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -41,7 +42,10 @@ import (
 	pgsubscription "github.com/fil-forge/sprue/pkg/store/subscription/postgres"
 	"github.com/fil-forge/sprue/pkg/store/upload"
 	pgupload "github.com/fil-forge/sprue/pkg/store/upload/postgres"
+	uploaddiff "github.com/fil-forge/sprue/pkg/store/upload_diff"
+	pguploaddiff "github.com/fil-forge/sprue/pkg/store/upload_diff/postgres"
 
+	"go.opentelemetry.io/contrib/instrumentation/github.com/aws/aws-sdk-go-v2/otelaws"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 )
@@ -65,6 +69,7 @@ var Module = fx.Module("postgres-store",
 		fx.Annotate(NewRevocationStore, fx.As(new(revocation.Store))),
 		fx.Annotate(NewRoutingPolicyStore, fx.As(new(routingpolicy.Store))),
 		fx.Annotate(NewSpaceDiffStore, fx.As(fx.Self()), fx.As(new(spacediff.Store))),
+		fx.Annotate(NewUploadDiffStore, fx.As(fx.Self()), fx.As(new(uploaddiff.Store))),
 		fx.Annotate(NewStorageProviderStore, fx.As(new(storageprovider.Store))),
 		fx.Annotate(NewSubscriptionStore, fx.As(new(subscription.Store))),
 		fx.Annotate(NewUploadStore, fx.As(new(upload.Store))),
@@ -97,6 +102,8 @@ func NewPostgresPool(cfg config.PostgresConfig, lc fx.Lifecycle, logger *zap.Log
 	if cfg.MinConns > 0 {
 		poolCfg.MinConns = cfg.MinConns
 	}
+	// Every query is a span on the caller's trace.
+	poolCfg.ConnConfig.Tracer = otelpgx.NewTracer()
 
 	pool, err := pgxpool.NewWithConfig(context.Background(), poolCfg)
 	if err != nil {
@@ -145,6 +152,9 @@ func NewS3Client(cfg config.S3Config, logger *zap.Logger) (*s3.Client, error) {
 		return nil, fmt.Errorf("loading AWS config: %w", err)
 	}
 
+	// Every S3 call is a span on the caller's trace.
+	otelaws.AppendMiddlewares(&awsCfg.APIOptions)
+
 	client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
 		o.UsePathStyle = cfg.UsePathStyle
 	})
@@ -189,8 +199,8 @@ func NewAgentStore(lc fx.Lifecycle, mdb *MigratedPool, s3Cfg config.S3Config, s3
 	return store
 }
 
-func NewBlobRegistryStore(mdb *MigratedPool, consumerStore consumer.Store) blobregistry.Store {
-	return pgblobregistry.New(mdb.Pool, consumerStore)
+func NewBlobRegistryStore(mdb *MigratedPool) blobregistry.Store {
+	return pgblobregistry.New(mdb.Pool)
 }
 
 func NewConsumerStore(mdb *MigratedPool) consumer.Store {
@@ -233,6 +243,10 @@ func NewRoutingPolicyStore(mdb *MigratedPool) routingpolicy.Store {
 
 func NewSpaceDiffStore(mdb *MigratedPool) *pgspacediff.Store {
 	return pgspacediff.New(mdb.Pool)
+}
+
+func NewUploadDiffStore(mdb *MigratedPool) *pguploaddiff.Store {
+	return pguploaddiff.New(mdb.Pool)
 }
 
 func NewStorageProviderStore(mdb *MigratedPool) storageprovider.Store {

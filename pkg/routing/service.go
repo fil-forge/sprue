@@ -122,19 +122,15 @@ func (s *Service) GetProviderInfo(ctx context.Context, provider did.DID) (Storag
 // from the current list of available storage nodes. When the space references
 // a routing policy, only the policy's candidates are considered. It may return
 // [ErrCandidateUnavailable] if no candidates are available.
-func (s *Service) SelectStorageProvider(ctx context.Context, space did.DID, blob blob.Blob, options ...SelectOption) (StorageProviderInfo, error) {
+func (s *Service) SelectStorageProvider(ctx context.Context, space did.DID, blob blob.BlobSpec, options ...SelectOption) (StorageProviderInfo, error) {
 	cfg := &selectCfg{}
 	for _, option := range options {
 		option(cfg)
 	}
-	log := s.logger.With(
-		zap.Stringer("space", space),
-		zap.Dict(
-			"blob",
-			zap.String("digest", digestutil.Format(blob.Digest)),
-			zap.Uint64("size", blob.Size),
-		),
-	)
+	log := s.logger.With(zap.Stringer("space", space), zap.Uint64("size", blob.Size()))
+	if digest, ok := blob.Digest(); ok {
+		log = log.With(zap.String("digest", digestutil.Format(digest)))
+	}
 	log.Debug("selecting storage provider")
 
 	candidates, err := listProviders(ctx, s.storageProviderStore)

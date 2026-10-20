@@ -8,6 +8,7 @@ import (
 	assertcmds "github.com/fil-forge/libforge/commands/assert"
 	contentcmds "github.com/fil-forge/libforge/commands/content"
 	ucanlib "github.com/fil-forge/libforge/ucan"
+	"github.com/fil-forge/sprue/internal/tracing"
 	"github.com/fil-forge/sprue/pkg/lib/ucan_client"
 	"github.com/fil-forge/ucantone/client"
 	"github.com/fil-forge/ucantone/did"
@@ -30,7 +31,7 @@ type Client struct {
 
 // New creates a new indexer client.
 func New(endpoint *url.URL, indexerDID did.DID, issuer ucan.Issuer, logger *zap.Logger) (*Client, error) {
-	client, err := client.NewHTTP(endpoint)
+	client, err := client.NewHTTP(endpoint, client.WithHTTPClient(tracing.NewHTTPClient()))
 	if err != nil {
 		return nil, fmt.Errorf("creating HTTP client: %w", err)
 	}

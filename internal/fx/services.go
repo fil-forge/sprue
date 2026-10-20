@@ -9,6 +9,7 @@ import (
 
 	"github.com/fil-forge/libforge/identity"
 	"github.com/fil-forge/sprue/internal/config"
+	"github.com/fil-forge/sprue/internal/tracing"
 	"github.com/fil-forge/sprue/pkg/billing"
 	"github.com/fil-forge/sprue/pkg/mailer"
 	"github.com/fil-forge/sprue/pkg/mailer/nop"
@@ -18,6 +19,7 @@ import (
 	"github.com/fil-forge/sprue/pkg/routing"
 	"github.com/fil-forge/sprue/pkg/store/consumer"
 	"github.com/fil-forge/sprue/pkg/store/subscription"
+	"github.com/fil-forge/sprue/pkg/usage"
 )
 
 var ServicesModule = fx.Module("services",
@@ -25,6 +27,7 @@ var ServicesModule = fx.Module("services",
 	fx.Provide(NewProvisioningService),
 	fx.Provide(billing.NewService),
 	fx.Provide(routing.NewService),
+	fx.Provide(usage.NewService),
 )
 
 func NewMailingService(deploymentCfg config.DeploymentConfig, mailerCfg config.MailerConfig, logger *zap.Logger) (mailer.Mailer, error) {
@@ -52,7 +55,10 @@ func NewMailingService(deploymentCfg config.DeploymentConfig, mailerCfg config.M
 		if mailerCfg.PostmarkToken == "" {
 			return nil, fmt.Errorf("postmark mail configured but token not set")
 		}
-		postmarkOpts := []postmark.Option{postmark.WithEnvironment(deploymentCfg.Environment)}
+		postmarkOpts := []postmark.Option{
+			postmark.WithEnvironment(deploymentCfg.Environment),
+			postmark.WithHTTPClient(tracing.NewHTTPClient()),
+		}
 		if mailerCfg.Sender != "" {
 			postmarkOpts = append(postmarkOpts, postmark.WithSender(mailerCfg.Sender))
 		}

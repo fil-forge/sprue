@@ -55,15 +55,23 @@ func (s *Service) GetSubscription(ctx context.Context, provider ServiceDID, subs
 }
 
 // ListServiceProviders returns a list of services that have been provisioned
-// for the given consumer (space).
+// for the given consumer (space). Each provider appears once: the consumer
+// schema keys on (subscription, provider) and so can hold a provider more than
+// once for a space, but callers are asking which services hold the space, not
+// how many subscriptions it has.
 func (s *Service) ListServiceProviders(ctx context.Context, space SpaceDID) ([]ServiceDID, error) {
 	var providers []ServiceDID
+	seen := map[ServiceDID]struct{}{}
 	page, err := s.consumerStore.List(ctx, space)
 	if err != nil {
 		return nil, err
 	}
 	for {
 		for _, rec := range page.Results {
+			if _, ok := seen[rec.Provider]; ok {
+				continue
+			}
+			seen[rec.Provider] = struct{}{}
 			providers = append(providers, rec.Provider)
 		}
 		if page.Cursor == nil {

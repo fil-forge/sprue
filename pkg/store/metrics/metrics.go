@@ -24,6 +24,7 @@ type Store interface {
 	IncrementTotals(ctx context.Context, inc map[string]uint64) error
 }
 
+// SpaceStore holds the running totals for a space.
 type SpaceStore interface {
 	// Get all metrics for a space from storage.
 	Get(ctx context.Context, space did.DID) (map[string]uint64, error)

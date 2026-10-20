@@ -1,3 +1,12 @@
+// Package memory holds the in-memory blob registry, for local development and
+// tests.
+//
+// It writes a change to the space diff log and to the space byte counters
+// through two separate stores, each with its own lock, so the pair is not
+// atomic: a reader can catch the diff row before the counters move. Readers
+// that need the two to agree, such as the usage service, can only detect that
+// by re-reading. The postgres registry commits both in one transaction and has
+// no such window, which is why this stays a development backend.
 package memory
 
 import (
@@ -10,7 +19,6 @@ import (
 	"github.com/fil-forge/libforge/commands/blob"
 	"github.com/fil-forge/sprue/pkg/store"
 	blobregistry "github.com/fil-forge/sprue/pkg/store/blob_registry"
-	"github.com/fil-forge/sprue/pkg/store/consumer"
 	"github.com/fil-forge/sprue/pkg/store/metrics"
 	spacediff "github.com/fil-forge/sprue/pkg/store/space_diff"
 	"github.com/fil-forge/ucantone/did"
@@ -23,18 +31,16 @@ type Store struct {
 	// space -> list of blob entries
 	blobs          map[did.DID][]blobregistry.Record
 	spaceDiffStore spacediff.Store
-	consumerStore  consumer.Store
 	spaceMetrics   metrics.SpaceStore
 	adminMetrics   metrics.Store
 }
 
 var _ blobregistry.Store = (*Store)(nil)
 
-func New(spaceDiffStore spacediff.Store, consumerStore consumer.Store, spaceMetrics metrics.SpaceStore, adminMetrics metrics.Store) *Store {
+func New(spaceDiffStore spacediff.Store, spaceMetrics metrics.SpaceStore, adminMetrics metrics.Store) *Store {
 	return &Store{
 		blobs:          map[did.DID][]blobregistry.Record{},
 		spaceDiffStore: spaceDiffStore,
-		consumerStore:  consumerStore,
 		spaceMetrics:   spaceMetrics,
 		adminMetrics:   adminMetrics,
 	}
@@ -47,25 +53,21 @@ func (s *Store) Deregister(ctx context.Context, space did.DID, digest multihash.
 	ents := []blobregistry.Record{}
 	for _, ent := range s.blobs[space] {
 		if bytes.Equal(ent.Blob.Digest, digest) {
-			consumers, err := s.collectConsumers(ctx, space)
-			if err != nil {
-				return fmt.Errorf("collecting consumers: %w", err)
-			}
-			// There should only be one subscription per provider, but in theory you
-			// could have multiple providers for the same consumer (space).
-			for _, c := range consumers {
-				s.spaceDiffStore.Put(ctx, c.Provider, space, c.Subscription, cause, -int64(ent.Blob.Size), time.Now())
-			}
-
 			inc := map[string]uint64{
 				metrics.BlobRemoveTotalMetric:     1,
 				metrics.BlobRemoveSizeTotalMetric: ent.Blob.Size,
 			}
-			err = s.spaceMetrics.IncrementTotals(ctx, space, inc)
-			if err != nil {
+			// One change is one diff row and one counter movement. The instant
+			// is read once, before the write, so both describe the same event.
+			receiptAt := time.Now()
+			if err := s.spaceDiffStore.Put(ctx, space, cause, -int64(ent.Blob.Size), receiptAt); err != nil {
+				return fmt.Errorf("putting space diff: %w", err)
+			}
+			if err := s.spaceMetrics.IncrementTotals(ctx, space, inc); err != nil {
 				return fmt.Errorf("incrementing space metrics: %w", err)
 			}
-			err = s.adminMetrics.IncrementTotals(ctx, inc)
+
+			err := s.adminMetrics.IncrementTotals(ctx, inc)
 			if err != nil {
 				return fmt.Errorf("incrementing admin metrics: %w", err)
 			}
@@ -146,45 +148,24 @@ func (s *Store) Register(ctx context.Context, space did.DID, blob blob.Blob, cau
 	}
 	s.blobs[space] = append(s.blobs[space], ent)
 
-	consumers, err := s.collectConsumers(ctx, space)
-	if err != nil {
-		return fmt.Errorf("collecting consumers: %w", err)
-	}
-	// There should only be one subscription per provider, but in theory you
-	// could have multiple providers for the same consumer (space).
-	for _, c := range consumers {
-		s.spaceDiffStore.Put(ctx, c.Provider, space, c.Subscription, cause, int64(blob.Size), time.Now())
-	}
-
 	inc := map[string]uint64{
 		metrics.BlobAddTotalMetric:     1,
 		metrics.BlobAddSizeTotalMetric: blob.Size,
 	}
-	err = s.spaceMetrics.IncrementTotals(ctx, space, inc)
-	if err != nil {
+	// One change is one diff row and one counter movement. The instant is read
+	// once, before the write, so both describe the same event.
+	receiptAt := time.Now()
+	if err := s.spaceDiffStore.Put(ctx, space, cause, int64(blob.Size), receiptAt); err != nil {
+		return fmt.Errorf("putting space diff: %w", err)
+	}
+	if err := s.spaceMetrics.IncrementTotals(ctx, space, inc); err != nil {
 		return fmt.Errorf("incrementing space metrics: %w", err)
 	}
-	err = s.adminMetrics.IncrementTotals(ctx, inc)
+
+	err := s.adminMetrics.IncrementTotals(ctx, inc)
 	if err != nil {
 		return fmt.Errorf("incrementing admin metrics: %w", err)
 	}
 
 	return nil
-}
-
-func (s *Store) collectConsumers(ctx context.Context, space did.DID) ([]consumer.Record, error) {
-	results, err := store.Collect(ctx, func(ctx context.Context, options store.PaginationConfig) (store.Page[consumer.Record], error) {
-		opts := []consumer.ListOption{}
-		if options.Cursor != nil {
-			opts = append(opts, consumer.WithListCursor(*options.Cursor))
-		}
-		return s.consumerStore.List(ctx, space, opts...)
-	})
-	if err != nil {
-		return nil, fmt.Errorf("listing consumers: %w", err)
-	}
-	if len(results) == 0 {
-		return nil, consumer.ErrConsumerNotFound
-	}
-	return results, nil
 }

@@ -44,6 +44,19 @@ Request logs carry `method`, `uri`, `status`, `latency`, `request_id`,
 `content_length`, `response_size`, `headers`, and related fields, and use the
 `request completed` / `client error` / `server error` messages.
 
+## Tracing
+
+`sprue serve` exports OpenTelemetry traces over OTLP/HTTP when
+`OTEL_EXPORTER_OTLP_ENDPOINT` names a collector; with no endpoint, tracing is
+off. Each UCAN request is a trace named for the commands it invokes (such as
+`/space/blob/add`), with a span per invocation and the Postgres, S3, piri and
+indexer calls it makes as child spans. A caller that sends a `traceparent`
+header, such as ingot, gets sprue's spans in its own trace. The other standard
+`OTEL_*` environment variables apply: `OTEL_EXPORTER_OTLP_HEADERS`
+authenticates to the collector, and `OTEL_TRACES_SAMPLER_ARG` sets the
+fraction of requests traced (`0.01` traces 1%; the default traces every
+request).
+
 ## Notes
 
 * Rate limits storage was not implemented. It has never been used in JS implementation, only supports blocking completely and can probably be applied at firewall.

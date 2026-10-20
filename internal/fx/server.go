@@ -14,6 +14,7 @@ import (
 
 	"github.com/fil-forge/libforge/identity"
 	"github.com/fil-forge/sprue/internal/config"
+	"github.com/fil-forge/sprue/internal/tracing"
 	"github.com/fil-forge/sprue/pkg/build"
 	"github.com/fil-forge/sprue/pkg/service"
 )
@@ -34,7 +35,8 @@ func NewEchoServer(
 	e.HideBanner = true
 	e.HidePort = true
 
-	// Middleware
+	// Middleware. The server span goes first, so it times the whole request.
+	e.Use(tracing.Middleware())
 	e.Use(middleware.Recover())
 	e.Use(middleware.RequestID())
 	e.Use(requestLogger(logger))

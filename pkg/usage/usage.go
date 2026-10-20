@@ -1,0 +1,469 @@
+// Package usage reconstructs per-space usage time series from the space and
+// upload diff logs and the space's running byte and object counters.
+package usage
+
+import (
+	"context"
+	"fmt"
+	"math"
+	"time"
+
+	metricscmds "github.com/fil-forge/libforge/commands/metrics"
+	"github.com/fil-forge/sprue/pkg/store/metrics"
+	spacediff "github.com/fil-forge/sprue/pkg/store/space_diff"
+	uploaddiff "github.com/fil-forge/sprue/pkg/store/upload_diff"
+	"github.com/fil-forge/ucantone/did"
+	"github.com/fil-forge/ucantone/errors"
+	"go.uber.org/zap"
+)
+
+const (
+	// MaxSamples is the most samples one call returns. Consumers ask for up to
+	// 768 (32 days at hourly granularity), and the CBOR and DAG-JSON codecs
+	// both refuse arrays longer than 8192, so the ceiling is real.
+	MaxSamples = 2048
+
+	// maxWindow bounds the window before it becomes a [time.Duration], which
+	// overflows silently past roughly 292 years.
+	maxWindow = 366 * 24 * time.Hour
+
+	// maxScanRows bounds the diff scan. One stored blob is one row, so without
+	// a bound a range covering a busy period reads without limit.
+	maxScanRows = 500_000
+
+	// totalsAttempts is how many times to read the space counters before giving
+	// up on a reading consistent with the diff scan.
+	totalsAttempts = 3
+)
+
+var (
+	// ErrInvalidRange is returned when the range is not a non-empty interval.
+	ErrInvalidRange = errors.New(
+		metricscmds.InvalidRangeErrorName,
+		"range must be a non-empty interval between positive unix timestamps",
+	)
+	// ErrInvalidWindow is returned when the window is not a usable duration.
+	ErrInvalidWindow = errors.New(
+		metricscmds.InvalidWindowErrorName,
+		"window must be positive and no longer than %s", maxWindow,
+	)
+	// ErrUsageUnstable is returned when the space was written to throughout the
+	// read, so no consistent series could be assembled. It is retryable.
+	ErrUsageUnstable = errors.New(
+		metricscmds.UsageUnstableErrorName,
+		"space usage changed throughout the read",
+	)
+	// ErrRangeTooBusy is returned when the range holds more recorded changes
+	// than one call will scan.
+	ErrRangeTooBusy = errors.New(
+		metricscmds.RangeTooBusyErrorName,
+		"range holds more than %d recorded changes, request a shorter range", maxScanRows,
+	)
+)
+
+func errTooManySamples(n int) error {
+	return errors.New(
+		metricscmds.TooManySamplesErrorName,
+		"%d samples requested, the limit is %d: widen the window or shorten the range", n, MaxSamples,
+	)
+}
+
+// Sample is one bucket of a usage series.
+type Sample struct {
+	// End is the instant the bucket closes.
+	End time.Time
+	// BytesStored is the bytes the space holds as of End.
+	BytesStored uint64
+	// BytesIngested is the bytes added to the space during the bucket.
+	BytesIngested uint64
+	// UploadCount is the uploads the space holds as of End.
+	UploadCount uint64
+}
+
+// Series is a dense run of samples: one per window over [From, To), ordered by
+// ascending End, with no gaps. To is the requested end clamped to the current
+// time.
+type Series struct {
+	From    time.Time
+	To      time.Time
+	Window  time.Duration
+	Samples []Sample
+}
+
+// Service answers usage queries against the recorded diffs.
+type Service struct {
+	diffs        spacediff.Store
+	uploadDiffs  uploaddiff.Store
+	spaceMetrics metrics.SpaceStore
+	logger       *zap.Logger
+	now          func() time.Time
+}
+
+type Option func(*Service)
+
+// WithClock replaces the clock used to clamp a range to the present.
+func WithClock(now func() time.Time) Option {
+	return func(s *Service) { s.now = now }
+}
+
+// NewService builds a usage service over the two diff logs and the space
+// counters they are anchored on.
+func NewService(diffs spacediff.Store, uploadDiffs uploaddiff.Store, spaceMetrics metrics.SpaceStore, logger *zap.Logger, opts ...Option) *Service {
+	s := &Service{
+		diffs:        diffs,
+		uploadDiffs:  uploadDiffs,
+		spaceMetrics: spaceMetrics,
+		logger:       logger,
+		now:          time.Now,
+	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
+}
+
+// ParseRange validates the arguments of a usage query, given as unix timestamps
+// and a number of seconds. It may return [ErrInvalidRange] or
+// [ErrInvalidWindow].
+func ParseRange(from, to, window int64) (time.Time, time.Time, time.Duration, error) {
+	if from <= 0 || to <= 0 || to <= from {
+		return time.Time{}, time.Time{}, 0, ErrInvalidRange
+	}
+	if window <= 0 || window > int64(maxWindow/time.Second) {
+		return time.Time{}, time.Time{}, 0, ErrInvalidWindow
+	}
+	return time.Unix(from, 0).UTC(), time.Unix(to, 0).UTC(), time.Duration(window) * time.Second, nil
+}
+
+// Sample returns the usage series for a space over [from, to) in buckets of
+// window, ending no later than the present. A space with nothing stored, and one
+// this service has never seen, both return a run of zeros.
+//
+// The last bucket is short whenever window does not divide the range covered.
+// Its stored bytes are exact, being a reading taken where it ends, while its
+// ingested bytes cover only the elapsed part of the window.
+//
+// It may return [ErrInvalidRange], [ErrInvalidWindow], [ErrRangeTooBusy],
+// [ErrUsageUnstable], or a TooManySamples failure when the range holds more
+// buckets than [MaxSamples].
+func (s *Service) Sample(ctx context.Context, space did.DID, from, to time.Time, window time.Duration) (Series, error) {
+	if from.IsZero() || !to.After(from) {
+		return Series{}, ErrInvalidRange
+	}
+	if window <= 0 || window > maxWindow {
+		return Series{}, ErrInvalidWindow
+	}
+
+	// Report what has already happened. A range running past the present ends
+	// at the present instead, which shortens its last bucket rather than
+	// padding one out with the latest reading and pulling a consumer's average
+	// forward. A range lying entirely ahead covers nothing at all, and must
+	// still come back with an end no earlier than its start.
+	if now := s.now(); to.After(now) {
+		to = now
+		if to.Before(from) {
+			to = from
+		}
+	}
+	if !to.After(from) {
+		return Series{From: from, To: to, Window: window, Samples: []Sample{}}, nil
+	}
+
+	// A duration cannot express more than about 292 years, and Sub saturates
+	// rather than wrapping, so a wider range would silently measure as that
+	// much and return a series stopping short of the range asked for.
+	span := to.Sub(from)
+	if span == math.MaxInt64 {
+		return Series{}, ErrInvalidRange
+	}
+
+	// Divide first and round up from the remainder. Rounding up by adding
+	// window-1 to the span would overflow for a range near that limit, turning
+	// the count negative and the allocations below into a panic.
+	n := int(span / window)
+	if span%window != 0 {
+		n++
+	}
+	if n > MaxSamples {
+		return Series{}, errTooManySamples(n)
+	}
+
+	samples, err := s.run(ctx, space, from, to, window, n)
+	if err != nil {
+		return Series{}, err
+	}
+
+	return Series{From: from, To: to, Window: window, Samples: samples}, nil
+}
+
+// run replays a space's diffs into n buckets of window over [from, to).
+func (s *Service) run(ctx context.Context, space did.DID, from, to time.Time, window time.Duration, n int) ([]Sample, error) {
+	reading, err := s.read(ctx, space, from)
+	if err != nil {
+		return nil, err
+	}
+
+	// Bucket k covers [from+k*window, from+(k+1)*window).
+	deltas := make([]int64, n)
+	ingested := make([]uint64, n)
+	uploadDeltas := make([]int64, n)
+
+	// Changes at or after `to` are what separates the counters, which describe
+	// now, from what the space held at `to`.
+	var tail, uploadTail int64
+
+	for _, r := range reading.byteRows {
+		switch {
+		case r.ReceiptAt.Before(from):
+			// Earlier than the range, so already part of the stored bytes at
+			// every bucket within it. Unwinding it would subtract it twice.
+			continue
+		case !r.ReceiptAt.Before(to):
+			tail += r.Delta
+		default:
+			// Within the range, so before `to`, and n buckets of window cover
+			// everything up to it: the index lands inside them.
+			k := int(r.ReceiptAt.Sub(from) / window)
+			deltas[k] += r.Delta
+			if r.Delta > 0 {
+				ingested[k] += uint64(r.Delta)
+			}
+		}
+	}
+
+	// The upload log is bucketed the same way. Its deltas are objects rather
+	// than bytes, so it yields only a gauge: there is no ingested equivalent.
+	for _, r := range reading.uploadRows {
+		switch {
+		case r.ReceiptAt.Before(from):
+			continue
+		case !r.ReceiptAt.Before(to):
+			uploadTail += r.Delta
+		default:
+			k := int(r.ReceiptAt.Sub(from) / window)
+			uploadDeltas[k] += r.Delta
+		}
+	}
+
+	// Walk back from the stored bytes at `to`, shedding each bucket's changes to
+	// reach the bytes held when that bucket opened.
+	// Bucket ends are accumulated rather than reached by multiplying the window
+	// out, which overflows a duration once the range approaches its limit.
+	ends := make([]time.Time, n)
+	end := from
+	for k := range n {
+		end = end.Add(window)
+		if end.After(to) {
+			end = to
+		}
+		ends[k] = end
+	}
+
+	samples := make([]Sample, n)
+	cur := reading.storedBytes - tail
+	uploads := reading.uploads - uploadTail
+	for k := n - 1; k >= 0; k-- {
+		end := ends[k]
+		held := cur
+		if held < 0 {
+			// The counters and the diff log disagree. Report nothing held
+			// rather than a wrapped value, and keep going: the rest of the
+			// series is still worth more than a failed call.
+			s.logger.Warn("space usage unwound below zero",
+				zap.Stringer("space", space),
+				zap.Time("bucket", end),
+				zap.Int64("bytes", held))
+			held = 0
+		}
+		count := uploads
+		if count < 0 {
+			s.logger.Warn("space upload count unwound below zero",
+				zap.Stringer("space", space),
+				zap.Time("bucket", end),
+				zap.Int64("uploads", count))
+			count = 0
+		}
+		samples[k] = Sample{
+			End:           end,
+			BytesStored:   uint64(held),
+			BytesIngested: ingested[k],
+			UploadCount:   uint64(count),
+		}
+		cur -= deltas[k]
+		uploads -= uploadDeltas[k]
+	}
+
+	return samples, nil
+}
+
+// reading is what a space currently holds and the changes that got it there,
+// both logs and both totals describing one instant.
+type reading struct {
+	storedBytes int64
+	uploads     int64
+	byteRows    []spacediff.DifferenceRecord
+	uploadRows  []uploaddiff.DifferenceRecord
+}
+
+// read returns what the space currently holds, together with its diffs from the
+// start of the range onwards, all describing the same instant.
+//
+// The totals and the logs come from different tables and one total anchors every
+// sample, so a change landing between the reads would shift a whole series. The
+// counters only ever increase, so reading them again after the scans detects
+// exactly that: unchanged means nothing committed for this space while they ran.
+// A change and an equal removal are caught too, because the counters are
+// compared separately rather than by their difference.
+//
+// Both logs are scanned inside one envelope. Validating them separately would
+// let the byte series and the upload series describe different instants, which
+// is the same skew at one remove.
+//
+// This assumes the backend makes a change visible in its log and its counters at
+// once, which the postgres stores do by committing them in one transaction. The
+// in-memory stores write them separately, so a reader there can still catch a
+// row whose counters have not moved yet; that backend is for development and
+// tests.
+func (s *Service) read(ctx context.Context, space did.DID, from time.Time) (reading, error) {
+	totals, err := s.spaceMetrics.Get(ctx, space)
+	if err != nil {
+		return reading{}, fmt.Errorf("getting space metrics: %w", err)
+	}
+
+	for attempt := 1; ; attempt++ {
+		byteRows, err := s.scan(ctx, space, from)
+		if err != nil {
+			return reading{}, err
+		}
+		uploadRows, err := s.scanUploads(ctx, space, from)
+		if err != nil {
+			return reading{}, err
+		}
+
+		after, err := s.spaceMetrics.Get(ctx, space)
+		if err != nil {
+			return reading{}, fmt.Errorf("getting space metrics: %w", err)
+		}
+
+		if settled(totals, after) {
+			storedBytes, err := storedBytes(totals)
+			if err != nil {
+				return reading{}, err
+			}
+			uploads, err := storedUploads(totals)
+			if err != nil {
+				return reading{}, err
+			}
+			return reading{
+				storedBytes: storedBytes,
+				uploads:     uploads,
+				byteRows:    byteRows,
+				uploadRows:  uploadRows,
+			}, nil
+		}
+
+		if attempt >= totalsAttempts {
+			s.logger.Warn("gave up reading consistent space usage",
+				zap.Stringer("space", space), zap.Int("attempts", attempt))
+			return reading{}, ErrUsageUnstable
+		}
+		totals = after
+	}
+}
+
+// settled reports whether every counter the series is built from held still
+// across the scans.
+func settled(before, after map[string]uint64) bool {
+	for _, m := range []string{
+		metrics.BlobAddSizeTotalMetric,
+		metrics.BlobRemoveSizeTotalMetric,
+		metrics.UploadAddTotalMetric,
+		metrics.UploadRemoveTotalMetric,
+	} {
+		if before[m] != after[m] {
+			return false
+		}
+	}
+	return true
+}
+
+// scan collects the diffs recorded from the start of the range onwards. The
+// store's lower bound is exclusive and a change recorded exactly at the start
+// belongs to the first bucket, so the bound is backed off by a second and the
+// earlier rows are dropped by the caller.
+//
+// This pages by hand rather than through store.Collect so the row count can be
+// bounded.
+func (s *Service) scan(ctx context.Context, space did.DID, from time.Time) ([]spacediff.DifferenceRecord, error) {
+	after := from.Add(-time.Second)
+
+	var rows []spacediff.DifferenceRecord
+	var cursor *string
+	for {
+		var opts []spacediff.ListOption
+		if cursor != nil {
+			opts = append(opts, spacediff.WithListCursor(*cursor))
+		}
+		page, err := s.diffs.List(ctx, space, after, opts...)
+		if err != nil {
+			return nil, fmt.Errorf("listing space diffs: %w", err)
+		}
+		rows = append(rows, page.Results...)
+		if len(rows) > maxScanRows {
+			return nil, ErrRangeTooBusy
+		}
+		if page.Cursor == nil || len(page.Results) == 0 {
+			return rows, nil
+		}
+		cursor = page.Cursor
+	}
+}
+
+// scanUploads collects the upload diffs over the same bound as scan. The two
+// logs have the same shape, so this is the same loop against the other store.
+func (s *Service) scanUploads(ctx context.Context, space did.DID, from time.Time) ([]uploaddiff.DifferenceRecord, error) {
+	after := from.Add(-time.Second)
+
+	var rows []uploaddiff.DifferenceRecord
+	var cursor *string
+	for {
+		var opts []uploaddiff.ListOption
+		if cursor != nil {
+			opts = append(opts, uploaddiff.WithListCursor(*cursor))
+		}
+		page, err := s.uploadDiffs.List(ctx, space, after, opts...)
+		if err != nil {
+			return nil, fmt.Errorf("listing upload diffs: %w", err)
+		}
+		rows = append(rows, page.Results...)
+		if len(rows) > maxScanRows {
+			return nil, ErrRangeTooBusy
+		}
+		if page.Cursor == nil || len(page.Results) == 0 {
+			return rows, nil
+		}
+		cursor = page.Cursor
+	}
+}
+
+// storedUploads derives the uploads a space currently holds from its add and
+// remove counters, which only ever increase.
+func storedUploads(totals map[string]uint64) (int64, error) {
+	added := totals[metrics.UploadAddTotalMetric]
+	removed := totals[metrics.UploadRemoveTotalMetric]
+	if removed > added || added-removed > math.MaxInt64 {
+		return 0, fmt.Errorf("space upload counters inconsistent: added %d, removed %d", added, removed)
+	}
+	return int64(added - removed), nil
+}
+
+// storedBytes derives the bytes a space currently holds from its add and remove
+// counters, which only ever increase.
+func storedBytes(totals map[string]uint64) (int64, error) {
+	added := totals[metrics.BlobAddSizeTotalMetric]
+	removed := totals[metrics.BlobRemoveSizeTotalMetric]
+	if removed > added || added-removed > math.MaxInt64 {
+		return 0, fmt.Errorf("space byte counters inconsistent: added %d, removed %d", added, removed)
+	}
+	return int64(added - removed), nil
+}

@@ -92,7 +92,8 @@ func NewSpaceStore(pool *pgxpool.Pool) *SpaceStore {
 func (s *SpaceStore) Initialize(ctx context.Context) error { return nil }
 
 func (s *SpaceStore) Get(ctx context.Context, space did.DID) (map[string]uint64, error) {
-	rows, err := s.pool.Query(ctx, `SELECT name, value FROM space_metrics WHERE space = $1`, space.String())
+	rows, err := s.pool.Query(ctx,
+		`SELECT name, value FROM space_metrics WHERE space = $1`, space.String())
 	if err != nil {
 		return nil, fmt.Errorf("querying space metrics: %w", err)
 	}

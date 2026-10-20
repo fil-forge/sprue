@@ -2,7 +2,10 @@ package store
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"time"
 )
 
 // Page is a generic type representing a paginated response from the store.
@@ -40,4 +43,33 @@ func Collect[T any](ctx context.Context, getPage GetPageFunc[T]) ([]T, error) {
 		i++
 	}
 	return items, nil
+}
+
+// Diff logs are listed in (receiptAt, cause) order, and a cursor carries both
+// so a page boundary falling inside a group of changes sharing a timestamp
+// resumes within that group rather than skipping the rest of it. Every diff log
+// and every backend uses this encoding, so a cursor means the same thing
+// whichever one issued it.
+type cursorPayload struct {
+	ReceiptAt time.Time `json:"r"`
+	Cause     string    `json:"c"`
+}
+
+// EncodeCursor builds the cursor that resumes listing after the given change.
+func EncodeCursor(receiptAt time.Time, cause string) string {
+	b, _ := json.Marshal(cursorPayload{ReceiptAt: receiptAt.UTC(), Cause: cause})
+	return base64.RawURLEncoding.EncodeToString(b)
+}
+
+// DecodeCursor reads back the change a cursor resumes after.
+func DecodeCursor(cursor string) (time.Time, string, error) {
+	b, err := base64.RawURLEncoding.DecodeString(cursor)
+	if err != nil {
+		return time.Time{}, "", err
+	}
+	var p cursorPayload
+	if err := json.Unmarshal(b, &p); err != nil {
+		return time.Time{}, "", err
+	}
+	return p.ReceiptAt, p.Cause, nil
 }

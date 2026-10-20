@@ -54,6 +54,10 @@ Sprue is the upload coordination service for Storacha local development. It rout
 - `piriclient`: Communicates with Piri storage nodes for blob allocation/acceptance
 - `indexerclient`: Communicates with the indexing service
 
+**Tracing (internal/tracing/)**
+- OpenTelemetry: the Echo server-span middleware, the `SpanNamer` UCAN event listener that names a request's span for its commands, the `Handler` wrapper giving each invocation its own span, and the instrumented HTTP transport. `Setup` installs the OTLP exporter for `serve`.
+- A new outbound HTTP client should use `tracing.NewHTTPClient()`, or wrap its own transport with `tracing.Transport`. Handlers registered through `createUCANServer` are wrapped already.
+
 **External Clients (pkg/)**
 - `piriclient`: Communicates with Piri storage nodes for blob allocation/acceptance
 - `indexerclient`: Communicates with the indexing service
@@ -75,6 +79,7 @@ Configuration via YAML file or environment variables with `SPRUE_` prefix:
 - `SPRUE_INDEXER_ENDPOINT`
 - `SPRUE_STORAGE_POSTGRES_DSN`, `SPRUE_STORAGE_POSTGRES_MAX_CONNS`, `SPRUE_STORAGE_POSTGRES_SKIP_MIGRATIONS`
 - `SPRUE_STORAGE_S3_*` for S3/MinIO settings
+- Tracing uses the standard `OTEL_*` variables, not the `SPRUE_` prefix: `OTEL_EXPORTER_OTLP_ENDPOINT` turns it on (off when unset), `OTEL_TRACES_SAMPLER_ARG` sets the sampled fraction
 
 ### Key Dependencies
 
@@ -85,3 +90,13 @@ Configuration via YAML file or environment variables with `SPRUE_` prefix:
 - **jackc/pgx/v5**: PostgreSQL driver
 - **pressly/goose/v3**: SQL schema migrations
 - **viper/cobra**: Configuration and CLI
+
+## Observability
+
+When a change adds or alters behavior someone depends on, decide how on-call
+would see it working and see it fail, and add what's useful in the same PR:
+logs, complete trace spans, and an alert or dashboard panel in
+fil-forge/infra-central. Skip it for changes nothing operational depends on.
+When a feature's health is best read as a number, say so in the PR
+description, naming the metric and [FIL-1144](https://linear.app/filecoin-foundation/issue/FIL-1144).
+`docs/observability.md` says how to do each.

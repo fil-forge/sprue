@@ -11,6 +11,7 @@ import (
 	"github.com/fil-forge/libforge/attestation"
 	"github.com/fil-forge/libforge/attestation/didmailto"
 	"github.com/fil-forge/libforge/identity"
+	"github.com/fil-forge/sprue/internal/tracing"
 	"github.com/fil-forge/sprue/pkg/lib/ucan_server"
 	"github.com/fil-forge/sprue/pkg/service/ui"
 	"github.com/fil-forge/sprue/pkg/store/agent"
@@ -101,7 +102,7 @@ func createUCANServer(id multikey.Issuer, agentStore agent.Store, handlers []ser
 		opt(&cfg)
 	}
 
-	webResolverOpts := []web.Option{}
+	webResolverOpts := []web.Option{web.WithTransport(tracing.Transport(http.DefaultTransport))}
 	if cfg.insecureDIDResolution {
 		logger.Warn("insecure DID resolution enabled: did:web will be resolved over HTTP instead of HTTPS; this should only be used for development purposes")
 		webResolverOpts = append(webResolverOpts, web.WithInsecure(true))
@@ -127,7 +128,7 @@ func createUCANServer(id multikey.Issuer, agentStore agent.Store, handlers []ser
 	if err != nil {
 		return nil, fmt.Errorf("parsing PLC directory URL %q: %w", plcDirectory, err)
 	}
-	p, err := plc.NewResolver(*u)
+	p, err := plc.NewResolver(*u, plc.WithTransport(tracing.Transport(http.DefaultTransport)))
 	if err != nil {
 		return nil, fmt.Errorf("creating did:plc resolver: %w", err)
 	}
@@ -149,8 +150,14 @@ func createUCANServer(id multikey.Issuer, agentStore agent.Store, handlers []ser
 	serverOpts := append(
 		slices.Clone(cfg.serverOptions),
 		server.WithReceiptTimestamps(true),
-		server.WithEventListener(&ucan_server.AgentMessageLogger{Logger: logger, AgentStore: agentStore}),
+		// The incoming message is stored while the handlers run, not before:
+		// nothing a handler reads from the agent store is written by this
+		// request, and the server still waits for the write before the
+		// response leaves. A failed incoming write is logged, not returned,
+		// since by then the handlers have run; see AgentMessageLogger.
+		server.WithConcurrentEventListener(&ucan_server.AgentMessageLogger{Logger: logger, AgentStore: agentStore}),
 		server.WithEventListener(&ucan_server.ErrorHandler{Logger: logger}),
+		server.WithEventListener(tracing.SpanNamer{}),
 		server.WithPanicLogger(ucan_server.NewPanicLogger(logger)),
 		server.WithValidationOptions(
 			validator.WithDIDResolver(resolver),
@@ -160,7 +167,7 @@ func createUCANServer(id multikey.Issuer, agentStore agent.Store, handlers []ser
 
 	srv := server.NewHTTP(id, serverOpts...)
 	for _, h := range handlers {
-		srv.Handle(h.Command, h.Handler)
+		srv.Handle(h.Command, tracing.Handler(h.Command, h.Handler))
 	}
 	return srv, nil
 }
