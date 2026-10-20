@@ -9,6 +9,7 @@ import (
 	routingcmds "github.com/fil-forge/libforge/commands/routing"
 	ucanlib "github.com/fil-forge/libforge/ucan"
 	providercap "github.com/fil-forge/sprue/pkg/commands/admin/provider"
+	proofscap "github.com/fil-forge/sprue/pkg/commands/admin/provider/proofs"
 	weightcap "github.com/fil-forge/sprue/pkg/commands/admin/provider/weight"
 	"github.com/fil-forge/sprue/pkg/lib/ucan_client"
 	"github.com/fil-forge/ucantone/binding"
@@ -142,6 +143,45 @@ func (c *Client) AdminProviderList(ctx context.Context, options ...invocation.Op
 		return nil, nil, fmt.Errorf("executing provider list invocation: %w", err)
 	}
 	return listOK, rcpt, nil
+}
+
+func (c *Client) AdminProviderProofsSet(ctx context.Context, providerID did.DID, proofs ucan.Container, options ...invocation.Option) (ucan.Receipt, error) {
+	if c.issuer.DID() != c.uploadServiceID {
+		return nil, fmt.Errorf("admin operation not permitted: signer DID %s does not match upload service ID %s", c.issuer.DID(), c.uploadServiceID)
+	}
+
+	if proofs == nil {
+		return nil, fmt.Errorf("missing proofs")
+	}
+	proofBytes, err := container.Encode(container.Raw, proofs)
+	if err != nil {
+		return nil, fmt.Errorf("encoding proofs: %w", err)
+	}
+
+	options = slices.Clone(options)
+	options = append(
+		options,
+		invocation.WithAudience(c.uploadServiceID),
+	)
+
+	inv, err := proofscap.Set.Invoke(
+		c.issuer,
+		c.uploadServiceID,
+		&proofscap.SetArguments{
+			Provider: providerID,
+			Proofs:   proofBytes,
+		},
+		options...,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("invoking provider proofs set: %w", err)
+	}
+
+	_, rcpt, _, err := ucan_client.Execute[*proofscap.SetOK](ctx, c.client, c.logger, inv)
+	if err != nil {
+		return nil, fmt.Errorf("executing provider proofs set invocation: %w", err)
+	}
+	return rcpt, nil
 }
 
 func (c *Client) AdminProviderWeightSet(ctx context.Context, providerID did.DID, weight int, replicationWeight int, options ...invocation.Option) (ucan.Receipt, error) {

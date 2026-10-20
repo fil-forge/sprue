@@ -229,6 +229,36 @@ func TestStorageProviderStore(t *testing.T) {
 				require.ErrorIs(t, err, storageprovider.ErrStorageProviderNotFound)
 			})
 
+			t.Run("SetProofs replaces only the proofs", func(t *testing.T) {
+				provider := testutil.RandomDID(t)
+				endpoint := randomEndpoint(t)
+				replWeight := 15
+				require.NoError(t, s.Add(t.Context(), provider, endpoint, 10, &replWeight, randomProofs(t)))
+				proofs := randomProofs(t)
+
+				require.NoError(t, s.SetProofs(t.Context(), provider, proofs))
+
+				rec, err := s.Get(t.Context(), provider)
+				require.NoError(t, err)
+				require.Equal(t, weights{endpoint, 10, &replWeight}, weightsOf(rec))
+				wantBytes, err := container.Encode(container.Raw, proofs)
+				require.NoError(t, err)
+				gotBytes, err := container.Encode(container.Raw, rec.Proofs)
+				require.NoError(t, err)
+				require.Equal(t, wantBytes, gotBytes)
+			})
+
+			t.Run("SetProofs returns ErrStorageProviderNotFound for unknown provider", func(t *testing.T) {
+				err := s.SetProofs(t.Context(), testutil.RandomDID(t), randomProofs(t))
+				require.ErrorIs(t, err, storageprovider.ErrStorageProviderNotFound)
+			})
+
+			t.Run("SetProofs returns an error when proofs are missing", func(t *testing.T) {
+				provider := testutil.RandomDID(t)
+				require.NoError(t, s.Add(t.Context(), provider, randomEndpoint(t), 10, nil, randomProofs(t)))
+				require.Error(t, s.SetProofs(t.Context(), provider, nil))
+			})
+
 			t.Run("Add sets UpdatedAt", func(t *testing.T) {
 				provider := testutil.RandomDID(t)
 				require.NoError(t, s.Add(t.Context(), provider, randomEndpoint(t), 10, nil, randomProofs(t)))

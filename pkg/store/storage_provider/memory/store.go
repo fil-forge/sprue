@@ -154,6 +154,22 @@ func (s *Store) SetWeights(ctx context.Context, id did.DID, weight int, replicat
 	return nil
 }
 
+func (s *Store) SetProofs(ctx context.Context, id did.DID, proofs ucan.Container) error {
+	if proofs == nil {
+		return fmt.Errorf("missing proofs")
+	}
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	sp, ok := s.providers[id]
+	if !ok {
+		return storageprovider.ErrStorageProviderNotFound
+	}
+	sp.Proofs = proofs
+	sp.UpdatedAt = time.Now()
+	s.providers[id] = sp
+	return nil
+}
+
 // cloneInt copies the pointed-to value, so a stored record never shares an
 // *int with the caller.
 func cloneInt(value *int) *int {

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"net/url"
 
 	blobcmds "github.com/fil-forge/libforge/commands/blob"
@@ -11,6 +12,7 @@ import (
 	"github.com/fil-forge/sprue/pkg/commands/admin/provider"
 	storageprovider "github.com/fil-forge/sprue/pkg/store/storage_provider"
 	"github.com/fil-forge/ucantone/binding"
+	"github.com/fil-forge/ucantone/did"
 	"github.com/fil-forge/ucantone/errors"
 	"github.com/fil-forge/ucantone/server"
 	"github.com/fil-forge/ucantone/ucan"
@@ -56,19 +58,9 @@ func NewAdminProviderRegisterHandler(id identity.Identity, providerStore storage
 				return res.SetFailure(errors.New("InvalidProofs", "decoding proofs: %s", err.Error()))
 			}
 
-			// Verify the proofs delegate every required capability from the
-			// provider (subject) to the service (audience).
-			proofStore := ucanlib.NewContainerProofStore(proofs)
-			for _, cmd := range requiredProofs {
-				chain, _, err := proofStore.ProofChain(req.Context(), id.Issuer.DID(), cmd, args.Provider)
-				if err != nil {
-					log.Error("Failed to build proof chain", zap.Stringer("command", cmd), zap.Error(err))
-					return res.SetFailure(errors.New("InvalidProofs", "building proof chain for %s: %s", cmd, err.Error()))
-				}
-				if len(chain) == 0 {
-					log.Warn("Missing required proof", zap.Stringer("command", cmd))
-					return res.SetFailure(errors.New("InvalidProofs", "missing required %s delegation", cmd))
-				}
+			if err := verifyProviderProofs(req.Context(), id.Issuer.DID(), args.Provider, proofs); err != nil {
+				log.Warn("Invalid proofs", zap.Error(err))
+				return res.SetFailure(err)
 			}
 
 			replicationWeight := initialReplicationWeight
@@ -84,4 +76,21 @@ func NewAdminProviderRegisterHandler(id identity.Identity, providerStore storage
 			return res.SetSuccess(&provider.RegisterOK{})
 		},
 	)
+}
+
+// verifyProviderProofs checks that proofs delegate every command in
+// requiredProofs from the provider (subject) to the service (audience). It
+// returns an InvalidProofs failure naming the first command without a chain.
+func verifyProviderProofs(ctx context.Context, service did.DID, provider did.DID, proofs ucan.Container) error {
+	proofStore := ucanlib.NewContainerProofStore(proofs)
+	for _, cmd := range requiredProofs {
+		chain, _, err := proofStore.ProofChain(ctx, service, cmd, provider)
+		if err != nil {
+			return errors.New("InvalidProofs", "building proof chain for %s: %s", cmd, err.Error())
+		}
+		if len(chain) == 0 {
+			return errors.New("InvalidProofs", "missing required %s delegation", cmd)
+		}
+	}
+	return nil
 }

@@ -92,6 +92,28 @@ func (s *Store) SetWeights(ctx context.Context, id did.DID, weight int, replicat
 	return nil
 }
 
+func (s *Store) SetProofs(ctx context.Context, id did.DID, proofs ucan.Container) error {
+	if proofs == nil {
+		return fmt.Errorf("missing proofs")
+	}
+	proofBytes, err := container.Encode(container.Raw, proofs)
+	if err != nil {
+		return fmt.Errorf("encoding proofs: %w", err)
+	}
+	tag, err := s.pool.Exec(ctx, `
+		UPDATE storage_provider
+		SET proofs = $2, updated_at = NOW()
+		WHERE provider = $1
+	`, id.String(), proofBytes)
+	if err != nil {
+		return fmt.Errorf("setting storage provider proofs: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return storageprovider.ErrStorageProviderNotFound
+	}
+	return nil
+}
+
 func (s *Store) Get(ctx context.Context, providerID did.DID) (storageprovider.Record, error) {
 	row := s.pool.QueryRow(ctx, `
 		SELECT provider, endpoint, weight, replication_weight, proofs, inserted_at, updated_at

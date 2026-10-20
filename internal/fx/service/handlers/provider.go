@@ -37,6 +37,10 @@ var Module = fx.Module("service-handlers",
 			fx.ResultTags(`group:"ucan_handlers"`),
 		),
 		fx.Annotate(
+			handlers.NewAdminProviderProofsSetHandler,
+			fx.ResultTags(`group:"ucan_handlers"`),
+		),
+		fx.Annotate(
 			handlers.NewAdminProviderRegisterHandler,
 			fx.ResultTags(`group:"ucan_handlers"`),
 		),

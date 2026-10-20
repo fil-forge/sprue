@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"github.com/fil-forge/sprue/cmd/client/admin/provider/proofs"
 	"github.com/fil-forge/sprue/cmd/client/admin/provider/weight"
 	"github.com/spf13/cobra"
 )
@@ -13,6 +14,7 @@ var Cmd = &cobra.Command{
 func init() {
 	Cmd.AddCommand(deregisterCmd)
 	Cmd.AddCommand(listCmd)
+	Cmd.AddCommand(proofs.Cmd)
 	Cmd.AddCommand(registerCmd)
 	Cmd.AddCommand(weight.Cmd)
 }
