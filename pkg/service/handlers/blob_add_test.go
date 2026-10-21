@@ -175,7 +175,7 @@ func TestBlobAddHandler(t *testing.T) {
 		// Register a storage provider with weight 0 — it'll be filtered out.
 		storageProvider := testutil.RandomIssuer(t)
 		endpoint := testutil.Must(url.Parse("https://piri.example.com"))(t)
-		err := deps.spStore.Put(ctx, storageProvider.DID(), *endpoint, 0, nil, container.New())
+		err := deps.spStore.Add(ctx, storageProvider.DID(), *endpoint, 0, nil, container.New())
 		require.NoError(t, err)
 
 		args := blobcmds.AddArguments{
@@ -230,7 +230,7 @@ func TestBlobAddHandler(t *testing.T) {
 		// The upload service is authorized to invoke /blob/allocate and /blob/accept
 		// by the proofs the provider granted it at registration, sourced from the
 		// provider record rather than the invocation metadata.
-		err := deps.spStore.Put(ctx, storageProvider.DID(), *piriURL, 100, nil, testutil.ProviderProofs(t, storageProvider, uploadService))
+		err := deps.spStore.Add(ctx, storageProvider.DID(), *piriURL, 100, nil, testutil.ProviderProofs(t, storageProvider, uploadService))
 		require.NoError(t, err)
 
 		args := blobcmds.AddArguments{
@@ -285,11 +285,11 @@ func TestBlobAddHandler(t *testing.T) {
 		}
 		piriSrv := testutil.NewMockPiriServer(t, candidate, uploadService, allocateOK, acceptOK)
 		piriURL := testutil.Must(url.Parse(piriSrv.URL))(t)
-		require.NoError(t, deps.spStore.Put(ctx, candidate.DID(), *piriURL, 1, nil, testutil.ProviderProofs(t, candidate, uploadService)))
+		require.NoError(t, deps.spStore.Add(ctx, candidate.DID(), *piriURL, 1, nil, testutil.ProviderProofs(t, candidate, uploadService)))
 
 		outside := testutil.RandomIssuer(t)
 		outsideURL := testutil.Must(url.Parse("http://127.0.0.1:1/unreachable"))(t)
-		require.NoError(t, deps.spStore.Put(ctx, outside.DID(), *outsideURL, 1000, nil, container.New()))
+		require.NoError(t, deps.spStore.Add(ctx, outside.DID(), *outsideURL, 1000, nil, container.New()))
 
 		policy := testutil.RandomDID(t)
 		require.NoError(t, deps.policyStore.SetCandidates(ctx, policy, []did.DID{candidate.DID()}, testutil.RandomCID(t)))
@@ -338,9 +338,9 @@ func TestBlobAddHandler(t *testing.T) {
 		// policy must not be selected.
 		candidate := testutil.RandomIssuer(t)
 		endpoint := testutil.Must(url.Parse("https://piri.example.com"))(t)
-		require.NoError(t, deps.spStore.Put(ctx, candidate.DID(), *endpoint, 0, nil, container.New()))
+		require.NoError(t, deps.spStore.Add(ctx, candidate.DID(), *endpoint, 0, nil, container.New()))
 		outside := testutil.RandomIssuer(t)
-		require.NoError(t, deps.spStore.Put(ctx, outside.DID(), *endpoint, 100, nil, container.New()))
+		require.NoError(t, deps.spStore.Add(ctx, outside.DID(), *endpoint, 100, nil, container.New()))
 
 		policy := testutil.RandomDID(t)
 		require.NoError(t, deps.policyStore.SetCandidates(ctx, policy, []did.DID{candidate.DID()}, testutil.RandomCID(t)))
@@ -384,7 +384,7 @@ func TestBlobAddHandler(t *testing.T) {
 		piriSrv := testutil.NewMockPiriServer(t, storageProvider, uploadService, allocateOK, acceptOK)
 		piriURL := testutil.Must(url.Parse(piriSrv.URL))(t)
 
-		err := deps.spStore.Put(ctx, storageProvider.DID(), *piriURL, 100, nil, testutil.ProviderProofs(t, storageProvider, uploadService))
+		err := deps.spStore.Add(ctx, storageProvider.DID(), *piriURL, 100, nil, testutil.ProviderProofs(t, storageProvider, uploadService))
 		require.NoError(t, err)
 
 		args := blobcmds.AddArguments{

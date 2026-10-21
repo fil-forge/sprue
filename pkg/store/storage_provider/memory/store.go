@@ -90,34 +90,6 @@ func (s *Store) List(ctx context.Context, options ...storageprovider.ListOption)
 	return store.Page[storageprovider.Record]{Results: records, Cursor: cursor}, nil
 }
 
-func (s *Store) Put(ctx context.Context, id did.DID, endpoint url.URL, weight int, replicationWeight *int, proofs ucan.Container) error {
-	if proofs == nil {
-		return fmt.Errorf("missing proofs")
-	}
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	now := time.Now()
-	if sp, ok := s.providers[id]; ok {
-		sp.Endpoint = endpoint
-		sp.Weight = weight
-		sp.ReplicationWeight = cloneInt(replicationWeight)
-		sp.Proofs = proofs
-		sp.UpdatedAt = now
-		s.providers[id] = sp
-		return nil
-	}
-	s.providers[id] = storageprovider.Record{
-		Provider:          id,
-		Endpoint:          endpoint,
-		Weight:            weight,
-		ReplicationWeight: cloneInt(replicationWeight),
-		Proofs:            proofs,
-		InsertedAt:        now,
-		UpdatedAt:         now,
-	}
-	return nil
-}
-
 func (s *Store) Add(ctx context.Context, id did.DID, endpoint url.URL, weight int, replicationWeight *int, proofs ucan.Container) error {
 	if proofs == nil {
 		return fmt.Errorf("missing proofs")

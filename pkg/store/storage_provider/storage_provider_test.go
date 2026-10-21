@@ -85,18 +85,18 @@ func TestStorageProviderStore(t *testing.T) {
 		t.Run(string(k), func(t *testing.T) {
 			s := makeStore(t, k)
 
-			t.Run("puts and gets a provider", func(t *testing.T) {
-				provider := testutil.Alice
+			t.Run("adds and gets a provider", func(t *testing.T) {
+				provider := testutil.RandomDID(t)
 				endpoint := randomEndpoint(t)
 				weight := 10
 				replWeight := 5
 				proofs := randomProofs(t)
 
-				require.NoError(t, s.Put(t.Context(), provider.DID(), endpoint, weight, &replWeight, proofs))
+				require.NoError(t, s.Add(t.Context(), provider, endpoint, weight, &replWeight, proofs))
 
-				rec, err := s.Get(t.Context(), provider.DID())
+				rec, err := s.Get(t.Context(), provider)
 				require.NoError(t, err)
-				require.Equal(t, provider.DID(), rec.Provider)
+				require.Equal(t, provider, rec.Provider)
 				require.Equal(t, endpoint, rec.Endpoint)
 				require.Equal(t, weight, rec.Weight)
 				require.Equal(t, replWeight, *rec.ReplicationWeight)
@@ -110,58 +110,12 @@ func TestStorageProviderStore(t *testing.T) {
 				require.Equal(t, wantBytes, gotBytes)
 			})
 
-			t.Run("Put returns an error when proofs are missing", func(t *testing.T) {
-				provider := testutil.Alice
-				endpoint := randomEndpoint(t)
+			t.Run("Add accepts a nil replicationWeight", func(t *testing.T) {
+				provider := testutil.RandomDID(t)
 
-				require.Error(t, s.Put(t.Context(), provider.DID(), endpoint, 10, nil, nil))
-			})
+				require.NoError(t, s.Add(t.Context(), provider, randomEndpoint(t), 10, nil, randomProofs(t)))
 
-			t.Run("put updates an existing provider", func(t *testing.T) {
-				provider := testutil.Alice
-				endpoint1 := randomEndpoint(t)
-				endpoint2 := randomEndpoint(t)
-				weight1 := 10
-				weight2 := 20
-				replWeight1 := 5
-				replWeight2 := 15
-
-				require.NoError(t, s.Put(t.Context(), provider.DID(), endpoint1, weight1, &replWeight1, randomProofs(t)))
-				require.NoError(t, s.Put(t.Context(), provider.DID(), endpoint2, weight2, &replWeight2, randomProofs(t)))
-
-				rec, err := s.Get(t.Context(), provider.DID())
-				require.NoError(t, err)
-				require.Equal(t, endpoint2, rec.Endpoint)
-				require.Equal(t, weight2, rec.Weight)
-				require.Equal(t, replWeight2, *rec.ReplicationWeight)
-			})
-
-			t.Run("Put with nil replicationWeight clears a previously-stored value", func(t *testing.T) {
-				provider := testutil.Alice
-				endpoint := randomEndpoint(t)
-				weight := 10
-				replWeight := 5
-
-				require.NoError(t, s.Put(t.Context(), provider.DID(), endpoint, weight, &replWeight, randomProofs(t)))
-
-				rec, err := s.Get(t.Context(), provider.DID())
-				require.NoError(t, err)
-				require.NotNil(t, rec.ReplicationWeight)
-
-				require.NoError(t, s.Put(t.Context(), provider.DID(), endpoint, weight, nil, randomProofs(t)))
-
-				rec, err = s.Get(t.Context(), provider.DID())
-				require.NoError(t, err)
-				require.Nil(t, rec.ReplicationWeight)
-			})
-
-			t.Run("Put accepts a nil replicationWeight on insert", func(t *testing.T) {
-				provider := testutil.Bob
-				endpoint := randomEndpoint(t)
-
-				require.NoError(t, s.Put(t.Context(), provider.DID(), endpoint, 10, nil, randomProofs(t)))
-
-				rec, err := s.Get(t.Context(), provider.DID())
+				rec, err := s.Get(t.Context(), provider)
 				require.NoError(t, err)
 				require.Nil(t, rec.ReplicationWeight)
 			})
@@ -212,6 +166,18 @@ func TestStorageProviderStore(t *testing.T) {
 				rec, err := s.Get(t.Context(), provider)
 				require.NoError(t, err)
 				require.Equal(t, weights{endpoint, 20, &replWeight}, weightsOf(rec))
+			})
+
+			t.Run("SetWeights with nil replicationWeight clears a previously-stored value", func(t *testing.T) {
+				provider := testutil.RandomDID(t)
+				replWeight := 5
+				require.NoError(t, s.Add(t.Context(), provider, randomEndpoint(t), 10, &replWeight, randomProofs(t)))
+
+				require.NoError(t, s.SetWeights(t.Context(), provider, 10, nil))
+
+				rec, err := s.Get(t.Context(), provider)
+				require.NoError(t, err)
+				require.Nil(t, rec.ReplicationWeight)
 			})
 
 			t.Run("SetWeights returns ErrStorageProviderNotFound for unknown provider", func(t *testing.T) {
@@ -271,9 +237,6 @@ func TestStorageProviderStore(t *testing.T) {
 			// Each write stores replication weight 5 from a caller-owned
 			// variable, then the caller changes the variable.
 			writes := map[string]func(t *testing.T, provider did.DID, replWeight *int) error{
-				"Put": func(t *testing.T, provider did.DID, replWeight *int) error {
-					return s.Put(t.Context(), provider, randomEndpoint(t), 10, replWeight, randomProofs(t))
-				},
 				"Add": func(t *testing.T, provider did.DID, replWeight *int) error {
 					return s.Add(t.Context(), provider, randomEndpoint(t), 10, replWeight, randomProofs(t))
 				},
@@ -318,15 +281,15 @@ func TestStorageProviderStore(t *testing.T) {
 			})
 
 			t.Run("deletes a provider", func(t *testing.T) {
-				provider := testutil.Alice
+				provider := testutil.RandomDID(t)
 				endpoint := randomEndpoint(t)
 				weight := 10
 				replWeight := 5
 
-				require.NoError(t, s.Put(t.Context(), provider.DID(), endpoint, weight, &replWeight, randomProofs(t)))
-				require.NoError(t, s.Delete(t.Context(), provider.DID()))
+				require.NoError(t, s.Add(t.Context(), provider, endpoint, weight, &replWeight, randomProofs(t)))
+				require.NoError(t, s.Delete(t.Context(), provider))
 
-				_, err := s.Get(t.Context(), provider.DID())
+				_, err := s.Get(t.Context(), provider)
 				require.ErrorIs(t, err, storageprovider.ErrStorageProviderNotFound)
 			})
 
@@ -338,14 +301,14 @@ func TestStorageProviderStore(t *testing.T) {
 			})
 
 			t.Run("List includes added providers", func(t *testing.T) {
-				provider1 := testutil.Alice
-				provider2 := testutil.Bob
+				provider1 := testutil.RandomDID(t)
+				provider2 := testutil.RandomDID(t)
 				endpoint := randomEndpoint(t)
 				weight := 10
 				replWeight := 5
 
-				require.NoError(t, s.Put(t.Context(), provider1.DID(), endpoint, weight, &replWeight, randomProofs(t)))
-				require.NoError(t, s.Put(t.Context(), provider2.DID(), endpoint, weight, &replWeight, randomProofs(t)))
+				require.NoError(t, s.Add(t.Context(), provider1, endpoint, weight, &replWeight, randomProofs(t)))
+				require.NoError(t, s.Add(t.Context(), provider2, endpoint, weight, &replWeight, randomProofs(t)))
 
 				all, err := store.Collect(t.Context(), func(ctx context.Context, opts store.PaginationConfig) (store.Page[storageprovider.Record], error) {
 					var listOpts []storageprovider.ListOption
@@ -360,8 +323,8 @@ func TestStorageProviderStore(t *testing.T) {
 				for _, r := range all {
 					ids = append(ids, r.Provider.String())
 				}
-				require.Contains(t, ids, provider1.DID().String())
-				require.Contains(t, ids, provider2.DID().String())
+				require.Contains(t, ids, provider1.String())
+				require.Contains(t, ids, provider2.String())
 			})
 
 			t.Run("List paginates results", func(t *testing.T) {
@@ -370,7 +333,7 @@ func TestStorageProviderStore(t *testing.T) {
 				for range 5 {
 					provider := testutil.RandomDID(t)
 					endpoint := randomEndpoint(t)
-					require.NoError(t, s.Put(t.Context(), provider, endpoint, weight, &replWeight, randomProofs(t)))
+					require.NoError(t, s.Add(t.Context(), provider, endpoint, weight, &replWeight, randomProofs(t)))
 				}
 
 				all, err := store.Collect(t.Context(), func(ctx context.Context, opts store.PaginationConfig) (store.Page[storageprovider.Record], error) {
@@ -385,13 +348,13 @@ func TestStorageProviderStore(t *testing.T) {
 			})
 
 			t.Run("deleted provider does not appear in List", func(t *testing.T) {
-				provider := testutil.Alice
+				provider := testutil.RandomDID(t)
 				endpoint := randomEndpoint(t)
 				weight := 10
 				replWeight := 5
 
-				require.NoError(t, s.Put(t.Context(), provider.DID(), endpoint, weight, &replWeight, randomProofs(t)))
-				require.NoError(t, s.Delete(t.Context(), provider.DID()))
+				require.NoError(t, s.Add(t.Context(), provider, endpoint, weight, &replWeight, randomProofs(t)))
+				require.NoError(t, s.Delete(t.Context(), provider))
 
 				all, err := store.Collect(t.Context(), func(ctx context.Context, opts store.PaginationConfig) (store.Page[storageprovider.Record], error) {
 					var listOpts []storageprovider.ListOption
@@ -403,7 +366,7 @@ func TestStorageProviderStore(t *testing.T) {
 				require.NoError(t, err)
 
 				for _, r := range all {
-					require.NotEqual(t, provider.DID(), r.Provider)
+					require.NotEqual(t, provider, r.Provider)
 				}
 			})
 		})
