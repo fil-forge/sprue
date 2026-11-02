@@ -31,6 +31,30 @@ func New(pool *pgxpool.Pool) *Store {
 
 func (s *Store) Initialize(ctx context.Context) error { return nil }
 
+func (s *Store) Put(ctx context.Context, id did.DID, endpoint url.URL, weight int, replicationWeight *int, proofs ucan.Container) error {
+	if proofs == nil {
+		return fmt.Errorf("missing proofs")
+	}
+	proofBytes, err := container.Encode(container.Raw, proofs)
+	if err != nil {
+		return fmt.Errorf("encoding proofs: %w", err)
+	}
+	_, err = s.pool.Exec(ctx, `
+		INSERT INTO storage_provider (provider, endpoint, weight, replication_weight, proofs)
+		VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (provider) DO UPDATE
+		SET endpoint = EXCLUDED.endpoint,
+		    weight = EXCLUDED.weight,
+		    replication_weight = EXCLUDED.replication_weight,
+		    proofs = EXCLUDED.proofs,
+		    updated_at = NOW()
+	`, id.String(), endpoint.String(), weight, replicationWeight, proofBytes)
+	if err != nil {
+		return fmt.Errorf("storing storage provider: %w", err)
+	}
+	return nil
+}
+
 func (s *Store) Add(ctx context.Context, id did.DID, endpoint url.URL, weight int, replicationWeight *int, proofs ucan.Container) error {
 	if proofs == nil {
 		return fmt.Errorf("missing proofs")
@@ -61,28 +85,6 @@ func (s *Store) SetWeights(ctx context.Context, id did.DID, weight int, replicat
 	`, id.String(), weight, replicationWeight)
 	if err != nil {
 		return fmt.Errorf("setting storage provider weights: %w", err)
-	}
-	if tag.RowsAffected() == 0 {
-		return storageprovider.ErrStorageProviderNotFound
-	}
-	return nil
-}
-
-func (s *Store) SetProofs(ctx context.Context, id did.DID, proofs ucan.Container) error {
-	if proofs == nil {
-		return fmt.Errorf("missing proofs")
-	}
-	proofBytes, err := container.Encode(container.Raw, proofs)
-	if err != nil {
-		return fmt.Errorf("encoding proofs: %w", err)
-	}
-	tag, err := s.pool.Exec(ctx, `
-		UPDATE storage_provider
-		SET proofs = $2, updated_at = NOW()
-		WHERE provider = $1
-	`, id.String(), proofBytes)
-	if err != nil {
-		return fmt.Errorf("setting storage provider proofs: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
 		return storageprovider.ErrStorageProviderNotFound
