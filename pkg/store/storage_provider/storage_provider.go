@@ -63,6 +63,8 @@ type Record struct {
 }
 
 type Store interface {
+	// Put creates a storage provider record, or replaces the existing one.
+	Put(ctx context.Context, providerID did.DID, endpoint url.URL, weight int, replicationWeight *int, proofs ucan.Container) error
 	// Add creates a storage provider record. Returns [ErrStorageProviderExists]
 	// if a record with this DID already exists.
 	Add(ctx context.Context, providerID did.DID, endpoint url.URL, weight int, replicationWeight *int, proofs ucan.Container) error
@@ -70,10 +72,6 @@ type Store interface {
 	// the rest of the record unchanged. Returns [ErrStorageProviderNotFound] if
 	// the record does not exist.
 	SetWeights(ctx context.Context, providerID did.DID, weight int, replicationWeight *int) error
-	// SetProofs replaces the proofs of an existing storage provider and leaves
-	// the rest of the record unchanged. Returns [ErrStorageProviderNotFound] if
-	// the record does not exist.
-	SetProofs(ctx context.Context, providerID did.DID, proofs ucan.Container) error
 	// Get a storage provider record by provider DID. May return
 	// [ErrStorageProviderNotFound].
 	Get(ctx context.Context, providerID did.DID) (Record, error)
