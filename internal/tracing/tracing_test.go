@@ -201,6 +201,28 @@ func TestHandlerPanicEndsAndFailsSpans(t *testing.T) {
 	}
 }
 
+func TestMissingReceiptFailsSpan(t *testing.T) {
+	rec := installRecorder(t)
+	service := testutil.RandomIssuer(t)
+	alice := testutil.RandomIssuer(t)
+	cmd := testutil.ConsoleLogCommand
+	srv := server.NewHTTP(service)
+	srv.HandleBatch(cmd, Handler(cmd, func([]execution.Batch) error { return nil }))
+
+	inv, err := invocation.Invoke(alice, alice.DID(), cmd, datamodel.Map{}, invocation.WithAudience(service.DID()))
+	require.NoError(t, err)
+	res, err := srv.Execute(execution.NewRequest(t.Context(), inv))
+	require.NoError(t, err)
+	require.True(t, res.Receipt().Out().IsErr())
+
+	spans := spansNamed(rec.Ended(), cmd.String())
+	require.Len(t, spans, 1)
+	require.Equal(t, codes.Error, spans[0].Status().Code)
+	ok, found := boolAttr(spans[0], "ucan.receipt.ok")
+	require.True(t, found)
+	require.False(t, ok)
+}
+
 func TestHealthNotTraced(t *testing.T) {
 	rec := installRecorder(t)
 	e := newServer(t, testutil.RandomIssuer(t), nil)

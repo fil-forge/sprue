@@ -102,8 +102,9 @@ func (SpanNamer) OnResponseEncode(context.Context, ucan.Container) error { retur
 // validated, so the gap before them is validation, and they end when the
 // handler returns for the whole batch. A failure receipt is an outcome the
 // caller receives, recorded as ucan.receipt.ok=false; an error returned by the
-// handler, a panic in it, or the receipt ucantone issues for a per-invocation
-// handler's error or panic, also marks the span as failed.
+// handler, a panic in it, an invocation it left without a receipt, or the
+// receipt ucantone issues for a per-invocation handler's error or panic, also
+// marks the span as failed.
 func Handler(cmd ucan.Command, fn execution.BatchHandlerFunc) execution.BatchHandlerFunc {
 	tracer := Tracer()
 	name := cmd.String()
@@ -131,11 +132,17 @@ func Handler(cmd ucan.Command, fn execution.BatchHandlerFunc) execution.BatchHan
 					span.RecordError(err)
 					span.SetStatus(codes.Error, err.Error())
 				default:
-					if rcpt := items[i].Response.Receipt(); rcpt != nil {
-						span.SetAttributes(attribute.Bool("ucan.receipt.ok", rcpt.Out().IsOK()))
-						if failure, ok := handlerFailure(rcpt); ok {
-							span.SetStatus(codes.Error, failure.Message)
-						}
+					rcpt := items[i].Response.Receipt()
+					if rcpt == nil {
+						// ucantone fails a task left without a receipt once
+						// the handler returns, after this span has ended.
+						span.SetAttributes(attribute.Bool("ucan.receipt.ok", false))
+						span.SetStatus(codes.Error, "handler set no receipt")
+						break
+					}
+					span.SetAttributes(attribute.Bool("ucan.receipt.ok", rcpt.Out().IsOK()))
+					if failure, ok := handlerFailure(rcpt); ok {
+						span.SetStatus(codes.Error, failure.Message)
 					}
 				}
 				span.End()
