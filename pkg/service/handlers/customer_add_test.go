@@ -61,7 +61,7 @@ func TestCustomerAddHandler(t *testing.T) {
 			Details:         details,
 		})
 
-		err := handler.Handler(req, res)
+		err := handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		_, err = customercmds.Add.Unpack(res.Receipt())
@@ -89,7 +89,7 @@ func TestCustomerAddHandler(t *testing.T) {
 			Product:  product,
 		})
 
-		err := handler.Handler(req, res)
+		err := handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		_, err = customercmds.Add.Unpack(res.Receipt())
@@ -114,7 +114,7 @@ func TestCustomerAddHandler(t *testing.T) {
 			Product:  product,
 		})
 
-		err := handler.Handler(req, res)
+		err := handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		_, err = customercmds.Add.Unpack(res.Receipt())

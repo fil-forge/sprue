@@ -70,7 +70,7 @@ func TestAdminProviderDeregisterHandler(t *testing.T) {
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
-		err = handler.Handler(req, res)
+		err = handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		_, err = provider.Deregister.Unpack(res.Receipt())
@@ -105,7 +105,7 @@ func TestAdminProviderDeregisterHandler(t *testing.T) {
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
-		err = handler.Handler(req, res)
+		err = handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 		_, err = blobcmds.Allocate.Unpack(res.Receipt())
 		require.NoError(t, err)
@@ -131,7 +131,7 @@ func TestAdminProviderDeregisterHandler(t *testing.T) {
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
-		err = handler.Handler(req, res)
+		err = handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		_, err = provider.Deregister.Unpack(res.Receipt())

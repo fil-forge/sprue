@@ -73,7 +73,7 @@ func TestRoutingUseHandler(t *testing.T) {
 		policy := putPolicy(t, deps)
 
 		req, res := invokeRoutingUse(t, ctx, space, uploadService, &policy)
-		require.NoError(t, handler.Handler(req, res))
+		require.NoError(t, handler.Handler([]execution.Batch{{Request: req, Response: res}}))
 
 		_, err := routingcmds.Use.Unpack(res.Receipt())
 		require.NoError(t, err)
@@ -93,7 +93,7 @@ func TestRoutingUseHandler(t *testing.T) {
 		require.NoError(t, deps.router.UseSpacePolicy(ctx, space.DID(), policy, testutil.RandomCID(t)))
 
 		req, res := invokeRoutingUse(t, ctx, space, uploadService, nil)
-		require.NoError(t, handler.Handler(req, res))
+		require.NoError(t, handler.Handler([]execution.Batch{{Request: req, Response: res}}))
 
 		_, err := routingcmds.Use.Unpack(res.Receipt())
 		require.NoError(t, err)
@@ -109,7 +109,7 @@ func TestRoutingUseHandler(t *testing.T) {
 		policy := putPolicy(t, deps)
 
 		req, res := invokeRoutingUse(t, ctx, space, uploadService, &policy)
-		require.NoError(t, handler.Handler(req, res))
+		require.NoError(t, handler.Handler([]execution.Batch{{Request: req, Response: res}}))
 
 		_, err := routingcmds.Use.Unpack(res.Receipt())
 		var errModel datamodel.ErrorModel
@@ -126,7 +126,7 @@ func TestRoutingUseHandler(t *testing.T) {
 		unknown := testutil.RandomDID(t)
 
 		req, res := invokeRoutingUse(t, ctx, space, uploadService, &unknown)
-		require.NoError(t, handler.Handler(req, res))
+		require.NoError(t, handler.Handler([]execution.Batch{{Request: req, Response: res}}))
 
 		_, err := routingcmds.Use.Unpack(res.Receipt())
 		var errModel datamodel.ErrorModel

@@ -78,7 +78,7 @@ func TestAccessDelegateHandler(t *testing.T) {
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(id.Issuer))
 		require.NoError(t, err)
 
-		err = handler.Handler(req, res)
+		err = handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		_, err = blobcmds.Allocate.Unpack(res.Receipt())
@@ -119,7 +119,7 @@ func TestAccessDelegateHandler(t *testing.T) {
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(id.Issuer))
 		require.NoError(t, err)
 
-		err = handler.Handler(req, res)
+		err = handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 		_, err = blobcmds.Allocate.Unpack(res.Receipt())
 		require.NoError(t, err)
@@ -155,7 +155,7 @@ func TestAccessDelegateHandler(t *testing.T) {
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(id.Issuer))
 		require.NoError(t, err)
 
-		err = handler.Handler(req, res)
+		err = handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 		_, err = blobcmds.Allocate.Unpack(res.Receipt())
 		require.NoError(t, err)
@@ -198,7 +198,7 @@ func TestAccessDelegateHandler(t *testing.T) {
 
 		// extractDelegations returns an error directly (not via SetFailure) when a
 		// referenced delegation is missing from the request metadata.
-		err = handler.Handler(req, res)
+		err = handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "delegation not found")
 	})

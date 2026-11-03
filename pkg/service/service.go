@@ -167,7 +167,7 @@ func createUCANServer(id multikey.Issuer, agentStore agent.Store, handlers []ser
 
 	srv := server.NewHTTP(id, serverOpts...)
 	for _, h := range handlers {
-		srv.Handle(h.Command, tracing.Handler(h.Command, h.Handler))
+		srv.HandleBatch(h.Command, tracing.Handler(h.Command, h.Handler))
 	}
 	return srv, nil
 }

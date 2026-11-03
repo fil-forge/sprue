@@ -181,7 +181,7 @@ func invokeBlobAbort(
 	req := execution.NewRequest(t.Context(), inv)
 	res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 	require.NoError(t, err)
-	if err := deps.handler.Handler(req, res); err != nil {
+	if err := deps.handler.Handler([]execution.Batch{{Request: req, Response: res}}); err != nil {
 		return nil, err
 	}
 	return res.Receipt(), nil

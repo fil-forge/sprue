@@ -263,7 +263,7 @@ func (w *digestlessWorld) send(t *testing.T, inv ucan.Invocation) addResult {
 	t.Helper()
 	req := execution.NewRequest(t.Context(), inv)
 	res := testutil.Must(execution.NewResponse(inv.Task().Link(), execution.WithIssuer(w.uploadService)))(t)
-	require.NoError(t, w.add.Handler(req, res))
+	require.NoError(t, w.add.Handler([]execution.Batch{{Request: req, Response: res}}))
 
 	out := addResult{inv: inv, receipt: res.Receipt()}
 	if res.Receipt().Out().IsErr() {
@@ -422,7 +422,7 @@ func TestDigestlessAbort(t *testing.T) {
 		))(t)
 		req := execution.NewRequest(t.Context(), inv)
 		res := testutil.Must(execution.NewResponse(inv.Task().Link(), execution.WithIssuer(w.uploadService)))(t)
-		require.NoError(t, w.abort.Handler(req, res))
+		require.NoError(t, w.abort.Handler([]execution.Batch{{Request: req, Response: res}}))
 		return res.Receipt()
 	}
 
@@ -470,7 +470,7 @@ func TestDigestlessBlobAddReplay(t *testing.T) {
 		inv := first.inv
 		req := execution.NewRequest(t.Context(), inv)
 		res := testutil.Must(execution.NewResponse(inv.Task().Link(), execution.WithIssuer(w.uploadService)))(t)
-		require.NoError(t, w.add.Handler(req, res))
+		require.NoError(t, w.add.Handler([]execution.Batch{{Request: req, Response: res}}))
 		againOK := testutil.Must(blobcmds.Add.Unpack(res.Receipt()))(t)
 		require.Equal(t, firstOK.Site.Task, againOK.Site.Task)
 		ran := map[cid.Cid]bool{}

@@ -69,7 +69,7 @@ func TestBlobListHandler(t *testing.T) {
 
 		req, res := invokeBlobList(t, ctx, alice, uploadService, space, &blobcmds.ListArguments{})
 
-		err := handler.Handler(req, res)
+		err := handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		ok, err := blobcmds.List.Unpack(res.Receipt())
@@ -91,7 +91,7 @@ func TestBlobListHandler(t *testing.T) {
 
 		req, res := invokeBlobList(t, ctx, alice, uploadService, space, &blobcmds.ListArguments{})
 
-		err := handler.Handler(req, res)
+		err := handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		ok, err := blobcmds.List.Unpack(res.Receipt())
@@ -117,7 +117,7 @@ func TestBlobListHandler(t *testing.T) {
 		size := uint64(2)
 		req, res := invokeBlobList(t, ctx, alice, uploadService, space, &blobcmds.ListArguments{Size: &size})
 
-		err := handler.Handler(req, res)
+		err := handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		ok, err := blobcmds.List.Unpack(res.Receipt())
@@ -143,7 +143,7 @@ func TestBlobListHandler(t *testing.T) {
 
 		size := uint64(1)
 		req1, res1 := invokeBlobList(t, ctx, alice, uploadService, space, &blobcmds.ListArguments{Size: &size})
-		require.NoError(t, handler.Handler(req1, res1))
+		require.NoError(t, handler.Handler([]execution.Batch{{Request: req1, Response: res1}}))
 
 		ok1, err := blobcmds.List.Unpack(res1.Receipt())
 		require.NoError(t, err)
@@ -153,7 +153,7 @@ func TestBlobListHandler(t *testing.T) {
 		// Second page using cursor.
 		cursor := *ok1.Cursor
 		req2, res2 := invokeBlobList(t, ctx, alice, uploadService, space, &blobcmds.ListArguments{Cursor: &cursor, Size: &size})
-		require.NoError(t, handler.Handler(req2, res2))
+		require.NoError(t, handler.Handler([]execution.Batch{{Request: req2, Response: res2}}))
 
 		ok2, err := blobcmds.List.Unpack(res2.Receipt())
 		require.NoError(t, err)
@@ -177,7 +177,7 @@ func TestBlobListHandler(t *testing.T) {
 
 		// Query space2 — should be empty.
 		req, res := invokeBlobList(t, ctx, alice, uploadService, space2, &blobcmds.ListArguments{})
-		require.NoError(t, handler.Handler(req, res))
+		require.NoError(t, handler.Handler([]execution.Batch{{Request: req, Response: res}}))
 
 		ok, err := blobcmds.List.Unpack(res.Receipt())
 		require.NoError(t, err)

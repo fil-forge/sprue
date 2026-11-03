@@ -76,7 +76,7 @@ func TestAccessRequestHandler(t *testing.T) {
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(id.Issuer))
 		require.NoError(t, err)
 
-		err = handler.Handler(req, res)
+		err = handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		ok, err := access.Request.Unpack(res.Receipt())
@@ -117,7 +117,7 @@ func TestAccessRequestHandler(t *testing.T) {
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(id.Issuer))
 		require.NoError(t, err)
 
-		err = handler.Handler(req, res)
+		err = handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		_, err = access.Request.Unpack(res.Receipt())
@@ -155,7 +155,7 @@ func TestAccessRequestHandler(t *testing.T) {
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(id.Issuer))
 		require.NoError(t, err)
 
-		err = handler.Handler(req, res)
+		err = handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "sending validation email")
 	})
@@ -193,7 +193,7 @@ func TestAccessRequestHandler(t *testing.T) {
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(id.Issuer))
 		require.NoError(t, err)
 
-		err = handler.Handler(req, res)
+		err = handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		require.Contains(t, m.lastURL.String(), "http://myhost:9090/validate-email")

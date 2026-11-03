@@ -225,7 +225,7 @@ func invokeBlobRemove(
 	req := execution.NewRequest(t.Context(), inv)
 	res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 	require.NoError(t, err)
-	require.NoError(t, deps.handler.Handler(req, res))
+	require.NoError(t, deps.handler.Handler([]execution.Batch{{Request: req, Response: res}}))
 	return res.Receipt()
 }
 

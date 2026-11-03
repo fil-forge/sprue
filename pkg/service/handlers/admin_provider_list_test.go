@@ -57,7 +57,7 @@ func TestAdminProviderListHandler(t *testing.T) {
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
-		err = handler.Handler(req, res)
+		err = handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		_, err = provider.List.Unpack(res.Receipt())
@@ -77,7 +77,7 @@ func TestAdminProviderListHandler(t *testing.T) {
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
-		err = handler.Handler(req, res)
+		err = handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		listOK, err := provider.List.Unpack(res.Receipt())
@@ -108,7 +108,7 @@ func TestAdminProviderListHandler(t *testing.T) {
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
-		err = handler.Handler(req, res)
+		err = handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		listOK, err := provider.List.Unpack(res.Receipt())

@@ -77,7 +77,7 @@ func TestUCANConcludeHandler(t *testing.T) {
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
-		err = handler.Handler(req, res)
+		err = handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		_, err = ucancmds.Conclude.Unpack(res.Receipt())
@@ -108,7 +108,7 @@ func TestUCANConcludeHandler(t *testing.T) {
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
-		err = handler.Handler(req, res)
+		err = handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		_, err = blobcmds.Allocate.Unpack(res.Receipt())
@@ -159,7 +159,7 @@ func TestUCANConcludeHandler(t *testing.T) {
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
-		err = handler.Handler(req, res)
+		err = handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		_, err = blobcmds.Allocate.Unpack(res.Receipt())
@@ -199,7 +199,7 @@ func TestUCANConcludeHandler(t *testing.T) {
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
-		err = handler.Handler(req, res)
+		err = handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		_, err = blobcmds.Allocate.Unpack(res.Receipt())
@@ -246,7 +246,7 @@ func TestUCANConcludeHandler(t *testing.T) {
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
-		require.NoError(t, handler.Handler(req, res))
+		require.NoError(t, handler.Handler([]execution.Batch{{Request: req, Response: res}}))
 		_, err = ucancmds.Conclude.Unpack(res.Receipt())
 		require.NoError(t, err)
 
@@ -289,7 +289,7 @@ func TestUCANConcludeHandler(t *testing.T) {
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
-		require.NoError(t, handler.Handler(req, res))
+		require.NoError(t, handler.Handler([]execution.Batch{{Request: req, Response: res}}))
 		require.NotNil(t, res.Metadata())
 		require.Len(t, res.Metadata().Receipts(), 1)
 		require.Equal(t, onwardRcpt.Link(), res.Metadata().Receipts()[0].Link())
@@ -322,7 +322,7 @@ func TestUCANConcludeHandler(t *testing.T) {
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
-		require.NoError(t, handler.Handler(req, res))
+		require.NoError(t, handler.Handler([]execution.Batch{{Request: req, Response: res}}))
 		_, err = ucancmds.Conclude.Unpack(res.Receipt())
 		require.ErrorIs(t, err, ucancmds.ErrConclusionReceiptNotFound)
 	})
@@ -361,7 +361,7 @@ func TestUCANConcludeHandler(t *testing.T) {
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
-		err = handler.Handler(req, res)
+		err = handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		_, err = blobcmds.Allocate.Unpack(res.Receipt())

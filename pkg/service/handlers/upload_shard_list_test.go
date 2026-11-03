@@ -58,7 +58,7 @@ func TestUploadShardListHandler(t *testing.T) {
 
 		req, res := invokeUploadShardList(t, ctx, alice, uploadService, space, &shardcmds.ListArguments{Root: root})
 
-		err := handler.Handler(req, res)
+		err := handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		ok, err := shardcmds.List.Unpack(res.Receipt())
@@ -79,7 +79,7 @@ func TestUploadShardListHandler(t *testing.T) {
 
 		req, res := invokeUploadShardList(t, ctx, alice, uploadService, space, &shardcmds.ListArguments{Root: root})
 
-		err := handler.Handler(req, res)
+		err := handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		ok, err := shardcmds.List.Unpack(res.Receipt())
@@ -108,7 +108,7 @@ func TestUploadShardListHandler(t *testing.T) {
 		size := uint64(2)
 		req, res := invokeUploadShardList(t, ctx, alice, uploadService, space, &shardcmds.ListArguments{Root: root, Size: &size})
 
-		err := handler.Handler(req, res)
+		err := handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		ok, err := shardcmds.List.Unpack(res.Receipt())
@@ -130,7 +130,7 @@ func TestUploadShardListHandler(t *testing.T) {
 
 		size := uint64(1)
 		req1, res1 := invokeUploadShardList(t, ctx, alice, uploadService, space, &shardcmds.ListArguments{Root: root, Size: &size})
-		require.NoError(t, handler.Handler(req1, res1))
+		require.NoError(t, handler.Handler([]execution.Batch{{Request: req1, Response: res1}}))
 
 		ok1, err := shardcmds.List.Unpack(res1.Receipt())
 		require.NoError(t, err)
@@ -140,7 +140,7 @@ func TestUploadShardListHandler(t *testing.T) {
 		// Second page using cursor.
 		cursor := *ok1.Cursor
 		req2, res2 := invokeUploadShardList(t, ctx, alice, uploadService, space, &shardcmds.ListArguments{Root: root, Cursor: &cursor, Size: &size})
-		require.NoError(t, handler.Handler(req2, res2))
+		require.NoError(t, handler.Handler([]execution.Batch{{Request: req2, Response: res2}}))
 
 		ok2, err := shardcmds.List.Unpack(res2.Receipt())
 		require.NoError(t, err)

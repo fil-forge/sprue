@@ -108,7 +108,7 @@ func TestMetricsSampleHandler(t *testing.T) {
 		}))
 
 		req, res := invokeMetricsSample(t, ctx, alice, uploadService, space, args())
-		require.NoError(t, handler.Handler(req, res))
+		require.NoError(t, handler.Handler([]execution.Batch{{Request: req, Response: res}}))
 
 		ok, err := metricscmds.Sample.Unpack(res.Receipt())
 		require.NoError(t, err)
@@ -136,7 +136,7 @@ func TestMetricsSampleHandler(t *testing.T) {
 			To:     from.Unix(),
 			Window: int64(time.Hour / time.Second),
 		})
-		require.NoError(t, handler.Handler(req, res))
+		require.NoError(t, handler.Handler([]execution.Batch{{Request: req, Response: res}}))
 
 		_, err := metricscmds.Sample.Unpack(res.Receipt())
 		var named errors.Named
@@ -154,7 +154,7 @@ func TestMetricsSampleHandler(t *testing.T) {
 
 		req, res := invokeMetricsSample(t, ctx, alice, uploadService, space, args())
 
-		err := handler.Handler(req, res)
+		err := handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.Error(t, err)
 		// The connection detail belongs in the logs, not in a signed receipt.
 		require.Contains(t, err.Error(), "sampling space usage")

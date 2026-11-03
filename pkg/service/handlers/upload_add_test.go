@@ -103,7 +103,7 @@ func TestUploadAddHandler(t *testing.T) {
 		root := testutil.RandomCID(t)
 		req, res := invokeUploadAdd(t, ctx, alice, uploadService, space, &uploadcmds.AddArguments{Root: root})
 
-		err := deps.route.Handler(req, res)
+		err := deps.route.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		_, err = uploadcmds.Add.Unpack(res.Receipt())
@@ -126,7 +126,7 @@ func TestUploadAddHandler(t *testing.T) {
 		root := testutil.RandomCID(t)
 		req, res := invokeUploadAdd(t, ctx, alice, uploadService, space, &uploadcmds.AddArguments{Root: root})
 
-		err := deps.route.Handler(req, res)
+		err := deps.route.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		_, err = blobcmds.Allocate.Unpack(res.Receipt())
@@ -158,7 +158,7 @@ func TestUploadAddHandler(t *testing.T) {
 			Shards: []cid.Cid{shard1, shard2},
 		})
 
-		err := deps.route.Handler(req, res)
+		err := deps.route.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		_, err = blobcmds.Allocate.Unpack(res.Receipt())
@@ -183,7 +183,7 @@ func TestUploadAddHandler(t *testing.T) {
 			Index: &index,
 		})
 
-		err := deps.route.Handler(req, res)
+		err := deps.route.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		_, err = blobcmds.Allocate.Unpack(res.Receipt())
@@ -207,7 +207,7 @@ func TestUploadAddHandler(t *testing.T) {
 			Root:   root,
 			Shards: []cid.Cid{shard1},
 		})
-		require.NoError(t, deps.route.Handler(req1, res1))
+		require.NoError(t, deps.route.Handler([]execution.Batch{{Request: req1, Response: res1}}))
 		require.False(t, res1.Receipt().Out().IsErr())
 
 		// Add again with a new shard.
@@ -216,7 +216,7 @@ func TestUploadAddHandler(t *testing.T) {
 			Root:   root,
 			Shards: []cid.Cid{shard2},
 		})
-		require.NoError(t, deps.route.Handler(req2, res2))
+		require.NoError(t, deps.route.Handler([]execution.Batch{{Request: req2, Response: res2}}))
 		require.False(t, res2.Receipt().Out().IsErr())
 
 		// Upload should still exist.
