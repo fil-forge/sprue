@@ -53,7 +53,7 @@ func TestUploadListHandler(t *testing.T) {
 		space := testutil.RandomIssuer(t)
 		req, res := invokeUploadList(t, ctx, alice, uploadService, space, &uploadcmds.ListArguments{})
 
-		err := handler.Handler(req, res)
+		err := handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		ok, err := uploadcmds.List.Unpack(res.Receipt())
@@ -75,7 +75,7 @@ func TestUploadListHandler(t *testing.T) {
 
 		req, res := invokeUploadList(t, ctx, alice, uploadService, space, &uploadcmds.ListArguments{})
 
-		err := handler.Handler(req, res)
+		err := handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		ok, err := uploadcmds.List.Unpack(res.Receipt())
@@ -102,7 +102,7 @@ func TestUploadListHandler(t *testing.T) {
 		size := uint64(2)
 		req, res := invokeUploadList(t, ctx, alice, uploadService, space, &uploadcmds.ListArguments{Size: &size})
 
-		err := handler.Handler(req, res)
+		err := handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		ok, err := uploadcmds.List.Unpack(res.Receipt())
@@ -122,7 +122,7 @@ func TestUploadListHandler(t *testing.T) {
 
 		size := uint64(1)
 		req1, res1 := invokeUploadList(t, ctx, alice, uploadService, space, &uploadcmds.ListArguments{Size: &size})
-		require.NoError(t, handler.Handler(req1, res1))
+		require.NoError(t, handler.Handler([]execution.Batch{{Request: req1, Response: res1}}))
 
 		ok1, err := uploadcmds.List.Unpack(res1.Receipt())
 		require.NoError(t, err)
@@ -132,7 +132,7 @@ func TestUploadListHandler(t *testing.T) {
 		// Second page using cursor.
 		cursor := *ok1.Cursor
 		req2, res2 := invokeUploadList(t, ctx, alice, uploadService, space, &uploadcmds.ListArguments{Cursor: &cursor, Size: &size})
-		require.NoError(t, handler.Handler(req2, res2))
+		require.NoError(t, handler.Handler([]execution.Batch{{Request: req2, Response: res2}}))
 
 		ok2, err := uploadcmds.List.Unpack(res2.Receipt())
 		require.NoError(t, err)
@@ -151,7 +151,7 @@ func TestUploadListHandler(t *testing.T) {
 
 		// Query space2 — should be empty.
 		req, res := invokeUploadList(t, ctx, alice, uploadService, space2, &uploadcmds.ListArguments{})
-		require.NoError(t, handler.Handler(req, res))
+		require.NoError(t, handler.Handler([]execution.Batch{{Request: req, Response: res}}))
 
 		ok, err := uploadcmds.List.Unpack(res.Receipt())
 		require.NoError(t, err)
@@ -169,7 +169,7 @@ func TestUploadListHandler(t *testing.T) {
 
 		req, res := invokeUploadList(t, ctx, alice, uploadService, space, &uploadcmds.ListArguments{})
 
-		require.NoError(t, handler.Handler(req, res))
+		require.NoError(t, handler.Handler([]execution.Batch{{Request: req, Response: res}}))
 
 		ok, err := uploadcmds.List.Unpack(res.Receipt())
 		require.NoError(t, err)

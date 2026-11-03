@@ -114,7 +114,7 @@ func TestIndexAddHandler(t *testing.T) {
 		space := testutil.RandomIssuer(t)
 		req, res := invokeIndexAdd(t, ctx, alice, uploadService, space, testutil.RandomCID(t))
 
-		err := handler.Handler(req, res)
+		err := handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		_, err = indexcmds.Add.Unpack(res.Receipt())
@@ -140,7 +140,7 @@ func TestIndexAddHandler(t *testing.T) {
 		// Index blob is not registered for this space.
 		req, res := invokeIndexAdd(t, ctx, alice, uploadService, space, testutil.RandomCID(t))
 
-		err := handler.Handler(req, res)
+		err := handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		_, err = indexcmds.Add.Unpack(res.Receipt())
@@ -182,7 +182,7 @@ func TestIndexAddHandler(t *testing.T) {
 			execution.WithDelegations(retrievalAuth),
 		)
 
-		err = handler.Handler(req, res)
+		err = handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		_, err = indexcmds.Add.Unpack(res.Receipt())
@@ -210,7 +210,7 @@ func TestIndexAddHandler(t *testing.T) {
 
 		var handlerErr error
 		require.NotPanics(t, func() {
-			handlerErr = handler.Handler(req, res)
+			handlerErr = handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		})
 		require.NoError(t, handlerErr)
 
@@ -251,7 +251,7 @@ func TestIndexAddHandler(t *testing.T) {
 		// stricter mock.
 		req, res := invokeIndexAdd(t, ctx, alice, uploadService, space, indexCID)
 
-		err = handler.Handler(req, res)
+		err = handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		// Currently the indexer client publishes even without retrieval auth

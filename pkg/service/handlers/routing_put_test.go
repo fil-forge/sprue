@@ -91,7 +91,7 @@ func TestRoutingPutHandler(t *testing.T) {
 		policy := testutil.RandomIssuer(t)
 
 		req, res := invokeRoutingPut(t, ctx, policy, uploadService, candidateSet(nodeA, nodeB))
-		require.NoError(t, handler.Handler(req, res))
+		require.NoError(t, handler.Handler([]execution.Batch{{Request: req, Response: res}}))
 
 		_, err := routingcmds.Put.Unpack(res.Receipt())
 		require.NoError(t, err)
@@ -108,9 +108,9 @@ func TestRoutingPutHandler(t *testing.T) {
 		policy := testutil.RandomIssuer(t)
 
 		req, res := invokeRoutingPut(t, ctx, policy, uploadService, candidateSet(nodeA))
-		require.NoError(t, handler.Handler(req, res))
+		require.NoError(t, handler.Handler([]execution.Batch{{Request: req, Response: res}}))
 		req, res = invokeRoutingPut(t, ctx, policy, uploadService, candidateSet(nodeB))
-		require.NoError(t, handler.Handler(req, res))
+		require.NoError(t, handler.Handler([]execution.Batch{{Request: req, Response: res}}))
 
 		rec, err := deps.policyStore.GetPolicy(ctx, policy.DID())
 		require.NoError(t, err)
@@ -123,7 +123,7 @@ func TestRoutingPutHandler(t *testing.T) {
 		policy := testutil.RandomIssuer(t)
 
 		req, res := invokeRoutingPut(t, ctx, policy, uploadService, candidateSet())
-		require.NoError(t, handler.Handler(req, res))
+		require.NoError(t, handler.Handler([]execution.Batch{{Request: req, Response: res}}))
 
 		_, err := routingcmds.Put.Unpack(res.Receipt())
 		var errModel datamodel.ErrorModel
@@ -138,7 +138,7 @@ func TestRoutingPutHandler(t *testing.T) {
 		policy := testutil.RandomIssuer(t)
 
 		req, res := invokeRoutingPut(t, ctx, policy, uploadService, candidateSet(registered, testutil.RandomDID(t)))
-		require.NoError(t, handler.Handler(req, res))
+		require.NoError(t, handler.Handler([]execution.Batch{{Request: req, Response: res}}))
 
 		_, err := routingcmds.Put.Unpack(res.Receipt())
 		var errModel datamodel.ErrorModel

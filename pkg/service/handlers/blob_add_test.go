@@ -127,7 +127,7 @@ func TestBlobAddHandler(t *testing.T) {
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
-		err = deps.handler.Handler(req, res)
+		err = deps.handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		_, err = blobcmds.Add.Unpack(res.Receipt())
@@ -159,7 +159,7 @@ func TestBlobAddHandler(t *testing.T) {
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
-		err = deps.handler.Handler(req, res)
+		err = deps.handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		_, err = blobcmds.Add.Unpack(res.Receipt())
@@ -194,7 +194,7 @@ func TestBlobAddHandler(t *testing.T) {
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
-		err = deps.handler.Handler(req, res)
+		err = deps.handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		_, err = blobcmds.Add.Unpack(res.Receipt())
@@ -249,7 +249,7 @@ func TestBlobAddHandler(t *testing.T) {
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
-		err = deps.handler.Handler(req, res)
+		err = deps.handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		_, err = blobcmds.Allocate.Unpack(res.Receipt())
@@ -311,7 +311,7 @@ func TestBlobAddHandler(t *testing.T) {
 			res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 			require.NoError(t, err)
 
-			require.NoError(t, deps.handler.Handler(req, res))
+			require.NoError(t, deps.handler.Handler([]execution.Batch{{Request: req, Response: res}}))
 			_, err = blobcmds.Allocate.Unpack(res.Receipt())
 			require.NoError(t, err)
 
@@ -361,7 +361,7 @@ func TestBlobAddHandler(t *testing.T) {
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
-		require.NoError(t, deps.handler.Handler(req, res))
+		require.NoError(t, deps.handler.Handler([]execution.Batch{{Request: req, Response: res}}))
 		_, err = blobcmds.Add.Unpack(res.Receipt())
 		require.ErrorIs(t, err, routing.ErrCandidateUnavailable)
 	})
@@ -403,7 +403,7 @@ func TestBlobAddHandler(t *testing.T) {
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
-		err = deps.handler.Handler(req, res)
+		err = deps.handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		_, err = blobcmds.Allocate.Unpack(res.Receipt())
@@ -516,7 +516,7 @@ func TestBlobAddHandler(t *testing.T) {
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
-		err = deps.handler.Handler(req, res)
+		err = deps.handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		gotAddOK, err := blobcmds.Add.Unpack(res.Receipt())

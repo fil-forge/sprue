@@ -49,13 +49,13 @@ func TestAdminProviderProofsSetHandler(t *testing.T) {
 	require.NoError(t, err)
 
 	// setProofs runs the handler and returns the failure name, or "" on success.
-	setProofs := func(t *testing.T, handler func(execution.Request, execution.Response) error, issuer ucan.Issuer, args proofs.SetArguments) string {
+	setProofs := func(t *testing.T, handler execution.BatchHandlerFunc, issuer ucan.Issuer, args proofs.SetArguments) string {
 		t.Helper()
 		req := issueProofsSetInvocation(t, issuer, uploadService.DID(), args)
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
-		require.NoError(t, handler(req, res))
+		require.NoError(t, handler([]execution.Batch{{Request: req, Response: res}}))
 
 		_, err = proofs.Set.Unpack(res.Receipt())
 		if err == nil {

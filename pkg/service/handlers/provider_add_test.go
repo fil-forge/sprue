@@ -102,7 +102,7 @@ func TestProviderAddHandler(t *testing.T) {
 			},
 		)
 
-		err := handler.Handler(req, res)
+		err := handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		ok, err := providercmds.Add.Unpack(res.Receipt())
@@ -130,7 +130,7 @@ func TestProviderAddHandler(t *testing.T) {
 			},
 		)
 
-		err := handler.Handler(req, res)
+		err := handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		ok, err := providercmds.Add.Unpack(res.Receipt())
@@ -160,7 +160,7 @@ func TestProviderAddHandler(t *testing.T) {
 			},
 		)
 
-		err := handler.Handler(req, res)
+		err := handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		ok, err := providercmds.Add.Unpack(res.Receipt())
@@ -188,7 +188,7 @@ func TestProviderAddHandler(t *testing.T) {
 			},
 		)
 
-		err := handler.Handler(req, res)
+		err := handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		_, err = providercmds.Add.Unpack(res.Receipt())
@@ -217,7 +217,7 @@ func TestProviderAddHandler(t *testing.T) {
 			},
 		)
 
-		err := handler.Handler(req, res)
+		err := handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		_, err = providercmds.Add.Unpack(res.Receipt())
@@ -245,7 +245,7 @@ func TestProviderAddHandler(t *testing.T) {
 			},
 		)
 
-		err := handler.Handler(req, res)
+		err := handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		_, err = providercmds.Add.Unpack(res.Receipt())
@@ -272,7 +272,7 @@ func TestProviderAddHandler(t *testing.T) {
 					Consumer: space.DID(),
 				},
 			)
-			require.NoError(t, handler.Handler(req, res))
+			require.NoError(t, handler.Handler([]execution.Batch{{Request: req, Response: res}}))
 			wantSpaces = append(wantSpaces, []string{space.DID().String()})
 		}
 

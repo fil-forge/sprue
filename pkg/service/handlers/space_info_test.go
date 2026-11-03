@@ -68,7 +68,7 @@ func TestSpaceInfoHandler(t *testing.T) {
 
 		req, res := invokeSpaceInfo(t, ctx, testutil.Alice, uploadService, space.DID())
 
-		err = handler.Handler(req, res)
+		err = handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		ok, err := spacecmds.Info.Unpack(res.Receipt())
@@ -90,7 +90,7 @@ func TestSpaceInfoHandler(t *testing.T) {
 
 		req, res := invokeSpaceInfo(t, ctx, testutil.Alice, uploadService, space.DID())
 
-		err := handler.Handler(req, res)
+		err := handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		ok, err := spacecmds.Info.Unpack(res.Receipt())
@@ -112,7 +112,7 @@ func TestSpaceInfoHandler(t *testing.T) {
 		webDID := testutil.Must(did.Parse("did:web:example.com"))(t)
 		req, res := invokeSpaceInfo(t, ctx, testutil.Alice, uploadService, webDID)
 
-		err := handler.Handler(req, res)
+		err := handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		_, err = spacecmds.Info.Unpack(res.Receipt())

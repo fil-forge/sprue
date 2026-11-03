@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/fil-forge/ucantone/execution"
+	"github.com/fil-forge/ucantone/execution/batch"
+	"github.com/fil-forge/ucantone/execution/dispatcher"
 	"github.com/fil-forge/ucantone/ipld/codec/dagcbor"
 	"github.com/fil-forge/ucantone/ipld/datamodel"
 	"github.com/fil-forge/ucantone/server"
@@ -47,7 +49,7 @@ func newServer(t *testing.T, service ucan.Issuer, routes map[ucan.Command]execut
 	t.Helper()
 	srv := server.NewHTTP(service, server.WithEventListener(SpanNamer{}))
 	for cmd, fn := range routes {
-		srv.Handle(cmd, Handler(cmd, fn))
+		srv.HandleBatch(cmd, Handler(cmd, dispatcher.Each(fn)))
 	}
 	e := echo.New()
 	e.Use(Middleware())
@@ -170,7 +172,55 @@ func TestHandlerErrorFailsSpan(t *testing.T) {
 	}
 	require.NotNil(t, handler)
 	require.Equal(t, codes.Error, handler.Status().Code)
-	require.Equal(t, "broken", handler.Status().Description)
+	require.Contains(t, handler.Status().Description, "broken")
+}
+
+func TestHandlerPanicEndsAndFailsSpans(t *testing.T) {
+	rec := installRecorder(t)
+	service := testutil.RandomIssuer(t)
+	alice := testutil.RandomIssuer(t)
+	cmd := testutil.ConsoleLogCommand
+	srv := server.NewHTTP(service, server.WithPanicLogger(func(execution.Request, any) {}))
+	srv.HandleBatch(cmd, Handler(cmd, func([]execution.Batch) error {
+		panic("handler exploded")
+	}))
+
+	var invs []ucan.Invocation
+	for range 2 {
+		inv, err := invocation.Invoke(alice, alice.DID(), cmd, datamodel.Map{}, invocation.WithAudience(service.DID()))
+		require.NoError(t, err)
+		invs = append(invs, inv)
+	}
+	_, err := srv.ExecuteBatch(batch.NewRequest(t.Context(), invs))
+	require.NoError(t, err)
+
+	spans := spansNamed(rec.Ended(), cmd.String())
+	require.Len(t, spans, 2)
+	for _, s := range spans {
+		require.Equal(t, codes.Error, s.Status().Code)
+	}
+}
+
+func TestMissingReceiptFailsSpan(t *testing.T) {
+	rec := installRecorder(t)
+	service := testutil.RandomIssuer(t)
+	alice := testutil.RandomIssuer(t)
+	cmd := testutil.ConsoleLogCommand
+	srv := server.NewHTTP(service)
+	srv.HandleBatch(cmd, Handler(cmd, func([]execution.Batch) error { return nil }))
+
+	inv, err := invocation.Invoke(alice, alice.DID(), cmd, datamodel.Map{}, invocation.WithAudience(service.DID()))
+	require.NoError(t, err)
+	res, err := srv.Execute(execution.NewRequest(t.Context(), inv))
+	require.NoError(t, err)
+	require.True(t, res.Receipt().Out().IsErr())
+
+	spans := spansNamed(rec.Ended(), cmd.String())
+	require.Len(t, spans, 1)
+	require.Equal(t, codes.Error, spans[0].Status().Code)
+	ok, found := boolAttr(spans[0], "ucan.receipt.ok")
+	require.True(t, found)
+	require.False(t, ok)
 }
 
 func TestHealthNotTraced(t *testing.T) {

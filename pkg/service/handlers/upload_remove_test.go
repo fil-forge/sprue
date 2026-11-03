@@ -37,7 +37,7 @@ func invokeUploadRemove(
 	req := execution.NewRequest(ctx, inv)
 	res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 	require.NoError(t, err)
-	require.NoError(t, route.Handler(req, res))
+	require.NoError(t, route.Handler([]execution.Batch{{Request: req, Response: res}}))
 	return res.Receipt()
 }
 

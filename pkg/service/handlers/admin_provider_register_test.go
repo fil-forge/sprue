@@ -97,7 +97,7 @@ func TestAdminProviderRegisterHandler(t *testing.T) {
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
-		err = handler.Handler(req, res)
+		err = handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		_, err = provider.Register.Unpack(res.Receipt())
@@ -126,7 +126,7 @@ func TestAdminProviderRegisterHandler(t *testing.T) {
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
-		err = handler.Handler(req, res)
+		err = handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 		_, err = blobcmds.Allocate.Unpack(res.Receipt())
 		require.NoError(t, err)
@@ -136,7 +136,7 @@ func TestAdminProviderRegisterHandler(t *testing.T) {
 		res2, err := execution.NewResponse(req2.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
-		err = handler.Handler(req2, res2)
+		err = handler.Handler([]execution.Batch{{Request: req2, Response: res2}})
 		require.NoError(t, err)
 		require.True(t, res2.Receipt().Out().IsErr())
 
@@ -172,7 +172,7 @@ func TestAdminProviderRegisterHandler(t *testing.T) {
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
-		err = handler.Handler(req, res)
+		err = handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 
 		_, err = provider.Register.Unpack(res.Receipt())
@@ -204,7 +204,7 @@ func TestAdminProviderRegisterHandler(t *testing.T) {
 		res, err := execution.NewResponse(req.Invocation().Task().Link(), execution.WithIssuer(uploadService))
 		require.NoError(t, err)
 
-		err = handler.Handler(req, res)
+		err = handler.Handler([]execution.Batch{{Request: req, Response: res}})
 		require.NoError(t, err)
 		_, err = blobcmds.Allocate.Unpack(res.Receipt())
 		require.NoError(t, err)
