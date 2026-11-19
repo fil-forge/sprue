@@ -191,7 +191,7 @@ func (s *Service) SelectReplicationProvider(ctx context.Context, primary did.DID
 
 	var weights []uint64
 	for _, c := range candidates {
-		weights = append(weights, uint64(c.Weight))
+		weights = append(weights, uint64(getReplicationWeight(c)))
 	}
 	selected := candidates[weightedRandomInt(weights)]
 	return StorageProviderInfo{
@@ -254,9 +254,6 @@ func listProviders(ctx context.Context, providerStore storageprovider.Store) ([]
 func filterExcludedProviders(providers []storageprovider.Record, exclusions []did.DID) []storageprovider.Record {
 	var filtered []storageprovider.Record
 	for _, prov := range providers {
-		if prov.Weight <= 0 {
-			continue
-		}
 		excluded := false
 		for _, ex := range exclusions {
 			if prov.Provider == ex {
@@ -284,15 +281,20 @@ func filterZeroWeightProviders(providers []storageprovider.Record) []storageprov
 func filterZeroReplicationWeightProviders(providers []storageprovider.Record) []storageprovider.Record {
 	var filtered []storageprovider.Record
 	for _, prov := range providers {
-		weight := prov.Weight
-		if prov.ReplicationWeight != nil {
-			weight = *prov.ReplicationWeight
-		}
-		if weight > 0 {
+		if getReplicationWeight(prov) > 0 {
 			filtered = append(filtered, prov)
 		}
 	}
 	return filtered
+}
+
+// getReplicationWeight returns the provider's replication weight, falling back
+// to its weight when no replication weight is set.
+func getReplicationWeight(prov storageprovider.Record) int {
+	if prov.ReplicationWeight != nil {
+		return *prov.ReplicationWeight
+	}
+	return prov.Weight
 }
 
 func weightedRandomInt(weights []uint64) int {
