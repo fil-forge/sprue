@@ -300,10 +300,16 @@ func weightedRandomInt(weights []uint64) int {
 	for _, weight := range weights {
 		totalWeight += weight
 	}
-	random := rand.Int63n(int64(totalWeight))
+	return pickWeighted(weights, uint64(rand.Int63n(int64(totalWeight))))
+}
+
+// pickWeighted returns the index whose cumulative weight range holds draw,
+// a value in [0, sum(weights)). Index i owns exactly weights[i] draws.
+func pickWeighted(weights []uint64, draw uint64) int {
+	random := int64(draw)
 	for i, weight := range weights {
 		random -= int64(weight)
-		if random <= 0 {
+		if random < 0 {
 			return i
 		}
 	}
