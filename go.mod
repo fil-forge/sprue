@@ -6,7 +6,7 @@ require (
 	github.com/alanshaw/dag-json-gen v0.0.11
 	github.com/aws/aws-sdk-go-v2 v1.48.0
 	github.com/aws/aws-sdk-go-v2/config v1.33.18
-	github.com/aws/aws-sdk-go-v2/credentials v1.21.0
+	github.com/aws/aws-sdk-go-v2/credentials v1.21.1
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.114.9
 	github.com/docker/docker v28.5.2+incompatible
 	github.com/exaring/otelpgx v0.13.0
