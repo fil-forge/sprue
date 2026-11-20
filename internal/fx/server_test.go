@@ -50,3 +50,29 @@ func TestServerInfoHandler(t *testing.T) {
 		require.Contains(t, body, id.DID().String())
 	})
 }
+
+func TestDIDDocumentHandler(t *testing.T) {
+	id, err := identity.New("", "did:web:sprue.example")
+	require.NoError(t, err)
+	handler := didDocumentHandler(id)
+
+	req := httptest.NewRequest(http.MethodGet, "/.well-known/did.json", nil)
+	rec := httptest.NewRecorder()
+	require.NoError(t, handler(echo.New().NewContext(req, rec)))
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Contains(t, rec.Header().Get(echo.HeaderContentType), "application/json")
+	require.Contains(t, rec.Body.String(), "did:web:sprue.example")
+	require.Equal(t, "max-age=300", rec.Header().Get("Cache-Control"))
+	require.NotEmpty(t, rec.Header().Get("Last-Modified"))
+	etag := rec.Header().Get("ETag")
+	require.NotEmpty(t, etag)
+
+	// A client that already holds the document gets a 304.
+	req = httptest.NewRequest(http.MethodGet, "/.well-known/did.json", nil)
+	req.Header.Set("If-None-Match", etag)
+	rec = httptest.NewRecorder()
+	require.NoError(t, handler(echo.New().NewContext(req, rec)))
+	require.Equal(t, http.StatusNotModified, rec.Code)
+	require.Empty(t, rec.Body.Bytes())
+}
