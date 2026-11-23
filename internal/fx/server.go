@@ -12,6 +12,7 @@ import (
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 
+	"github.com/fil-forge/libforge/diddoc"
 	"github.com/fil-forge/libforge/identity"
 	"github.com/fil-forge/sprue/internal/config"
 	"github.com/fil-forge/sprue/internal/tracing"
@@ -174,14 +175,24 @@ func healthHandler(c echo.Context) error {
 }
 
 // didDocumentHandler returns the DID document for did:web resolution.
+// Responses carry Cache-Control, ETag and Last-Modified headers, and
+// conditional requests get a 304 when the document has not changed.
 func didDocumentHandler(id identity.Identity) echo.HandlerFunc {
-	return func(c echo.Context) error {
-		doc, err := id.DIDDocument()
-		if err != nil {
+	handler, err := newDIDDocumentHandler(id)
+	if err != nil {
+		return func(c echo.Context) error {
 			return c.JSON(http.StatusInternalServerError, map[string]string{
 				"error": "failed to get DID document",
 			})
 		}
-		return c.JSON(http.StatusOK, doc)
 	}
+	return echo.WrapHandler(handler)
+}
+
+func newDIDDocumentHandler(id identity.Identity) (http.Handler, error) {
+	doc, err := id.DIDDocument()
+	if err != nil {
+		return nil, err
+	}
+	return diddoc.NewHandler(doc)
 }

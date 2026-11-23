@@ -138,7 +138,7 @@ func createUCANServer(id multikey.Issuer, agentStore agent.Store, handlers []ser
 		"key": key.Resolver,
 		"web": resolver.Tiered{
 			resolver.WellKnown{id.DID(): selfDoc},
-			resolver.NewCached(webResolver, time.Hour*3),
+			webResolver,
 		},
 		"mailto": didmailto.NewResolver(id.DID()),
 		"plc":    plcResolver,
