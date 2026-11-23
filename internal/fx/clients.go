@@ -9,6 +9,7 @@ import (
 	"github.com/fil-forge/sprue/pkg/indexerclient"
 	"github.com/fil-forge/sprue/pkg/piriclient"
 	"github.com/fil-forge/ucantone/did"
+	"github.com/fil-forge/ucantone/did/web"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 )
@@ -63,12 +64,15 @@ func NewIndexerClient(
 		}
 	}
 
-	// Fall back to deriving from hostname (without port)
+	// Fall back to the did:web of the endpoint: its host, and its port when
+	// that is not the scheme's default. The endpoint is trusted configuration
+	// and the DID only names the audience of invocations, so an http endpoint
+	// is accepted as well as an https one.
 	if indexerDID == (did.DID{}) {
-		indexerDID, err = did.Parse("did:web:" + indexerURL.Hostname())
+		indexerDID, err = web.NewInsecure(*indexerURL)
 		if err != nil {
-			logger.Warn("failed to create indexer DID from hostname",
-				zap.String("host", indexerURL.Hostname()),
+			logger.Warn("failed to create indexer DID from endpoint",
+				zap.String("endpoint", cfg.Indexer.Endpoint),
 				zap.Error(err),
 			)
 			return IndexerClientResult{}

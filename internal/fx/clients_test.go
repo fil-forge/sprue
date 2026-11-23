@@ -30,6 +30,20 @@ func TestNewIndexerClient(t *testing.T) {
 			},
 			exists: true,
 		},
+		{
+			name:   "endpoint with a port and no DID creates client",
+			config: config.IndexerConfig{Endpoint: "https://indexer.example.com:8443"},
+			exists: true,
+		},
+		{
+			name:   "http endpoint with no DID creates client",
+			config: config.IndexerConfig{Endpoint: "http://indexer:9000"},
+			exists: true,
+		},
+		{
+			name:   "endpoint that cannot be a did:web and no DID disables client",
+			config: config.IndexerConfig{Endpoint: "http://127.0.0.1:9000"},
+		},
 	}
 
 	for _, tt := range tests {
