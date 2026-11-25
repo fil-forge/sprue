@@ -28,9 +28,11 @@ import (
 	"github.com/fil-forge/ucantone/did"
 	"github.com/fil-forge/ucantone/errors/datamodel"
 	"github.com/fil-forge/ucantone/execution"
+	ipldmodel "github.com/fil-forge/ucantone/ipld/datamodel"
 	"github.com/fil-forge/ucantone/multikey"
 	"github.com/fil-forge/ucantone/server"
 	"github.com/fil-forge/ucantone/ucan"
+	"github.com/fil-forge/ucantone/ucan/command"
 	"github.com/fil-forge/ucantone/ucan/container"
 	"github.com/fil-forge/ucantone/ucan/invocation"
 	"github.com/fil-forge/ucantone/ucan/promise"
@@ -468,12 +470,23 @@ func TestBlobAddHandler(t *testing.T) {
 			},
 			invocation.WithAudience(storageProvider.DID()),
 		))(t)
+		// What the node attached to its accept receipt: the location
+		// commitment, named by its own link, and the PDP promise, named by
+		// its task.
+		claimInv := testutil.Must(invocation.Invoke(
+			storageProvider, storageProvider.DID(),
+			command.MustParse("/assert/location"), ipldmodel.Map{"digest": []byte(digest)},
+		))(t)
+		pdpInv := testutil.Must(invocation.Invoke(
+			storageProvider, storageProvider.DID(),
+			command.MustParse("/pdp/accept"), ipldmodel.Map{"blob": []byte(digest)},
+		))(t)
 		accRcpt := testutil.Must(receipt.IssueOK(
 			storageProvider,
 			accInv.Task().Link(),
 			&blobcmds.AcceptOK{
-				Site: testutil.RandomCID(t),
-				PDP:  promise.AwaitOK{Task: testutil.RandomCID(t)},
+				Site: claimInv.Link(),
+				PDP:  promise.AwaitOK{Task: pdpInv.Task().Link()},
 			},
 		))(t)
 
@@ -496,7 +509,7 @@ func TestBlobAddHandler(t *testing.T) {
 		// Persist the chain in the agent store and register the blob with cause
 		// pointing at the prior /blob/add invocation's task CID.
 		msg := container.New(
-			container.WithInvocations(allocInv, putInv, accInv, prevAddInv),
+			container.WithInvocations(allocInv, putInv, accInv, prevAddInv, claimInv, pdpInv),
 			container.WithReceipts(allocRcpt, putRcpt, accRcpt, prevAddRcpt),
 		)
 		require.NoError(t, deps.agentStore.Write(ctx, msg, agent.Index(msg)))
@@ -525,10 +538,18 @@ func TestBlobAddHandler(t *testing.T) {
 		// The returned AddOK should match the one from the prior receipt.
 		require.Equal(t, accInv.Task().Link(), gotAddOK.Site.Task)
 
-		// Response metadata should carry all three invocations and all three
-		// receipts from the prior chain.
+		// Response metadata should carry the prior chain's three invocations
+		// and receipts, and what the accept receipt names: without the
+		// location commitment the client cannot use the acceptance.
 		require.NotNil(t, res.Metadata())
-		require.Len(t, res.Metadata().Invocations(), 3)
+		var got []string
+		for _, inv := range res.Metadata().Invocations() {
+			got = append(got, inv.Link().String())
+		}
+		require.ElementsMatch(t, []string{
+			allocInv.Link().String(), putInv.Link().String(), accInv.Link().String(),
+			claimInv.Link().String(), pdpInv.Link().String(),
+		}, got)
 		require.Len(t, res.Metadata().Receipts(), 3)
 	})
 }

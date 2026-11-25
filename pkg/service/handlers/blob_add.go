@@ -455,8 +455,9 @@ func hasErrorName(err error, name string) bool {
 
 // replayAdd answers a /blob/add with the result of an add that already ran:
 // addRcpt's success, and the allocate, put and accept tasks behind it. The put
-// and accept receipts are included when they exist; an add whose put has not
-// been concluded has neither yet.
+// and accept receipts are included when they exist, the accept receipt with
+// the invocations it names; an add whose put has not been concluded has
+// neither yet.
 func replayAdd(ctx context.Context, agentStore agent.Store, addRcpt ucan.Receipt, res *binding.Response[*blobcmds.AddOK], log *zap.Logger) error {
 	o, _ := addRcpt.Out().Unpack()
 	var addOK blobcmds.AddOK
@@ -498,6 +499,7 @@ func replayAdd(ctx context.Context, agentStore agent.Store, addRcpt ucan.Receipt
 		return fmt.Errorf("getting invocation for allocation: %w", err)
 	}
 
+	invs := []ucan.Invocation{allocInv, putInv, accInv}
 	rcpts := []ucan.Receipt{allocRcpt}
 	for _, task := range []cid.Cid{accArgs.Put.Task, addOK.Site.Task} {
 		rcpt, err := agentStore.GetReceipt(ctx, task)
@@ -509,10 +511,24 @@ func replayAdd(ctx context.Context, agentStore agent.Store, addRcpt ucan.Receipt
 			return fmt.Errorf("getting receipt for %s: %w", task, err)
 		}
 		rcpts = append(rcpts, rcpt)
+		if task != addOK.Site.Task {
+			continue
+		}
+		// The client reads the blob's location from what the accept receipt
+		// names, and fails the add when the reply carries the receipt alone.
+		attached, err := AcceptAttachments(ctx, agentStore, rcpt)
+		if err != nil {
+			log.Error("failed to get accept attachments", zap.Stringer("task", task), zap.Error(err))
+			return fmt.Errorf("getting accept attachments for %s: %w", task, err)
+		}
+		if len(attached) == 0 && rcpt.Out().IsOK() {
+			log.Warn("replaying blob add without the location commitment its accept receipt names", zap.Stringer("accept", task))
+		}
+		invs = append(invs, attached...)
 	}
 
 	res.SetMetadata(container.New(
-		container.WithInvocations(allocInv, putInv, accInv),
+		container.WithInvocations(invs...),
 		container.WithReceipts(rcpts...),
 	))
 	return res.SetSuccess(&addOK)

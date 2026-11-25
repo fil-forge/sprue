@@ -13,6 +13,7 @@ import (
 	"github.com/fil-forge/libforge/identity"
 	"github.com/fil-forge/sprue/internal/tracing"
 	"github.com/fil-forge/sprue/pkg/lib/ucan_server"
+	"github.com/fil-forge/sprue/pkg/service/handlers"
 	"github.com/fil-forge/sprue/pkg/service/ui"
 	"github.com/fil-forge/sprue/pkg/store/agent"
 	delegation_store "github.com/fil-forge/sprue/pkg/store/delegation"
@@ -229,7 +230,7 @@ func (s *Service) HandleReceiptRequest(c echo.Context) error {
 		return fmt.Errorf("listing agent messages: %w", err)
 	}
 
-	found := false
+	var rcpt ucan.Receipt
 	var invs []ucan.Invocation
 	var dlgs []ucan.Delegation
 	var rcpts []ucan.Receipt
@@ -239,15 +240,23 @@ func (s *Service) HandleReceiptRequest(c echo.Context) error {
 		rcpts = append(rcpts, msg.Receipts()...)
 		for _, r := range msg.Receipts() {
 			if r.Ran() == task {
-				found = true
+				rcpt = r
 			}
 		}
 	}
-	if !found {
+	if rcpt == nil {
 		return c.JSON(http.StatusNotFound, map[string]string{
 			"error": "receipt not found",
 		})
 	}
+
+	// The page above need not hold the message with what an accept receipt
+	// names, and a client cannot use the receipt without it.
+	attached, err := handlers.AcceptAttachments(c.Request().Context(), s.agentStore, rcpt)
+	if err != nil {
+		return fmt.Errorf("getting accept attachments: %w", err)
+	}
+	invs = append(invs, attached...)
 
 	ct := container.New(
 		container.WithInvocations(invs...),
