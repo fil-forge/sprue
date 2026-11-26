@@ -191,7 +191,7 @@ func (s *Service) SelectReplicationProvider(ctx context.Context, primary did.DID
 
 	var weights []uint64
 	for _, c := range candidates {
-		weights = append(weights, uint64(c.Weight))
+		weights = append(weights, uint64(getReplicationWeight(c)))
 	}
 	selected := candidates[weightedRandomInt(weights)]
 	return StorageProviderInfo{
@@ -254,9 +254,6 @@ func listProviders(ctx context.Context, providerStore storageprovider.Store) ([]
 func filterExcludedProviders(providers []storageprovider.Record, exclusions []did.DID) []storageprovider.Record {
 	var filtered []storageprovider.Record
 	for _, prov := range providers {
-		if prov.Weight <= 0 {
-			continue
-		}
 		excluded := false
 		for _, ex := range exclusions {
 			if prov.Provider == ex {
@@ -284,15 +281,20 @@ func filterZeroWeightProviders(providers []storageprovider.Record) []storageprov
 func filterZeroReplicationWeightProviders(providers []storageprovider.Record) []storageprovider.Record {
 	var filtered []storageprovider.Record
 	for _, prov := range providers {
-		weight := prov.Weight
-		if prov.ReplicationWeight != nil {
-			weight = *prov.ReplicationWeight
-		}
-		if weight > 0 {
+		if getReplicationWeight(prov) > 0 {
 			filtered = append(filtered, prov)
 		}
 	}
 	return filtered
+}
+
+// getReplicationWeight returns the provider's replication weight, falling back
+// to its weight when no replication weight is set.
+func getReplicationWeight(prov storageprovider.Record) int {
+	if prov.ReplicationWeight != nil {
+		return *prov.ReplicationWeight
+	}
+	return prov.Weight
 }
 
 func weightedRandomInt(weights []uint64) int {
@@ -300,10 +302,16 @@ func weightedRandomInt(weights []uint64) int {
 	for _, weight := range weights {
 		totalWeight += weight
 	}
-	random := rand.Int63n(int64(totalWeight))
+	return pickWeighted(weights, uint64(rand.Int63n(int64(totalWeight))))
+}
+
+// pickWeighted returns the index whose cumulative weight range holds draw,
+// a value in [0, sum(weights)). Index i owns exactly weights[i] draws.
+func pickWeighted(weights []uint64, draw uint64) int {
+	random := int64(draw)
 	for i, weight := range weights {
 		random -= int64(weight)
-		if random <= 0 {
+		if random < 0 {
 			return i
 		}
 	}
