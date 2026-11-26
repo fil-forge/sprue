@@ -184,11 +184,24 @@ func TestReceiptEndpointServesAcceptReceiptWithItsLocationCommitment(t *testing.
 			gotRcpt, ok := got.Receipt(task)
 			require.True(t, ok, "no receipt for the accept task")
 			require.Equal(t, accRcpt.Link().String(), gotRcpt.Link().String())
+			// The listed page's invocations, and the two the receipt names.
+			wantInvs := []string{claim.Link().String(), pdp.Link().String()}
+			page, err := store.List(t.Context(), task, agent.WithListLimit(25))
+			require.NoError(t, err)
+			seen := map[string]bool{}
+			for _, msg := range page.Results {
+				for _, inv := range msg.Invocations() {
+					if l := inv.Link().String(); !seen[l] {
+						seen[l] = true
+						wantInvs = append(wantInvs, l)
+					}
+				}
+			}
 			var gotInvs []string
 			for _, inv := range got.Invocations() {
 				gotInvs = append(gotInvs, inv.Link().String())
 			}
-			require.Subset(t, gotInvs, []string{claim.Link().String(), pdp.Link().String()})
+			require.ElementsMatch(t, wantInvs, gotInvs)
 		})
 	}
 }
