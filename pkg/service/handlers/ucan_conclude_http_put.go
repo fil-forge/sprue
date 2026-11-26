@@ -366,11 +366,11 @@ func attachedLinks(rcpt ucan.Receipt) []cid.Cid {
 	return []cid.Cid{acceptOK.Site, acceptOK.PDP.Task}
 }
 
-// AcceptAttachments returns the invocations a successful accept receipt names,
+// acceptAttachments returns the invocations a successful accept receipt names,
 // its location commitment and its PDP promise, from the messages stored under
 // the accept task. It returns none when the commitment is not among them or
 // rcpt is any other receipt.
-func AcceptAttachments(ctx context.Context, agentStore agent.Store, rcpt ucan.Receipt) ([]ucan.Invocation, error) {
+func acceptAttachments(ctx context.Context, agentStore agent.Store, rcpt ucan.Receipt) ([]ucan.Invocation, error) {
 	links := attachedLinks(rcpt)
 	if len(links) == 0 {
 		return nil, nil

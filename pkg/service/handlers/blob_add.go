@@ -516,7 +516,7 @@ func replayAdd(ctx context.Context, agentStore agent.Store, addRcpt ucan.Receipt
 		}
 		// The client reads the blob's location from what the accept receipt
 		// names, and fails the add when the reply carries the receipt alone.
-		attached, err := AcceptAttachments(ctx, agentStore, rcpt)
+		attached, err := acceptAttachments(ctx, agentStore, rcpt)
 		if err != nil {
 			log.Error("failed to get accept attachments", zap.Stringer("task", task), zap.Error(err))
 			return fmt.Errorf("getting accept attachments for %s: %w", task, err)

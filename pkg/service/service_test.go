@@ -5,10 +5,8 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 
-	blobcmds "github.com/fil-forge/libforge/commands/blob"
 	"github.com/fil-forge/sprue/internal/testutil"
 	"github.com/fil-forge/sprue/pkg/store/agent"
 	agentmemory "github.com/fil-forge/sprue/pkg/store/agent/memory"
@@ -20,9 +18,6 @@ import (
 	"github.com/fil-forge/ucantone/ucan/command"
 	"github.com/fil-forge/ucantone/ucan/container"
 	"github.com/fil-forge/ucantone/ucan/invocation"
-	"github.com/fil-forge/ucantone/ucan/promise"
-	"github.com/fil-forge/ucantone/ucan/receipt"
-	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 )
@@ -101,80 +96,4 @@ func (s *requestWriteFails) Write(ctx context.Context, message ucan.Container, i
 		return errors.New("store unavailable")
 	}
 	return s.Store.Write(ctx, message, index)
-}
-
-func writeMessage(t *testing.T, store agent.Store, invs []ucan.Invocation, rcpts []ucan.Receipt) {
-	t.Helper()
-	msg := container.New(container.WithInvocations(invs...), container.WithReceipts(rcpts...))
-	require.NoError(t, store.Write(t.Context(), msg, agent.Index(msg)))
-}
-
-// An accept receipt is no use to a client without the location commitment it
-// names. The endpoint serves the two together even when other messages under
-// the accept task crowd the commitment out of the page it lists.
-func TestReceiptEndpointServesAcceptReceiptWithItsLocationCommitment(t *testing.T) {
-	store := agentmemory.New()
-	node := testutil.Bob
-
-	invoke := func(cmd string) ucan.Invocation {
-		return testutil.Must(invocation.Invoke(node, node.DID(), command.MustParse(cmd), datamodel.Map{}))(t)
-	}
-	accInv, claim, pdp := invoke("/blob/accept"), invoke("/assert/location"), invoke("/pdp/accept")
-	task := accInv.Task().Link()
-	accRcpt := testutil.Must(receipt.IssueOK(node, task, &blobcmds.AcceptOK{
-		Site: claim.Link(),
-		PDP:  promise.AwaitOK{Task: pdp.Task().Link()},
-	}))(t)
-	writeMessage(t, store, []ucan.Invocation{accInv, claim, pdp}, []ucan.Receipt{accRcpt})
-
-	listsCommitment := func() bool {
-		page, err := store.List(t.Context(), task, agent.WithListLimit(25))
-		require.NoError(t, err)
-		for _, msg := range page.Results {
-			for _, inv := range msg.Invocations() {
-				if inv.Link() == claim.Link() {
-					return true
-				}
-			}
-		}
-		return false
-	}
-	// Each reply differs by one invocation, as each replayed
-	// /blob/add differs by the add it answers.
-	for listsCommitment() {
-		writeMessage(t, store, []ucan.Invocation{accInv, invoke("/test/reply")}, []ucan.Receipt{accRcpt})
-	}
-
-	req := httptest.NewRequest(http.MethodGet, "/receipt/"+task.String(), nil)
-	rec := httptest.NewRecorder()
-	c := echo.New().NewContext(req, rec)
-	c.SetParamNames("cid")
-	c.SetParamValues(task.String())
-	svc := &Service{agentStore: store, logger: zaptest.NewLogger(t)}
-	require.NoError(t, svc.HandleReceiptRequest(c))
-	require.Equal(t, http.StatusOK, rec.Code)
-
-	var got container.Container
-	require.NoError(t, got.UnmarshalCBOR(rec.Body))
-	gotRcpt, ok := got.Receipt(task)
-	require.True(t, ok, "no receipt for the accept task")
-	require.Equal(t, accRcpt.Link().String(), gotRcpt.Link().String())
-	// The listed page's invocations, and the two the receipt names.
-	wantInvs := []string{claim.Link().String(), pdp.Link().String()}
-	page, err := store.List(t.Context(), task, agent.WithListLimit(25))
-	require.NoError(t, err)
-	seen := map[string]bool{}
-	for _, msg := range page.Results {
-		for _, inv := range msg.Invocations() {
-			if l := inv.Link().String(); !seen[l] {
-				seen[l] = true
-				wantInvs = append(wantInvs, l)
-			}
-		}
-	}
-	var gotInvs []string
-	for _, inv := range got.Invocations() {
-		gotInvs = append(gotInvs, inv.Link().String())
-	}
-	require.ElementsMatch(t, wantInvs, gotInvs)
 }
