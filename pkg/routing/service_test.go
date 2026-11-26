@@ -183,6 +183,39 @@ func TestSelectReplicationProvider(t *testing.T) {
 		require.Equal(t, replica.Provider, info.ID)
 	})
 
+	t.Run("selects a replica-only provider with weight 0 and a positive replication weight", func(t *testing.T) {
+		store := spmemory.New()
+		primary := addProvider(t, store, 100, nil)
+		rw := 100
+		replicaOnly := addProvider(t, store, 0, &rw)
+		svc := routing.NewService(store, rpmemory.New(), logger)
+
+		info, err := svc.SelectReplicationProvider(ctx, primary.Provider, blob)
+		require.NoError(t, err)
+		require.Equal(t, replicaOnly.Provider, info.ID)
+	})
+
+	t.Run("draws replicas in proportion to replication weight, not weight", func(t *testing.T) {
+		store := spmemory.New()
+		primary := addProvider(t, store, 100, nil)
+		highRW, lowRW := 1000, 1
+		favoured := addProvider(t, store, 1, &highRW)
+		addProvider(t, store, 1000, &lowRW)
+		svc := routing.NewService(store, rpmemory.New(), logger)
+
+		// favoured holds 1000/1001 of the replication weight; 150 of 200 leaves a
+		// failure chance far below 1e-100, while drawing by weight gives it ~0.2.
+		favouredCount := 0
+		for range 200 {
+			info, err := svc.SelectReplicationProvider(ctx, primary.Provider, blob)
+			require.NoError(t, err)
+			if info.ID == favoured.Provider {
+				favouredCount++
+			}
+		}
+		require.GreaterOrEqual(t, favouredCount, 150)
+	})
+
 	t.Run("combines primary exclusion with additional exclusions", func(t *testing.T) {
 		store := spmemory.New()
 		primary := addProvider(t, store, 100, nil)
