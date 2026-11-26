@@ -367,45 +367,40 @@ func attachedLinks(rcpt ucan.Receipt) []cid.Cid {
 }
 
 // AcceptAttachments returns the invocations a successful accept receipt names,
-// its location commitment and its PDP promise, or none when the commitment is
-// not found or rcpt is any other receipt.
-//
-// The messages indexed under the accept task are searched, then those under
-// the PDP task. A reply carrying the receipt without its attachments, as
-// replays of /blob/add used to, takes over the accept task's index entries;
-// the PDP task's still lead to the message the node's attachments are in.
-//
-// shortcut: the PDP task is per blob, so a commitment stays lost if its accept
-// task was taken over and the blob has been accepted again since; find it by
-// its link (agent_index.token, which has no index) if such tasks turn up.
+// its location commitment and its PDP promise, from the messages stored under
+// the accept task. It returns none when the commitment is not among them or
+// rcpt is any other receipt.
 func AcceptAttachments(ctx context.Context, agentStore agent.Store, rcpt ucan.Receipt) ([]ucan.Invocation, error) {
 	links := attachedLinks(rcpt)
 	if len(links) == 0 {
 		return nil, nil
 	}
-	site, pdp := links[0], links[1]
-	for _, task := range []cid.Cid{rcpt.Ran(), pdp} {
-		page, err := agentStore.List(ctx, task)
-		if err != nil {
-			return nil, fmt.Errorf("listing agent messages for %s: %w", task, err)
-		}
-		var invs []ucan.Invocation
-		located := false
-		for _, msg := range page.Results {
-			for _, inv := range msg.Invocations() {
-				if inv.Link() == site {
-					located = true
-					invs = append(invs, inv)
-				} else if inv.Task().Link() == pdp {
-					invs = append(invs, inv)
-				}
+	page, err := agentStore.List(ctx, rcpt.Ran())
+	if err != nil {
+		return nil, fmt.Errorf("listing agent messages for %s: %w", rcpt.Ran(), err)
+	}
+	return findAttachments(page.Results, links[0], links[1]), nil
+}
+
+// findAttachments picks out of msgs the location commitment with link site
+// and the invocation of task pdp, or nothing when the commitment is missing.
+func findAttachments(msgs []ucan.Container, site, pdp cid.Cid) []ucan.Invocation {
+	var invs []ucan.Invocation
+	located := false
+	for _, msg := range msgs {
+		for _, inv := range msg.Invocations() {
+			if inv.Link() == site {
+				located = true
+				invs = append(invs, inv)
+			} else if inv.Task().Link() == pdp {
+				invs = append(invs, inv)
 			}
 		}
-		if located {
-			return invs, nil
-		}
 	}
-	return nil, nil
+	if !located {
+		return nil
+	}
+	return invs
 }
 
 // writeAgentMessages persists acceptances as one or more agent messages, each
