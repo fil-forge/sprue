@@ -7,7 +7,7 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.48.0
 	github.com/aws/aws-sdk-go-v2/config v1.33.21
 	github.com/aws/aws-sdk-go-v2/credentials v1.21.3
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.114.10
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.116.0
 	github.com/docker/docker v28.5.2+incompatible
 	github.com/exaring/otelpgx v0.13.0
 	github.com/fil-forge/libforge v0.0.0-20261123132321-e3267015aa44
