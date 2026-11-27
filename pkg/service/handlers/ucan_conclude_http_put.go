@@ -366,6 +366,43 @@ func attachedLinks(rcpt ucan.Receipt) []cid.Cid {
 	return []cid.Cid{acceptOK.Site, acceptOK.PDP.Task}
 }
 
+// acceptAttachments returns the invocations a successful accept receipt names,
+// its location commitment and its PDP promise, from the messages stored under
+// the accept task. It returns none when the commitment is not among them or
+// rcpt is any other receipt.
+func acceptAttachments(ctx context.Context, agentStore agent.Store, rcpt ucan.Receipt) ([]ucan.Invocation, error) {
+	links := attachedLinks(rcpt)
+	if len(links) == 0 {
+		return nil, nil
+	}
+	page, err := agentStore.List(ctx, rcpt.Ran())
+	if err != nil {
+		return nil, fmt.Errorf("listing agent messages for %s: %w", rcpt.Ran(), err)
+	}
+	return findAttachments(page.Results, links[0], links[1]), nil
+}
+
+// findAttachments picks out of msgs the location commitment with link site
+// and the invocation of task pdp, or nothing when the commitment is missing.
+func findAttachments(msgs []ucan.Container, site, pdp cid.Cid) []ucan.Invocation {
+	var invs []ucan.Invocation
+	located := false
+	for _, msg := range msgs {
+		for _, inv := range msg.Invocations() {
+			if inv.Link() == site {
+				located = true
+				invs = append(invs, inv)
+			} else if inv.Task().Link() == pdp {
+				invs = append(invs, inv)
+			}
+		}
+	}
+	if !located {
+		return nil
+	}
+	return invs
+}
+
 // writeAgentMessages persists acceptances as one or more agent messages, each
 // within a container's token budget. A single message per call would fail to
 // encode once a conclusion is large enough, losing the record of acceptances
